@@ -1,0 +1,94 @@
+{
+  "_comment": "Output da Fase 1 - Scope Resolution. Produzido por scope-resolver-agent.",
+  "_schema_version": "1.0.0",
+
+  "mode": "scoped",
+  "_mode_options": ["scoped", "full", "manual"],
+
+  "source_docs": [
+    "docs/prd.md",
+    "docs/techspec.md",
+    "api-contract.yaml"
+  ],
+
+  "rationale": "Escopo extraido do PRD secao 3.2 (Ativos Sensiveis) e TechSpec secao 5 (Componentes). OpenAPI usado para enumerar endpoints. Auditoria focada em payment-service e auth-service por serem os componentes que tocam dados PCI-DSS e credenciais.",
+
+  "critical_assets": [
+    {
+      "name": "credit_card_data",
+      "classification": "PCI-DSS",
+      "asset_multiplier": 2.0,
+      "components": ["payment-service"],
+      "paths": [
+        "src/payment/**",
+        "infra/payment/**"
+      ],
+      "source": "prd.md#secao-3.2"
+    },
+    {
+      "name": "user_credentials",
+      "classification": "auth",
+      "asset_multiplier": 1.5,
+      "components": ["auth-service"],
+      "paths": [
+        "src/auth/**",
+        "infra/auth/**"
+      ],
+      "source": "prd.md#secao-3.2"
+    },
+    {
+      "name": "user_pii",
+      "classification": "LGPD",
+      "asset_multiplier": 1.5,
+      "components": ["user-service"],
+      "paths": [
+        "src/user/**"
+      ],
+      "source": "prd.md#secao-3.3"
+    }
+  ],
+
+  "in_scope_endpoints": [
+    {
+      "method": "POST",
+      "path": "/api/payments",
+      "auth": "bearer",
+      "asset_touch": ["credit_card_data"],
+      "exploitability_factor": 1.0
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/login",
+      "auth": "none",
+      "asset_touch": ["user_credentials"],
+      "exploitability_factor": 1.5
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/reset-password",
+      "auth": "none",
+      "asset_touch": ["user_credentials"],
+      "exploitability_factor": 1.5
+    },
+    {
+      "method": "GET",
+      "path": "/api/users/{id}",
+      "auth": "bearer",
+      "asset_touch": ["user_pii"],
+      "exploitability_factor": 1.0
+    }
+  ],
+
+  "out_of_scope": [
+    "src/admin/**",
+    "scripts/migration/**",
+    "docs/**"
+  ],
+
+  "warnings": [],
+
+  "metadata": {
+    "resolved_at": "2026-01-15T10:32:00Z",
+    "resolver": "scope-resolver-agent v1.0.0"
+  }
+}

@@ -1,0 +1,81 @@
+# Contrato: SAST Agent
+# Sub-agent responsavel por analise estatica de codigo-fonte
+# Cobre OWASP: A01, A03, A04, A09, A10
+#
+# Este contrato e portavel entre Claude Subagents, OpenAI Codex e GitHub Copilot.
+# Substituir placeholders {{ ... }} antes de despachar.
+
+agent_role: sast-agent
+case_id: "{{ CASE_ID }}"           # ex: SEC-001 (deve corresponder a item do test_plan.md)
+
+scope:
+  paths:
+    - "{{ SCOPE_PATH }}"            # ex: src/payment/
+  exclude:
+    - "**/test/**"
+    - "**/tests/**"
+    - "**/*_test.go"
+    - "**/*.spec.ts"
+    - "**/__tests__/**"
+
+context:
+  critical_assets:                  # opcional - vem do scope.json
+    - name: "{{ ASSET_NAME }}"      # ex: credit_card_data
+      classification: "{{ ASSET_CLASSIFICATION }}"  # ex: PCI-DSS
+  related_owasp:                    # categorias OWASP cobertas pelo caso
+    - A03
+
+tooling:
+  primary:
+    tool_id: semgrep                # referencia em tools/tools.json
+    config:
+      - "p/owasp-top-ten"
+      - "p/{{ STACK }}"             # ex: p/java, p/javascript, p/python
+      - "p/secrets"
+  fallback:
+    - if_unavailable: semgrep
+      tool_id: spotbugs             # apenas Java/JVM
+      config:
+        - "FindSecBugs"
+
+execution:
+  via: docker                       # tools/run.py resolve a imagem
+  command: |
+    python tools/run.py {{ TOOLING_PRIMARY_TOOL_ID }} \
+      --config={{ TOOLING_PRIMARY_CONFIG_0 }} \
+      --config={{ TOOLING_PRIMARY_CONFIG_1 }} \
+      --sarif --output={{ OUTPUT_PATH }} \
+      {{ SCOPE_PATH }}
+
+output:
+  format: sarif                     # OBRIGATORIO - cross-tool dedup depende disso
+  path: ".security/findings/{{ CASE_ID }}.sarif"
+  also_emit:
+    format: markdown
+    path: ".security/findings/{{ CASE_ID }}.md"
+
+success_criteria:
+  exit_codes_acceptable: [0, 1]     # 1 = findings encontrados, ainda e sucesso
+  schema_validation: sarif-2.1.0
+  required_fields:
+    - "tool.driver.name"
+    - "results"
+
+failure_protocol:
+  on_tool_missing:
+    action: "documentar gap, marcar caso como NOT_EXECUTED, prosseguir"
+    do_not: "travar pipeline ou tentar instalar ferramenta"
+  on_tool_error:
+    action: "capturar stderr, registrar como erro de execucao, prosseguir"
+    artifact: ".security/findings/{{ CASE_ID }}.error.log"
+  on_timeout_seconds: 600
+  on_docker_unavailable:
+    action: "tentar fallback CLI nativa se --no-docker permitido, senao NOT_EXECUTED"
+
+reporting:
+  back_to_dispatcher:
+    - status                        # PASS | FAIL | NOT_EXECUTED | ERROR
+    - findings_count_by_severity    # {critical: N, high: N, medium: N, low: N}
+    - sarif_path
+    - execution_time_ms
+    - tool_version_used

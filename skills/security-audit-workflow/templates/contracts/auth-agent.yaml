@@ -1,0 +1,113 @@
+# Contrato: Auth Agent
+# Sub-agent responsavel por revisao de fluxos de autenticacao e autorizacao
+# Cobre OWASP: A01 (Broken Access Control), A07 (Auth Failures)
+#
+# Este agente combina analise automatizada (Semgrep) com revisao guiada por
+# checklist — JWT, sessao, rate limit, CORS, CSRF, password policy.
+
+agent_role: auth-agent
+case_id: "{{ CASE_ID }}"
+
+scope:
+  paths:
+    - "{{ AUTH_MODULE_PATH }}"      # ex: src/auth/, src/security/
+  endpoints:                        # do OpenAPI quando disponivel
+    - method: "{{ METHOD }}"
+      path: "{{ PATH }}"
+      requires_auth: "{{ BOOLEAN }}"
+  exclude:
+    - "**/test/**"
+
+context:
+  critical_assets:
+    - name: "user_credentials"
+      classification: "auth"
+  related_owasp:
+    - A01
+    - A07
+  framework_detected: "{{ AUTH_FRAMEWORK }}"  # ex: spring-security, passport, fastapi-users
+
+tooling:
+  primary:
+    tool_id: semgrep
+    config:
+      - "p/jwt"
+      - "p/{{ AUTH_FRAMEWORK_RULESET }}"  # ex: p/spring-security
+      - "p/owasp-top-ten"
+  guided_review:                    # checklist executado pelo agente LLM
+    enabled: true
+    checklist:
+      jwt:
+        - "alg=none e explicitamente rejeitado"
+        - "secret/key nao esta hardcoded no codigo"
+        - "exp claim e validado e razoavel (<24h para access token)"
+        - "iss e aud sao validados"
+        - "refresh tokens tem rotacao"
+        - "blacklist/revogacao implementada para logout"
+      session:
+        - "Cookies tem flags Secure, HttpOnly, SameSite"
+        - "Session ID e regenerado apos login"
+        - "Timeout de inatividade configurado"
+      authorization:
+        - "Toda rota tem decisao de authz explicita (allow ou deny)"
+        - "IDOR: ids de recursos sao validados contra owner"
+        - "Privilegios elevados requerem reauth (step-up)"
+      rate_limiting:
+        - "Endpoints de login tem rate limit por IP e por user"
+        - "Reset de senha tem throttling"
+        - "API publica tem rate limit global"
+      password_policy:
+        - "Hashing com BCrypt/Argon2/scrypt (NAO SHA-x ou MD5)"
+        - "Politica de complexidade documentada"
+        - "Validacao contra HaveIBeenPwned (opcional mas recomendado)"
+      cors:
+        - "Allow-Origin nao e *"
+        - "Allow-Credentials=true so com origin especifico"
+      csrf:
+        - "Protegido em endpoints state-changing"
+        - "Token validado no servidor"
+
+execution:
+  via: docker
+  steps:
+    - name: "Semgrep auth rules"
+      command: |
+        python tools/run.py semgrep \
+          --config=p/jwt \
+          --config=p/{{ AUTH_FRAMEWORK_RULESET }} \
+          --sarif --output={{ OUTPUT_PATH_SAST }} \
+          {{ AUTH_MODULE_PATH }}
+    - name: "Guided review (LLM)"
+      command: "executado pelo agente seguindo checklist acima"
+      output: ".security/findings/{{ CASE_ID }}-review.md"
+
+output:
+  format: sarif                     # findings automatizados
+  path: ".security/findings/{{ CASE_ID }}.sarif"
+  also_emit:
+    format: markdown
+    path: ".security/findings/{{ CASE_ID }}-review.md"
+    content: "Resultado da guided review com gaps identificados"
+
+success_criteria:
+  exit_codes_acceptable: [0, 1]
+  schema_validation: sarif-2.1.0
+  guided_review_completed: true
+
+failure_protocol:
+  on_tool_missing:
+    action: "executar apenas guided review, marcar SAST como skipped"
+  on_no_auth_module_detected:
+    action: "verificar se app realmente nao tem auth ou se esta em path nao convencional"
+    fallback: "perguntar ao usuario o path do modulo de auth"
+  on_timeout_seconds: 600
+
+reporting:
+  back_to_dispatcher:
+    - status
+    - sast_findings_count
+    - review_gaps_count
+    - critical_gaps                 # ex: ["JWT alg=none accepted", "no rate limit on login"]
+    - sarif_path
+    - review_md_path
+    - execution_time_ms

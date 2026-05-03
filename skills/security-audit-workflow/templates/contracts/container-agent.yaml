@@ -1,0 +1,98 @@
+# Contrato: Container Agent
+# Sub-agent responsavel por hardening de Dockerfile e imagem final
+# Cobre OWASP: A05 (Misconfiguration), A06 (Vulnerable Components)
+
+agent_role: container-agent
+case_id: "{{ CASE_ID }}"
+
+scope:
+  dockerfiles:
+    - "{{ DOCKERFILE_PATH }}"       # ex: Dockerfile, docker/Dockerfile.prod
+  images:                           # opcional - se imagem ja foi buildada
+    - "{{ IMAGE_TAG }}"             # ex: my-app:latest
+
+context:
+  related_owasp:
+    - A05
+    - A06
+
+tooling:
+  dockerfile_lint:
+    tool_id: hadolint
+    config:
+      failure_threshold: error      # error|warning|info|style
+      ignore_rules: []              # ex: ["DL3008"] para ignorar versao apt-get
+  image_cve_scan:
+    tool_id: trivy-image
+    config:
+      severity: "HIGH,CRITICAL"
+      ignore_unfixed: false
+      scanners: "vuln,config,secret"
+  cis_benchmark:                    # opcional, mais rigoroso
+    tool_id: dockle
+    optional: true
+
+execution:
+  via: docker
+  steps:
+    - name: "Lint Dockerfile"
+      command: |
+        python tools/run.py hadolint \
+          --format sarif \
+          {{ DOCKERFILE_PATH }} \
+          > {{ OUTPUT_PATH_LINT }}
+    - name: "Scan image (se fornecida)"
+      condition: "image_provided"
+      command: |
+        python tools/run.py trivy image \
+          --severity HIGH,CRITICAL \
+          --format sarif \
+          --output {{ OUTPUT_PATH_IMAGE }} \
+          {{ IMAGE_TAG }}
+      docker_socket_required: true  # IMPORTANTE: ver tools/README.md
+    - name: "CIS benchmarks"
+      condition: "dockle_enabled"
+      optional: true
+      command: |
+        python tools/run.py dockle \
+          --format json \
+          {{ IMAGE_TAG }}
+
+output:
+  format: sarif
+  path: ".security/findings/{{ CASE_ID }}.sarif"
+  merged: true
+
+success_criteria:
+  exit_codes_acceptable: [0, 1]
+  schema_validation: sarif-2.1.0
+  custom_checks:
+    - "USER directive nao deve ser root"
+    - "Imagem base nao deve usar tag 'latest'"
+    - "Multi-stage build recomendado"
+
+failure_protocol:
+  on_tool_missing:
+    action: "executar ferramentas disponiveis, marcar restantes como skipped"
+  on_image_not_found:
+    action: "executar apenas Dockerfile lint, avisar que scan de imagem foi pulado"
+    note: "imagem precisa ser buildada antes do scan"
+  on_docker_socket_unavailable:
+    action: "alternativa: exportar imagem com 'docker save' e usar trivy fs"
+    security_note: "Montar docker.sock no container Trivy tem implicacoes de seguranca local"
+  on_timeout_seconds: 900
+
+reporting:
+  back_to_dispatcher:
+    - status
+    - dockerfile_findings_count
+    - image_cve_count
+    - findings_by_severity
+    - sarif_path
+    - execution_time_ms
+
+remediation_priority:
+  - "Container running as root → USER non-root"
+  - "Imagem base com CVEs CRITICAL → atualizar para tag mais recente"
+  - "Secrets em ENV/ARG → mover para runtime secrets"
+  - "Imagem inchada → adotar multi-stage build + distroless/alpine"

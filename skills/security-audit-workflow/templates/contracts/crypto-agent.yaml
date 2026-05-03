@@ -1,0 +1,125 @@
+# Contrato: Crypto Agent
+# Sub-agent responsavel por revisao de uso de criptografia
+# Cobre OWASP: A02 (Cryptographic Failures)
+
+agent_role: crypto-agent
+case_id: "{{ CASE_ID }}"
+
+scope:
+  paths:
+    - "{{ CRYPTO_USAGE_PATHS }}"    # paths com uso de bibliotecas crypto detectadas na Fase 0
+  exclude:
+    - "**/test/**"
+
+context:
+  related_owasp:
+    - A02
+
+tooling:
+  primary:
+    tool_id: semgrep
+    config:
+      - "p/insecure-crypto"
+      - "p/secrets"
+  pattern_search:                   # grep por patterns conhecidos como inseguros
+    enabled: true
+    patterns:
+      weak_algorithms:
+        - "MessageDigest\\.getInstance\\(.MD5.\\)"
+        - "MessageDigest\\.getInstance\\(.SHA1.\\)"
+        - "MessageDigest\\.getInstance\\(.SHA-1.\\)"
+        - "Cipher\\.getInstance\\(.DES.\\)"
+        - "Cipher\\.getInstance\\(.3DES.\\)"
+        - "Cipher\\.getInstance\\(.RC4.\\)"
+        - "Cipher\\.getInstance\\(.AES/ECB.\\)"
+        - "createHash\\(.md5.\\)"
+        - "createHash\\(.sha1.\\)"
+        - "hashlib\\.md5\\("
+        - "hashlib\\.sha1\\("
+        - "crypto/md5"
+        - "crypto/des"
+      insecure_random:
+        - "java\\.util\\.Random"
+        - "Math\\.random"
+        - "rand\\.Intn"             # Go: usar crypto/rand
+        - "rand::random"            # Rust: usar getrandom
+      hardcoded_keys:
+        - "key\\s*=\\s*\"[A-Za-z0-9+/=]{16,}\""
+        - "secret\\s*=\\s*\""
+      tls_disabled:
+        - "verify=False"            # Python requests
+        - "rejectUnauthorized:\\s*false"  # Node
+        - "InsecureSkipVerify:\\s*true"   # Go
+        - "ServerCertificateValidationCallback"  # .NET
+  guided_review:
+    enabled: true
+    checklist:
+      hashing:
+        - "Senhas: BCrypt/Argon2/scrypt (NAO MD5/SHA-x/SHA-256 puro)"
+        - "Integridade: SHA-256 ou superior"
+        - "HMAC usado para autenticacao de mensagens"
+      symmetric_encryption:
+        - "AES-256-GCM ou ChaCha20-Poly1305 (com authenticated encryption)"
+        - "IV/nonce unico por mensagem"
+        - "ECB mode NUNCA usado"
+      asymmetric:
+        - "RSA com >= 2048 bits ou ECDSA P-256+"
+        - "Padding OAEP (NAO PKCS1v1.5)"
+      key_management:
+        - "Chaves nao hardcoded"
+        - "Rotacao de chaves implementada"
+        - "Secrets manager usado (Vault, KMS, AWS Secrets Manager)"
+      randomness:
+        - "SecureRandom (Java) / crypto.randomBytes (Node) / secrets module (Python)"
+        - "NUNCA Math.random() ou java.util.Random para crypto"
+      tls:
+        - "TLS 1.2+ obrigatorio"
+        - "Certificate pinning quando aplicavel"
+        - "verify/rejectUnauthorized NUNCA desabilitado em producao"
+
+execution:
+  via: docker
+  steps:
+    - name: "Semgrep crypto rules"
+      command: |
+        python tools/run.py semgrep \
+          --config=p/insecure-crypto \
+          --sarif --output={{ OUTPUT_PATH_SAST }} \
+          {{ CRYPTO_USAGE_PATHS }}
+    - name: "Pattern search"
+      command: |
+        python tools/run.py semgrep \
+          --pattern-from={{ PATTERNS_FILE }} \
+          --sarif --output={{ OUTPUT_PATH_PATTERNS }} \
+          {{ CRYPTO_USAGE_PATHS }}
+    - name: "Guided review (LLM)"
+      command: "executado pelo agente seguindo checklist acima"
+
+output:
+  format: sarif
+  path: ".security/findings/{{ CASE_ID }}.sarif"
+  also_emit:
+    format: markdown
+    path: ".security/findings/{{ CASE_ID }}-review.md"
+
+success_criteria:
+  exit_codes_acceptable: [0, 1]
+  schema_validation: sarif-2.1.0
+
+failure_protocol:
+  on_tool_missing:
+    action: "executar pattern search via grep nativo, marcar SAST como skipped"
+  on_no_crypto_usage:
+    action: "verificar se app realmente nao usa crypto"
+    fallback: "marcar caso como NOT_APPLICABLE"
+  on_timeout_seconds: 600
+
+reporting:
+  back_to_dispatcher:
+    - status
+    - weak_algorithm_count
+    - hardcoded_keys_count
+    - insecure_random_count
+    - tls_issues_count
+    - sarif_path
+    - execution_time_ms

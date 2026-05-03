@@ -1,0 +1,234 @@
+{
+  "_comment": "Mapping declarativo de ferramentas → imagens Docker oficiais. O wrapper run.py consulta este arquivo para resolver execucao.",
+  "_schema_version": "1.0.0",
+  "_last_updated": "2026-01-15",
+
+  "tools": {
+    "semgrep": {
+      "image": "returntocorp/semgrep:latest",
+      "image_pinned": "returntocorp/semgrep:1.45.0",
+      "_comment": "Use 'image' para sempre pegar latest, 'image_pinned' para reprodutibilidade",
+      "entrypoint_override": null,
+      "default_args": [],
+      "mounts": [
+        {"src": "$PWD", "dst": "/src", "mode": "ro"}
+      ],
+      "workdir": "/src",
+      "networking": "none",
+      "supports_stacks": ["java", "node", "python", "go", "rust", "csharp"],
+      "supports_sarif": true,
+      "sarif_flag": "--sarif",
+      "first_run_notes": "Download de rulesets pode levar 1-2min na primeira execucao"
+    },
+
+    "trivy": {
+      "image": "aquasec/trivy:latest",
+      "image_pinned": "aquasec/trivy:0.49.0",
+      "default_args": [],
+      "mounts": [
+        {"src": "$PWD", "dst": "/src", "mode": "ro"}
+      ],
+      "cache_volume": "trivy-cache:/root/.cache/trivy",
+      "workdir": "/src",
+      "networking": "default",
+      "supports_stacks": ["java", "node", "python", "go", "rust", "csharp"],
+      "supports_sarif": true,
+      "sarif_flag": "--format sarif",
+      "first_run_notes": "Download de vulnerability DB (~150MB) na primeira execucao"
+    },
+
+    "trivy-image": {
+      "_comment": "Variante de Trivy para escanear imagens Docker. Requer socket Docker.",
+      "image": "aquasec/trivy:latest",
+      "image_pinned": "aquasec/trivy:0.49.0",
+      "default_args": ["image"],
+      "mounts": [
+        {"src": "/var/run/docker.sock", "dst": "/var/run/docker.sock", "mode": "rw"}
+      ],
+      "cache_volume": "trivy-cache:/root/.cache/trivy",
+      "networking": "default",
+      "security_warning": "Montar docker.sock da implicacoes de seguranca local (acesso ao daemon Docker)",
+      "alternative": "Usar 'docker save IMAGE -o image.tar && trivy image --input image.tar' para evitar socket"
+    },
+
+    "gitleaks": {
+      "image": "zricethezav/gitleaks:latest",
+      "image_pinned": "zricethezav/gitleaks:v8.18.0",
+      "default_args": ["detect"],
+      "mounts": [
+        {"src": "$PWD", "dst": "/repo", "mode": "ro"}
+      ],
+      "workdir": "/repo",
+      "networking": "none",
+      "supports_sarif": true,
+      "sarif_flag": "--report-format sarif",
+      "requires_git": true
+    },
+
+    "hadolint": {
+      "image": "hadolint/hadolint:latest",
+      "image_pinned": "hadolint/hadolint:v2.12.0",
+      "entrypoint_override": "hadolint",
+      "default_args": [],
+      "mounts": [
+        {"src": "$PWD", "dst": "/src", "mode": "ro"}
+      ],
+      "workdir": "/src",
+      "networking": "none",
+      "supports_sarif": true,
+      "sarif_flag": "--format sarif"
+    },
+
+    "dockle": {
+      "image": "goodwithtech/dockle:latest",
+      "image_pinned": "goodwithtech/dockle:v0.4.14",
+      "default_args": [],
+      "mounts": [
+        {"src": "/var/run/docker.sock", "dst": "/var/run/docker.sock", "mode": "rw"}
+      ],
+      "networking": "default",
+      "security_warning": "Requer socket Docker"
+    },
+
+    "checkov": {
+      "image": "bridgecrew/checkov:latest",
+      "image_pinned": "bridgecrew/checkov:3.1.0",
+      "default_args": [],
+      "mounts": [
+        {"src": "$PWD", "dst": "/tf", "mode": "ro"}
+      ],
+      "workdir": "/tf",
+      "networking": "default",
+      "supports_sarif": true,
+      "sarif_flag": "--output sarif"
+    },
+
+    "kubesec": {
+      "image": "kubesec/kubesec:latest",
+      "image_pinned": "kubesec/kubesec:v2.13.0",
+      "default_args": ["scan"],
+      "mounts": [
+        {"src": "$PWD", "dst": "/manifests", "mode": "ro"}
+      ],
+      "workdir": "/manifests",
+      "networking": "none",
+      "supports_sarif": false,
+      "output_format": "json"
+    },
+
+    "kube-score": {
+      "image": "zegl/kube-score:latest",
+      "image_pinned": "zegl/kube-score:v1.18.0",
+      "default_args": ["score"],
+      "mounts": [
+        {"src": "$PWD", "dst": "/manifests", "mode": "ro"}
+      ],
+      "workdir": "/manifests",
+      "networking": "none",
+      "supports_sarif": false,
+      "output_format": "json"
+    },
+
+    "owasp-dependency-check": {
+      "image": "owasp/dependency-check:latest",
+      "image_pinned": "owasp/dependency-check:9.0.7",
+      "default_args": ["--scan", "/src", "--out", "/report"],
+      "mounts": [
+        {"src": "$PWD", "dst": "/src", "mode": "ro"},
+        {"src": "$PWD/.security/findings", "dst": "/report", "mode": "rw"}
+      ],
+      "cache_volume": "dc-cache:/usr/share/dependency-check/data",
+      "networking": "default",
+      "supports_sarif": true,
+      "sarif_flag": "--format SARIF",
+      "first_run_warning": "Primeira execucao baixa NVD database (~300MB, ~5min)",
+      "supports_stacks": ["java", "node", "python", "csharp"]
+    },
+
+    "gosec": {
+      "image": "securego/gosec:latest",
+      "image_pinned": "securego/gosec:v2.18.0",
+      "default_args": [],
+      "mounts": [
+        {"src": "$PWD", "dst": "/src", "mode": "ro"}
+      ],
+      "workdir": "/src",
+      "networking": "none",
+      "supports_sarif": true,
+      "sarif_flag": "-fmt sarif",
+      "supports_stacks": ["go"]
+    },
+
+    "govulncheck": {
+      "image": "golang:1.22-alpine",
+      "_comment": "govulncheck nao tem imagem oficial dedicada; usamos golang oficial e instalamos on-the-fly",
+      "entrypoint_override": "/bin/sh",
+      "default_args": ["-c", "go install golang.org/x/vuln/cmd/govulncheck@latest && govulncheck ./..."],
+      "mounts": [
+        {"src": "$PWD", "dst": "/src", "mode": "ro"}
+      ],
+      "workdir": "/src",
+      "networking": "default",
+      "supports_sarif": false,
+      "output_format": "json",
+      "supports_stacks": ["go"]
+    },
+
+    "cargo-audit": {
+      "image": "rust:latest",
+      "_comment": "cargo-audit nao tem imagem dedicada; instala via cargo",
+      "entrypoint_override": "/bin/sh",
+      "default_args": ["-c", "cargo install cargo-audit --quiet && cargo audit --json"],
+      "mounts": [
+        {"src": "$PWD", "dst": "/src", "mode": "ro"}
+      ],
+      "workdir": "/src",
+      "networking": "default",
+      "supports_sarif": false,
+      "output_format": "json",
+      "supports_stacks": ["rust"]
+    },
+
+    "bandit": {
+      "image": "python:3.12-slim",
+      "_comment": "bandit instala via pip - mantemos imagem Python oficial enxuta",
+      "entrypoint_override": "/bin/sh",
+      "default_args": ["-c", "pip install bandit[toml] --quiet && bandit -r /src -f sarif"],
+      "mounts": [
+        {"src": "$PWD", "dst": "/src", "mode": "ro"}
+      ],
+      "workdir": "/src",
+      "networking": "default",
+      "supports_sarif": true,
+      "supports_stacks": ["python"]
+    },
+
+    "tfsec": {
+      "image": "aquasec/tfsec:latest",
+      "image_pinned": "aquasec/tfsec:v1.28.0",
+      "default_args": [],
+      "mounts": [
+        {"src": "$PWD", "dst": "/src", "mode": "ro"}
+      ],
+      "workdir": "/src",
+      "networking": "none",
+      "supports_sarif": true,
+      "sarif_flag": "--format sarif"
+    }
+  },
+
+  "image_pull_policy": {
+    "default": "IfNotPresent",
+    "_options": ["Always", "IfNotPresent", "Never"],
+    "_comment": "IfNotPresent = usa cache local, puxa so se nao tiver. Always = sempre pull (recomendado em CI)."
+  },
+
+  "global_settings": {
+    "default_timeout_seconds": 600,
+    "default_pull_timeout_seconds": 300,
+    "auto_remove_containers": true,
+    "user_mapping": "auto",
+    "_user_mapping_options": ["auto", "host", "none"],
+    "_user_mapping_comment": "auto = aplica --user em Linux/Mac, omite em Windows. host = sempre aplica. none = nunca aplica."
+  }
+}

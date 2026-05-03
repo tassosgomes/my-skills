@@ -1,0 +1,89 @@
+# Contrato: SCA Agent
+# Sub-agent responsavel por analise de dependencias (Software Composition Analysis)
+# Cobre OWASP: A06 (Vulnerable Components), A08 (Software & Data Integrity)
+#
+# Estrategia: usar Trivy fs como universal + ferramentas nativas da stack para
+# precisao maior em ecosystems com advisory db proprio (RustSec, GoVulnDB, etc).
+
+agent_role: sca-agent
+case_id: "{{ CASE_ID }}"
+
+scope:
+  manifests:                        # arquivos de dependencia detectados
+    - "{{ MANIFEST_PATH }}"         # ex: pom.xml, package-lock.json, go.sum, Cargo.lock
+  include_transitive: true
+  include_dev_dependencies: false   # geralmente nao vao para producao
+
+context:
+  related_owasp:
+    - A06
+    - A08
+
+tooling:
+  # Estrategia: rodar Trivy (universal) + ferramenta nativa quando aplicavel
+  primary:
+    tool_id: trivy-fs               # universal, funciona para todas as stacks
+    config:
+      severity: "HIGH,CRITICAL"
+      ignore_unfixed: false
+  native_by_stack:                  # complementar, depende da stack detectada
+    java:
+      tool_id: owasp-dependency-check
+      config:
+        fail_build_on_cvss: 7.0
+    node:
+      tool_id: trivy-fs             # npm audit alternativo via Trivy
+    python:
+      tool_id: trivy-fs             # pip-audit alternativo via Trivy
+    go:
+      tool_id: govulncheck
+    rust:
+      tool_id: cargo-audit
+    csharp:
+      tool_id: trivy-fs             # ou owasp-dependency-check para .NET
+
+execution:
+  via: docker
+  steps:
+    - name: "Run primary scanner (universal)"
+      command: |
+        python tools/run.py trivy fs \
+          --scanners vuln \
+          --severity HIGH,CRITICAL \
+          --format sarif \
+          --output {{ OUTPUT_PATH_PRIMARY }} \
+          {{ MANIFEST_PATH }}
+    - name: "Run native scanner if applicable"
+      command: "{{ NATIVE_SCANNER_COMMAND }}"
+      optional: true                # nao falha caso de skip
+
+output:
+  format: sarif
+  path: ".security/findings/{{ CASE_ID }}.sarif"
+  merged: true                      # consolidador une primary + native em um SARIF
+
+success_criteria:
+  exit_codes_acceptable: [0, 1]
+  schema_validation: sarif-2.1.0
+  required_fields:
+    - "tool.driver.name"
+    - "results"
+
+failure_protocol:
+  on_tool_missing:
+    action: "registrar ferramenta indisponivel, tentar alternativa, NOT_EXECUTED se todas falharem"
+  on_advisory_db_outdated:
+    action: "atualizar db (trivy --reset) e tentar novamente uma vez"
+  on_first_run_long:
+    note: "OWASP DC primeira execucao baixa NVD database (~300MB, ~5min) — comportamento esperado"
+  on_timeout_seconds: 1800          # 30min para primeira execucao OWASP DC
+
+reporting:
+  back_to_dispatcher:
+    - status
+    - findings_count_by_severity
+    - cve_count
+    - top_5_critical_cves
+    - sarif_path
+    - execution_time_ms
+    - tool_versions_used

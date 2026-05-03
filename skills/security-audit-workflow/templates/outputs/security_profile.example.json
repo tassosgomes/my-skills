@@ -1,0 +1,61 @@
+{
+  "_comment": "Output da Fase 0 - Reconhecimento. Produzido por recon-agent.",
+  "_schema_version": "1.0.0",
+
+  "detected_stacks": ["java", "docker", "kubernetes"],
+  "primary_stack": "java",
+  "stack_versions": {
+    "java": "21",
+    "spring_boot": "3.2.0",
+    "maven": "3.9"
+  },
+
+  "attack_surface": {
+    "rest_api": true,
+    "graphql_api": false,
+    "grpc_api": false,
+    "workers": false,
+    "scheduled_jobs": true,
+    "cli": false,
+    "library": false
+  },
+
+  "components": {
+    "auth": "spring-security",
+    "persistence": ["jpa", "postgresql"],
+    "outbound_http": ["webclient"],
+    "manual_crypto": false,
+    "deserialization_risks": ["jackson"],
+    "cache": ["caffeine"],
+    "messaging": [],
+    "feature_flags": null
+  },
+
+  "deployment": {
+    "dockerfile": "Dockerfile",
+    "k8s": "k8s/deployment.yaml",
+    "helm": null,
+    "iac": null,
+    "ci_cd": ".github/workflows/build.yml"
+  },
+
+  "docs_provided": {
+    "prd": "docs/prd.md",
+    "techspec": "docs/techspec.md",
+    "openapi": "api-contract.yaml",
+    "qa_report": null
+  },
+
+  "git": {
+    "is_git_repo": true,
+    "default_branch": "main",
+    "commit_count": 847,
+    "contributors_count": 12
+  },
+
+  "metadata": {
+    "scanned_at": "2026-01-15T10:30:00Z",
+    "scanner": "recon-agent v1.0.0",
+    "execution_time_ms": 1240
+  }
+}
