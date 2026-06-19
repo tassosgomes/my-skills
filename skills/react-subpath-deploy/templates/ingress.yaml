@@ -1,0 +1,42 @@
+# Exemplo de Ingress com múltiplos subpaths no mesmo host.
+# Cada path aponta para um Service/Deployment independente.
+#
+# Para adicionar uma nova POC:
+#   1. Criar Deployment + Service da nova POC
+#   2. Adicionar um novo bloco `path` neste Ingress
+#   3. Aplicar o manifesto
+#
+# Para NetScaler CPX, descomentar a annotation abaixo.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: poc-arquitetura
+  namespace: poc
+  # annotations:
+  #   ingress.citrix.com/insecure-termination: "allow"
+spec:
+  rules:
+    - host: poc-arquitetura.ecad.org.br
+      http:
+        paths:
+          - path: /poc-01
+            pathType: Prefix
+            backend:
+              service:
+                name: poc-01-svc
+                port:
+                  number: 80
+          - path: /poc-02
+            pathType: Prefix
+            backend:
+              service:
+                name: poc-02-svc
+                port:
+                  number: 80
+          - path: /poc-03
+            pathType: Prefix
+            backend:
+              service:
+                name: poc-03-svc
+                port:
+                  number: 80
