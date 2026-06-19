@@ -193,11 +193,12 @@ NAO inicie sem confirmacao.
 
 ## FASE 6 — SETUP (apenas apos confirmacao)
 
-Crie a estrutura de diretorios e o arquivo de sessao:
+Crie a estrutura de diretorios e os arquivos de sessao:
 
 ### Estrutura de diretorios:
 ```
 [diretorio_do_prd]/qa-evidence/
+├── qa_test_plan.md
 ├── qa_session.json
 ├── qa_task_01_[slug]/
 │   ├── screenshots/
@@ -206,6 +207,49 @@ Crie a estrutura de diretorios e o arquivo de sessao:
 ├── qa_task_02_[slug]/
 │   ...
 ```
+
+### qa_test_plan.md (OBRIGATORIO — escrever sempre):
+
+Escreva o plano de testes completo e aprovado em `[diretorio_do_prd]/qa-evidence/qa_test_plan.md`:
+
+```markdown
+# Plano de Testes QA
+
+**PRD:** [caminho ou titulo]
+**Techspec:** [caminho ou titulo]
+**Ambiente:** [URL base]
+**Banco:** [sim/nao, tipo]
+**Formato do relatorio:** [markdown/pdf/ambos]
+**Data de criacao:** [ISO 8601 UTC]
+
+## Tasks de Teste
+
+### qa_task_01_[slug] — [nome da user story]
+- **Tipo:** UI + API + Banco / apenas API / apenas UI
+- **Depende de:** (nenhuma) / qa_task_XX
+- **Pode rodar em paralelo com:** qa_task_XX, qa_task_YY
+
+### qa_task_02_[slug] — [nome da user story]
+- **Tipo:** ...
+- **Depende de:** qa_task_01
+- ...
+
+## Ordem de Execucao
+
+| Fase | Modo       | Tasks                          |
+|------|------------|-------------------------------|
+| 1    | Sequencial | qa_task_01                    |
+| 2    | Paralelo   | qa_task_02, qa_task_03        |
+| 3    | Sequencial | qa_task_04                    |
+
+## Fora do Escopo
+
+| User Story | Motivo |
+|------------|--------|
+| [US]       | [motivo informado pelo usuario] |
+```
+
+**IMPORTANTE:** O `qa_test_plan.md` deve ser gravado em disco antes de qualquer subagente ser disparado.
 
 ### qa_session.json:
 
@@ -272,7 +316,7 @@ Crie a estrutura de diretorios e o arquivo de sessao:
 
 ## FASE 7 — EXECUCAO DOS SUBAGENTES
 
-Para cada task, invoque o subagente `qa-task-runner` passando:
+Para cada task, dispare um subagente carregando as instrucoes da skill `flow-qa-task-runner`. Passe como contexto:
 - Caminho do `qa_session.json`
 - ID da task a executar (ex: `qa_task_01`)
 - Conteudo relevante do PRD/techspec para aquela user story (nao o documento inteiro)
@@ -295,12 +339,12 @@ Siga as fases definidas no `qa_session.json`.
 
 ## FASE 8 — CONSOLIDACAO
 
-Apos todas as tasks concluirem (PASS, FAIL ou BLOCKED), invoque `qa-report-builder` com:
+Apos todas as tasks concluirem (PASS, FAIL ou BLOCKED), dispare um subagente carregando as instrucoes da skill `flow-qa-report-builder`. Passe como contexto:
 - Caminho do `qa_session.json`
 - Lista de todos os `qa_report_task_XX.md` gerados
 - Formato de relatorio solicitado pelo usuario
 
-O `qa-report-builder` gera o `qa_report_consolidated.md` e/ou `.pdf` no diretorio `qa-evidence/`.
+O subagente executando `flow-qa-report-builder` gera o `qa_report_consolidated.md` e/ou `.pdf` no diretorio `qa-evidence/`.
 
 Informe o usuario:
 ```
@@ -336,6 +380,7 @@ Relatorio consolidado disponivel em:
 - [ ] Plano de tasks aprovado pelo usuario
 - [ ] Autorizacao de execucao obtida
 - [ ] Diretorio qa-evidence/ criado
+- [ ] qa_test_plan.md gravado em disco
 - [ ] qa_session.json criado (sem credenciais hardcoded)
 - [ ] Subdiretorio criado para cada task
 - [ ] Tasks executadas na ordem correta (fases)

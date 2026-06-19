@@ -4,6 +4,30 @@ Repositório de skills que utilizo no meu dia a dia. Cada skill vive em `skills/
 
 ---
 
+## Instalação
+
+Para instalar todas as skills deste repositório:
+
+```bash
+npx skills add tassosgomes/my-skills
+```
+
+Para instalar uma skill específica:
+
+```bash
+npx skills add tassosgomes/my-skills/<nome-da-skill>
+```
+
+Exemplos:
+
+```bash
+npx skills add tassosgomes/my-skills/flow-qa-orchestrator
+npx skills add tassosgomes/my-skills/common-mermaid-creator
+npx skills add tassosgomes/my-skills/java-architecture
+```
+
+---
+
 ## Visão geral das skills
 
 ### Pipeline de QA
@@ -13,6 +37,12 @@ Repositório de skills que utilizo no meu dia a dia. Cada skill vive em `skills/
 | [flow-qa-orchestrator](#flow-qa-orchestrator) | Orquestrador | Coordena pipeline de QA E2E (entrevista → plano → execução → relatório) |
 | [flow-qa-task-runner](#flow-qa-task-runner) | Subagente | Executa testes de uma user story (UI/API/DB) com fidelidade total |
 | [flow-qa-report-builder](#flow-qa-report-builder) | Consolidador | Gera relatório final consolidado (Markdown/PDF) da sessão de QA |
+
+### Documentação
+
+| Skill | Tipo | Propósito |
+|-------|------|-----------|
+| [common-mermaid-creator](#common-mermaid-creator) | Gerador | Gera diagramas Mermaid de alta qualidade a partir de PRDs e especificações de arquitetura |
 
 ### Segurança
 
@@ -43,7 +73,7 @@ Repositório de skills que utilizo no meu dia a dia. Cada skill vive em `skills/
 3. **Análise & Planejamento** — monta tasks por user story (`qa_task_NN_<slug>`), identifica dependências e fases (paralelo/sequencial).
 4. **Aprovação do plano** — apresenta o plano e aguarda revisão.
 5. **Autorização de execução** — exige confirmação explícita antes de iniciar.
-6. **Setup** — cria `qa-evidence/` e `qa_session.json` (sem credenciais hardcoded; só nomes de env vars).
+6. **Setup** — cria `qa-evidence/`, grava `qa_test_plan.md` em disco (plano aprovado completo) e `qa_session.json` (sem credenciais hardcoded; só nomes de env vars). O plano é sempre persistido antes de qualquer subagente ser disparado.
 7. **Execução** — dispara `flow-qa-task-runner` por task, respeitando dependências.
 8. **Consolidação** — chama `flow-qa-report-builder` para gerar o relatório final.
 
@@ -84,6 +114,25 @@ Repositório de skills que utilizo no meu dia a dia. Cada skill vive em `skills/
 - **Índice de evidências** — árvore de arquivos.
 
 **Regras:** nunca omite falha, nunca suaviza linguagem ("falhou" é "falhou"), nunca sugere correções, sempre cita evidências com caminho específico.
+
+---
+
+## common-mermaid-creator
+
+**Papel:** Especialista em diagramas técnicos — gera diagramas Mermaid de alta qualidade a partir de PRDs e especificações de arquitetura.
+
+**Fluxo (9 fases):**
+1. **Análise profunda do PRD** — lê o documento completo, detecta idioma, extrai atores, endpoints, fluxos, decisões, contratos e itens fora de escopo.
+2. **Avaliação de significância** — filtra candidatos a diagrama por cinco critérios (fluxo principal, parte difícil, decisão arquitetural, contrato público, relação entre componentes). Diagrama elegível apenas se passar em ao menos um critério.
+3. **Seleção de tipo** — escolhe `sequenceDiagram`, `flowchart TD`, `flowchart LR`, `classDiagram` ou `erDiagram` conforme o que melhor comunica cada elemento.
+4. **Poda e otimização** — limita a 6–8 diagramas (máx. 10); remove redundâncias; divide visões densas (>10 nós).
+5. **Preparação de rótulos** — máx. 3 palavras por nó, acentos corretos no idioma do PRD, termos técnicos mantidos em inglês.
+6. **Geração do documento** — produz um único arquivo `[output-folder]/[prd-name]-diagrams.md` com todos os diagramas embutidos.
+7. **Qualidade Mermaid** — aplica guardrails de sintaxe (sem `\\n` em rótulos, IDs ASCII, aspas em subgraphs com espaços, sem expressões complexas como `min(`, `++`).
+8. **Revisão interna** — relê o PRD e o documento gerado, corrige inconsistências silenciosamente antes de gravar.
+9. **Validação** — checklist final: idioma, acentos, contagem de diagramas, sem itens inventados, sem itens excluídos.
+
+**Regras-chave:** nunca inventa elementos ausentes no PRD; sem emojis em nenhum lugar; saída sempre em arquivo único; não inclui seções Analysis/Rationale/Design Decisions no final.
 
 ---
 
