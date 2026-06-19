@@ -30,13 +30,15 @@ npx skills add tassosgomes/my-skills/java-architecture
 
 ## Visão geral das skills
 
+> :star: Skills de minha autoria.
+
 ### Pipeline de QA
 
 | Skill | Tipo | Propósito |
 |-------|------|-----------|
-| [flow-qa-orchestrator](#flow-qa-orchestrator) | Orquestrador | Coordena pipeline de QA E2E (entrevista → plano → execução → relatório) |
-| [flow-qa-task-runner](#flow-qa-task-runner) | Subagente | Executa testes de uma user story (UI/API/DB) com fidelidade total |
-| [flow-qa-report-builder](#flow-qa-report-builder) | Consolidador | Gera relatório final consolidado (Markdown/PDF) da sessão de QA |
+| :star: [flow-qa-orchestrator](#flow-qa-orchestrator) | Orquestrador | Coordena pipeline de QA E2E (entrevista → plano → execução → relatório) |
+| :star: [flow-qa-task-runner](#flow-qa-task-runner) | Subagente | Executa testes de uma user story (UI/API/DB) com fidelidade total |
+| :star: [flow-qa-report-builder](#flow-qa-report-builder) | Consolidador | Gera relatório final consolidado (Markdown/PDF) da sessão de QA |
 
 ### Documentação
 
@@ -55,49 +57,49 @@ npx skills add tassosgomes/my-skills/java-architecture
 
 | Skill | Tipo | Propósito |
 |-------|------|-----------|
-| [security-audit-workflow](#security-audit-workflow) | Workflow | Auditoria de segurança stack-agnóstica via sub-agents e Docker |
+| :star: [security-audit-workflow](#security-audit-workflow) | Workflow | Auditoria de segurança stack-agnóstica via sub-agents e Docker |
 
 ### APIs
 
 | Skill | Tipo | Propósito |
 |-------|------|-----------|
-| [restful-api](#restful-api) | Normativo | Padrões REST/HTTP agnósticos de stack: URLs, versionamento, paginação, RFC 9457, OpenAPI 3 |
+| :star: [restful-api](#restful-api) | Normativo | Padrões REST/HTTP agnósticos de stack: URLs, versionamento, paginação, RFC 9457, OpenAPI 3 |
 
 ### Java / Spring Boot
 
 | Skill | Tipo | Propósito |
 |-------|------|-----------|
-| [java-architecture](#java-architecture) | Normativo | Clean Architecture / Hexagonal, CQRS type-safe, Repository Pattern, multi-módulo Maven |
-| [java-code-quality](#java-code-quality) | Transversal | HARD RULES de naming, métodos, DI, exceptions, records, logging |
-| [java-dependency-config](#java-dependency-config) | Baseline | Dependências e configurações padrão Spring Boot 3+ (JPA, Flyway, MapStruct, Resilience4j) |
-| [java-observability](#java-observability) | Normativo | Logging JSON + OpenTelemetry, tracing com Jaeger, métricas Prometheus, Health Checks |
-| [java-performance](#java-performance) | Code review | JPA otimizado, N+1, QueryDSL, caching (Caffeine/Redis), WebClient, HikariCP |
-| [java-testing](#java-testing) | Normativo | JUnit 5 + AssertJ + Mockito, Testcontainers, Playwright E2E, Dev Containers |
+| :star: [java-architecture](#java-architecture) | Normativo | Clean Architecture / Hexagonal, CQRS type-safe, Repository Pattern, multi-módulo Maven |
+| :star: [java-code-quality](#java-code-quality) | Transversal | HARD RULES de naming, métodos, DI, exceptions, records, logging |
+| :star: [java-dependency-config](#java-dependency-config) | Baseline | Dependências e configurações padrão Spring Boot 3+ (JPA, Flyway, MapStruct, Resilience4j) |
+| :star: [java-observability](#java-observability) | Normativo | Logging JSON + OpenTelemetry, tracing com Jaeger, métricas Prometheus, Health Checks |
+| :star: [java-performance](#java-performance) | Code review | JPA otimizado, N+1, QueryDSL, caching (Caffeine/Redis), WebClient, HikariCP |
+| :star: [java-testing](#java-testing) | Normativo | JUnit 5 + AssertJ + Mockito, Testcontainers, Playwright E2E, Dev Containers |
 
 ### .NET / ASP.NET Core
 
 | Skill | Tipo | Propósito |
 |-------|------|-----------|
-| [dotnet-index](#dotnet-index) | Índice | Mapa de navegação entre os 7 módulos de skills .NET |
-| [dotnet-architecture](#dotnet-architecture) | Normativo | Clean Architecture com camadas numeradas, CQRS nativo, Repository Pattern, FluentValidation |
-| [dotnet-code-quality](#dotnet-code-quality) | Transversal | Naming conventions, SOLID, async/await, CancellationToken, DI, estilo C# |
-| [dotnet-dependency-config](#dotnet-dependency-config) | Baseline | NuGet baseline, EF Core + PostgreSQL, Mapster, Polly, RabbitMQ, NuGet library authoring |
-| [dotnet-observability](#dotnet-observability) | Normativo | Health Checks, Kubernetes probes, OpenTelemetry logging integrado a tracing |
-| [dotnet-performance](#dotnet-performance) | Code review | EF Core otimizado, IMemoryCache/Redis, HttpClient + Polly, paginação, IAsyncEnumerable |
-| [dotnet-production-readiness](#dotnet-production-readiness) | Checklist | OpenTelemetry OTLP, logs JSON estruturados, sanitização de dados sensíveis, deploy checklist |
-| [dotnet-testing](#dotnet-testing) | Normativo | xUnit + AwesomeAssertions + Moq, WebApplicationFactory + Testcontainers, Playwright E2E |
+| :star: [dotnet-index](#dotnet-index) | Índice | Mapa de navegação entre os 7 módulos de skills .NET |
+| :star: [dotnet-architecture](#dotnet-architecture) | Normativo | Clean Architecture com camadas numeradas, CQRS nativo, Repository Pattern, FluentValidation |
+| :star: [dotnet-code-quality](#dotnet-code-quality) | Transversal | Naming conventions, SOLID, async/await, CancellationToken, DI, estilo C# |
+| :star: [dotnet-dependency-config](#dotnet-dependency-config) | Baseline | NuGet baseline, EF Core + PostgreSQL, Mapster, Polly, RabbitMQ, NuGet library authoring |
+| :star: [dotnet-observability](#dotnet-observability) | Normativo | Health Checks, Kubernetes probes, OpenTelemetry logging integrado a tracing |
+| :star: [dotnet-performance](#dotnet-performance) | Code review | EF Core otimizado, IMemoryCache/Redis, HttpClient + Polly, paginação, IAsyncEnumerable |
+| :star: [dotnet-production-readiness](#dotnet-production-readiness) | Checklist | OpenTelemetry OTLP, logs JSON estruturados, sanitização de dados sensíveis, deploy checklist |
+| :star: [dotnet-testing](#dotnet-testing) | Normativo | xUnit + AwesomeAssertions + Moq, WebApplicationFactory + Testcontainers, Playwright E2E |
 
 ### React / Vite / TypeScript
 
 | Skill | Tipo | Propósito |
 |-------|------|-----------|
-| [react-architecture](#react-architecture) | Normativo | Estrutura de pastas (flat/feature-based), path aliases `@/`, public API via `index.ts` |
-| [react-code-quality](#react-code-quality) | Transversal | Naming em inglês, componentes ~300 linhas, TypeScript strict, hooks patterns, props tipadas |
-| [react-observability](#react-observability) | Normativo | OpenTelemetry Web, propagação W3C Trace Context, `useTracing` hook, erros globais |
-| [react-production-readiness](#react-production-readiness) | Checklist | Agregadora: telemetria, runtime config, erros, CI pipeline, Dockerfile |
-| [react-runtime-config](#react-runtime-config) | Normativo | 12-factor runtime config, `window.RUNTIME_ENV`, Dockerfile multi-stage, `envsubst` |
-| [react-subpath-deploy](#react-subpath-deploy) | Normativo | Deploy em subpath Kubernetes: Vite base path, React Router basename, Nginx SPA fallback |
-| [react-testing](#react-testing) | Normativo | Vitest + React Testing Library + MSW, `renderHook`, `userEvent`, queries semânticas, 70%+ |
+| :star: [react-architecture](#react-architecture) | Normativo | Estrutura de pastas (flat/feature-based), path aliases `@/`, public API via `index.ts` |
+| :star: [react-code-quality](#react-code-quality) | Transversal | Naming em inglês, componentes ~300 linhas, TypeScript strict, hooks patterns, props tipadas |
+| :star: [react-observability](#react-observability) | Normativo | OpenTelemetry Web, propagação W3C Trace Context, `useTracing` hook, erros globais |
+| :star: [react-production-readiness](#react-production-readiness) | Checklist | Agregadora: telemetria, runtime config, erros, CI pipeline, Dockerfile |
+| :star: [react-runtime-config](#react-runtime-config) | Normativo | 12-factor runtime config, `window.RUNTIME_ENV`, Dockerfile multi-stage, `envsubst` |
+| :star: [react-subpath-deploy](#react-subpath-deploy) | Normativo | Deploy em subpath Kubernetes: Vite base path, React Router basename, Nginx SPA fallback |
+| :star: [react-testing](#react-testing) | Normativo | Vitest + React Testing Library + MSW, `renderHook`, `userEvent`, queries semânticas, 70%+ |
 
 ---
 
