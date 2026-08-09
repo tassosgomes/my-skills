@@ -1,6 +1,8 @@
 ---
 name: flow-qa-task-runner
 description: "Subagente de execucao de testes QA para uma user story ou feature especifica. Recebe contexto do qa-orchestrator (qa_session.json + trecho do PRD/techspec), planeja casos de teste, executa via Playwright CLI (UI), cURL (API) e Docker CLI (banco de dados), salva todas as evidencias, e gera relatorio individual. NUNCA modifica testes para forcam pass. NUNCA sugere correcoes de codigo. Reporta o que encontrou com total fidelidade. Usar quando: executar task de teste QA individual; validar user story especifica."
+metadata:
+  group: flow-qa
 ---
 
 # QA Task Runner

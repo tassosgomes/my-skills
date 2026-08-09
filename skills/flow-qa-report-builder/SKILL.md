@@ -1,6 +1,8 @@
 ---
 name: flow-qa-report-builder
 description: "Consolidador de relatorios QA. Recebe qa_session.json e todos os relatorios individuais (qa_report_task_XX.md) gerados pelos subagentes qa-task-runner, e produz um relatorio consolidado completo em Markdown e/ou PDF. Estrutura: sumario executivo, resultado por feature, detalhes de falhas (expected vs actual), evidencias referenciadas e recomendacoes de investigacao. Usar quando: consolidar resultados de testes QA; gerar relatorio final de sessao de testes."
+metadata:
+  group: flow-qa
 ---
 
 # QA Report Builder

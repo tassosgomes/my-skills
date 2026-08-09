@@ -1,295 +1,74 @@
 ---
 name: dotnet-architecture
-description: "Padroes arquiteturais e estrutura de projeto .NET C# / ASP.NET Core: Clean Architecture com camadas numeradas, Repository Pattern com Entity Framework Core, CQRS nativo (sem MediatR) com Commands, Queries, Handlers e Dispatcher, tratamento global de erros (IExceptionHandler, ProblemDetails), Custom Exceptions e Result Pattern, FluentValidation em handlers, estrutura de pastas e dependencias entre projetos. Usar quando: criar novo microservico; criar modulo/feature; implementar endpoints e fluxo CQRS; definir contratos (DTOs/requests/responses); definir ou revisar estrutura de camadas; organizar pastas e projetos; configurar referencias entre projetos."
+description: "Use para mudanças estruturais em .NET C# / ASP.NET Core: novo serviço, módulo, feature, endpoint, camadas, CQRS, repositories, DTOs ou tratamento global de erros. Não use para tuning de performance, observabilidade isolada ou revisão geral de estilo."
+metadata:
+  group: dotnet
 ---
 
-# Padroes Arquiteturais e Estrutura de Projeto .NET C# e ASP.NET Core
+# Arquitetura .NET C# / ASP.NET Core
 
-## Indice
+Esta é a skill primária quando a mudança altera a estrutura do sistema. O core mantém as
+fronteiras e as regras que não podem ser esquecidas; exemplos completos ficam em `examples/` e
+só devem ser lidos quando a tarefa exigir aquele padrão.
 
-1. [Estrutura de Pastas](#estrutura-de-pastas)
-2. [Dependencias entre Projetos](#dependencias-entre-projetos)
-3. [Padroes de Arquitetura](#padroes-de-arquitetura)
-4. [Comandos para Criacao da Estrutura](#comandos-para-criacao-da-estrutura)
-5. [Checklists](#checklists)
-6. [Regras Criticas de Implementacao](#regras-criticas-de-implementacao)
+## Modelo obrigatório
 
-> **Exemplos de codigo completos** ficam em `examples/` e devem ser abertos sob demanda conforme a tarefa:
-> - `examples/clean-architecture.md` — entidade de dominio + handler de caso de uso
-> - `examples/repository-pattern.md` — `IRepository<T>`, base generica e repositorio especifico
-> - `examples/cqrs.md` — interfaces CQRS, dispatcher, commands/queries, DI e controllers
-> - `examples/error-handling.md` — global exception handler, custom exceptions, Result pattern, middleware, FluentValidation
-> - `examples/project-setup.md` — comandos `dotnet` para criar solution, projetos e referencias
+Use Clean Architecture/Hexagonal com estas responsabilidades:
 
----
-
-# PARTE 1 — ESTRUTURA DE PROJETO
-
-## Estrutura de Pastas
-
-### Visao Geral
-
-Estrutura padrao para projetos .NET seguindo Clean Architecture, com camadas numeradas para facilitar navegacao e representar a hierarquia de dependencias.
-
-```
-ProjectName/
-├── ProjectName.sln
-├── 1-Services/
-│   └── ProjectName.API/
-│       └── ProjectName.API.csproj
-├── 2-Application/
-│   └── ProjectName.Application/
-│       └── ProjectName.Application.csproj
-├── 3-Domain/
-│   └── ProjectName.Domain/
-│       ├── ProjectName.Domain.csproj
-│       ├── Entities/
-│       ├── Services/
-│       └── Interfaces/
-├── 4-Infra/
-│   └── ProjectName.Infra/
-│       ├── ProjectName.Infra.csproj
-│       └── Repositories/
-└── 5-Tests/
-    ├── ProjectName.UnitTests/
-    │   └── ProjectName.UnitTests.csproj
-    ├── ProjectName.IntegrationTests/
-    │   └── ProjectName.IntegrationTests.csproj
-    └── ProjectName.End2EndTests/
-        └── ProjectName.End2EndTests.csproj
+```text
+API/Services -> Application -> Domain
+Infrastructure ----------------> Domain
+Tests --------------------------> camadas que exercitam
 ```
 
-### Descricao das Camadas
+- **Domain:** entidades, value objects, invariantes, regras de negócio e portas; não depende de
+  ASP.NET Core, EF Core ou outra infraestrutura.
+- **Application:** casos de uso, handlers, DTOs, validação e orquestração; depende de abstrações
+  do domínio.
+- **API/Services:** controllers finos, contratos HTTP, middleware e autenticação; não contém regra
+  de negócio.
+- **Infrastructure:** EF Core, repositórios, integrações externas e configurações concretas.
+- **Tests:** projetos separados para unitário, integração e E2E.
 
-#### 1. Services (Camada de Apresentacao)
+As pastas numeradas (`1-Services` a `5-Tests`) são uma convenção de navegação, não devem aparecer
+em namespaces. As referências de projeto apontam para dentro: API → Application → Domain e
+Infrastructure → Domain.
 
-- **Pasta:** `1-Services/`
-- **Tipo:** ASP.NET Core Web API
-- **Responsabilidade:**
-  - Expor endpoints HTTP
-  - Gerenciar controllers
-  - Configuracao de middleware
-  - Autenticacao e autorizacao
-  - Documentacao da API (Swagger)
+## Regras não negociáveis
 
-#### 2. Application (Camada de Aplicacao)
+1. Mantenha regras de negócio no Domain e contratos de infraestrutura atrás de interfaces.
+2. Use CQRS nativo (`ICommand<T>`, `IQuery<T>` e handlers) sem MediatR.
+3. Resolva handlers por tipos e DI/assembly scan; nunca por nome de bean, string ou
+   `ApplicationContext.GetBean`.
+4. Coloque interfaces de repositório no Domain/Application e implementações EF Core na
+   Infrastructure; entidades EF não atravessam essa fronteira.
+5. Use `IExceptionHandler` global e `ProblemDetails` (RFC 9457) para erros HTTP.
+6. Use exceções específicas para falhas de domínio; reserve `Result<T>` para integrações que
+   precisam modelar falhas esperadas.
+7. Valide commands/queries com FluentValidation antes de executar efeitos colaterais.
+8. Propague `CancellationToken` em operações assíncronas e mantenha controllers sem lógica de
+   persistência.
 
-- **Pasta:** `2-Application/`
-- **Tipo:** Class Library
-- **Responsabilidade:**
-  - Casos de uso (Use Cases)
-  - Servicos de aplicacao
-  - DTOs (Data Transfer Objects)
-  - Mapeamentos
-  - Validacoes de entrada
-  - Orquestracao da logica de negocio
+## Carregamento sob demanda
 
-#### 3. Domain (Camada de Dominio)
+| Necessidade | Recurso a ler |
+|---|---|
+| árvore de solução, projetos e referências | `examples/project-setup.md` |
+| entidade, use case e fronteiras | `examples/clean-architecture.md` |
+| portas, repositório EF e mapeamento | `examples/repository-pattern.md` |
+| command/query, dispatcher, DI e controller | `examples/cqrs.md` |
+| exceções, ProblemDetails, middleware e validação | `examples/error-handling.md` |
 
-- **Pasta:** `3-Domain/`
-- **Tipo:** Class Library
-- **Responsabilidade:**
-  - Entidades de dominio
-  - Regras de negocio
-  - Interfaces de repositorios
-  - Servicos de dominio
-  - Value Objects
-  - Eventos de dominio
-- **Subpastas:**
-  - `Entities/` — Classes de entidades do dominio
-  - `Services/` — Servicos que encapsulam logicas de dominio
-  - `Interfaces/` — Contratos e interfaces do dominio
+Não leia todos os exemplos por padrão. Se a tarefa é apenas criar um endpoint, comece pelo core,
+leia `cqrs.md` e `error-handling.md` somente se esses padrões forem usados.
 
-#### 4. Infra (Camada de Infraestrutura)
+## Checklist do diff
 
-- **Pasta:** `4-Infra/`
-- **Tipo:** Class Library
-- **Responsabilidade:**
-  - Implementacao de repositorios
-  - Acesso a dados (Entity Framework)
-  - Configuracoes de banco de dados
-  - Integracoes externas
-  - Servicos de infraestrutura
-- **Subpastas:**
-  - `Repositories/` — Implementacoes concretas dos repositorios
-
-#### 5. Tests (Camada de Testes)
-
-- **Pasta:** `5-Tests/`
-- **Tipo:** xUnit Test Projects
-- **Projetos:**
-  - `UnitTests` — Testes unitarios isolados, mocks e stubs
-  - `IntegrationTests` — Testes de integracao com banco de dados e servicos
-  - `End2EndTests` — Testes de ponta a ponta simulando usuario real
-
----
-
-## Dependencias entre Projetos
-
-### Fluxo de Dependencias
-
-```
-┌─────────────────┐
-│   1-Services    │
-│      (API)      │
-└─────────┬───────┘
-          │
-          ▼
-┌─────────────────┐
-│  2-Application  │
-└─────────┬───────┘
-          │
-          ▼
-┌─────────────────┐    ┌─────────────────┐
-│    3-Domain     │◄───│    4-Infra      │
-└─────────────────┘    └─────────────────┘
-          ▲                      ▲
-          │                      │
-          └──────────────────────┘
-                     │
-          ┌─────────────────┐
-          │    5-Tests      │
-          └─────────────────┘
-```
-
-### Referencias de Projeto
-
-- **API** → Application
-- **Application** → Domain
-- **Infra** → Domain
-- **UnitTests** → Application + Domain
-- **IntegrationTests** → Application + Infra
-- **End2EndTests** → API
-
-### Principios Arquiteturais
-
-1. **Inversao de Dependencia**: As camadas externas dependem das internas. O Domain nao possui dependencias externas. Interfaces no Domain sao implementadas na Infra.
-2. **Separacao de Responsabilidades**: Cada camada tem uma responsabilidade bem definida. Baixo acoplamento entre as camadas. Alta coesao dentro de cada camada.
-3. **Testabilidade**: Estrutura permite testes isolados. Dependencias podem ser mockadas. Testes cobrem todas as camadas.
-
-### Convencoes de Nomenclatura (Camadas)
-
-- **API**: `ProjectName.API`
-- **Application**: `ProjectName.Application`
-- **Domain**: `ProjectName.Domain`
-- **Infra**: `ProjectName.Infra`
-- **UnitTests**: `ProjectName.UnitTests`
-- **IntegrationTests**: `ProjectName.IntegrationTests`
-- **End2EndTests**: `ProjectName.End2EndTests`
-
----
-
-# PARTE 2 — PADROES ARQUITETURAIS
-
-## Padroes de Arquitetura
-
-> **Por que seguir padroes arquiteturais?**
-> - **Reduz complexidade**: Separacao de responsabilidades torna sistema mais compreensivel
-> - **Facilita testes**: Camadas bem definidas permitem mocking e isolamento efetivos
-> - **Acelera onboarding**: Desenvolvedores familiarizados com padroes se adaptam mais rapido
-> - **Reduz acoplamento**: Mudancas em uma camada nao afetam outras
-> - **Facilita evolucao**: Arquitetura limpa permite crescimento sustentavel do sistema
-> - **Melhora manutenibilidade**: Bugs e mudancas ficam localizados
-
-### Clean Architecture
-
-Regras de negocio vivem no Domain (entidades com comportamento e invariantes encapsuladas). A Application orquestra casos de uso via handlers, dependendo de abstracoes do Domain — nunca o contrario.
-
-→ Template completo em `examples/clean-architecture.md`.
-
-### Repository Pattern
-
-Abstrai o acesso a dados atras de `IRepository<T>` generico, com implementacao base sobre Entity Framework Core e repositorios especificos para queries de dominio. Use `AsNoTracking` em consultas somente leitura.
-
-→ Template completo em `examples/repository-pattern.md`.
-
-### CQRS Nativo (Sem MediatR)
-
-Separa comandos (escrita) de queries (leitura) com interfaces proprias (`ICommand<T>`, `IQuery<T>`, `ICommandHandler<,>`, `IQueryHandler<,>`) e um `Dispatcher` nativo que resolve handlers via DI por reflection — sem dependencia do MediatR. Handlers sao registrados automaticamente com Scrutor (`Scan`).
-
-→ Interfaces, dispatcher, commands/queries, registro no DI e uso em controllers em `examples/cqrs.md`.
-
-### Tratamento de Erros
-
-Centraliza falhas via `IExceptionHandler` global (ASP.NET Core 8+) traduzindo excecoes em `ProblemDetails`. Custom exceptions herdam de `DomainException`; o `Result<T>` pattern modela sucesso/falha sem excecoes em operacoes criticas. Validacao com FluentValidation nos handlers.
-
-→ Global handler, custom exceptions, Result pattern, middleware de logging e FluentValidation em `examples/error-handling.md`.
-
----
-
-## Comandos para Criacao da Estrutura
-
-Sequencia de comandos `dotnet` CLI para criar a solution, os 7 projetos das camadas e configurar as referencias entre eles.
-
-→ Comandos completos em `examples/project-setup.md`.
-
----
-
-## Checklists
-
-### Clean Architecture
-
-- [ ] Domain layer isolada sem dependencias externas
-- [ ] Application layer com handlers CQRS
-- [ ] Infrastructure layer com implementacoes concretas
-- [ ] Dependency Inversion respeitado
-- [ ] Regras de negocio no dominio
-
-### Repository Pattern
-
-- [ ] `IRepository<T>` generico definido
-- [ ] Implementacao base com Entity Framework Core
-- [ ] Repositorios especificos quando necessario
-- [ ] DbContext configurado com Unit of Work
-- [ ] Queries otimizadas com `AsNoTracking` para leitura
-
-### CQRS Nativo
-
-- [ ] Interfaces `ICommand<T>` e `IQuery<T>` definidas
-- [ ] `ICommandHandler<T,R>` e `IQueryHandler<T,R>` implementados
-- [ ] Dispatcher nativo configurado no DI
-- [ ] Handlers registrados automaticamente
-- [ ] Logging estruturado nos handlers
-- [ ] Validation pipeline implementado
-
-### Tratamento de Erros
-
-- [ ] Global exception handler configurado
-- [ ] Custom exceptions por dominio
-- [ ] Result pattern para operacoes criticas
-- [ ] Logging estruturado de erros
-- [ ] Validation pipeline automatico
-- [ ] Problem Details padronizado
-
-### Validacao
-
-- [ ] FluentValidation configurado
-- [ ] Validators por comando/query
-- [ ] Pipeline behavior para validacao
-- [ ] Mensagens de validacao em ingles
-- [ ] Validation exceptions customizadas
-
-### Estrutura de Projeto
-
-- [ ] Camadas numeradas (1-Services a 5-Tests)
-- [ ] Referencias de projeto corretas
-- [ ] Namespaces seguindo convencao
-- [ ] Domain sem dependencias externas
-- [ ] Pastas internas organizadas
-
----
-
-## Regras Criticas de Implementacao
-
-1. **Namespaces Limpos**: Jamais inclua os prefixos numéricos das pastas (ex: `1-`, `2-`) nos namespaces.
-   - Correto: `namespace ProjectName.Application.UseCases`
-   - Incorreto: `namespace ProjectName._2_Application.UseCases`
-
-2. **Bibliotecas Obrigatórias**:
-   - Para DI Scan: Instalar `Scrutor` (`dotnet add package Scrutor`).
-   - Para Validação: Instalar `FluentValidation.DependencyInjectionExtensions`.
-   - Para EF Core: Instalar `Microsoft.EntityFrameworkCore.Design`.
-
-3. **Padrão UnitOfWork**:
-   - A interface `IUnitOfWork` deve expor apenas `Task<int> SaveChangesAsync(CancellationToken ct)`.
-   - A implementação deve injetar o `AppDbContext`.
+- [ ] A dependência entre camadas aponta para dentro.
+- [ ] O Domain continua independente de framework e persistência.
+- [ ] O controller é fino e o caso de uso está na Application.
+- [ ] O handler é resolvido por tipo/DI, sem lookup nominal.
+- [ ] Repositório e entidade EF não vazam para a API.
+- [ ] DTOs e validação pertencem ao contrato/caso de uso correto.
+- [ ] Erros produzem ProblemDetails sem stack trace exposto.
+- [ ] Há teste focado para o comportamento novo ou alterado.

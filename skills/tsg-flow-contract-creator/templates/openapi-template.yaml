@@ -1,0 +1,411 @@
+openapi: 3.1.0
+
+info:
+  title: "[Nome da Feature] API"
+  description: |
+    API para [descrição da funcionalidade].
+    
+    **Contrato gerado a partir do PRD:** `tasks/prd-[nome-funcionalidade]/prd.md`
+    **Data de geração:** [data]
+    
+    ## Premissas Adotadas
+    - [Premissa 1 — ex: Autenticação via JWT Bearer]
+    - [Premissa 2 — ex: Paginação por offset/limit]
+    - [Premissa 3 — ex: Valores monetários em centavos (inteiro)]
+  version: "1.0.0"
+  contact:
+    name: "[Time responsável]"
+
+servers:
+  - url: http://localhost:3000/api/v1
+    description: Desenvolvimento local
+  - url: https://staging.exemplo.com/api/v1
+    description: Staging
+  - url: https://api.exemplo.com/api/v1
+    description: Produção
+
+# ─── Segurança Global ────────────────────────────────────────────────────────
+security:
+  - BearerAuth: []
+
+tags:
+  - name: [Recurso 1]
+    description: "Operações relacionadas a [recurso 1]"
+  - name: [Recurso 2]
+    description: "Operações relacionadas a [recurso 2]"
+
+# ─── Paths ───────────────────────────────────────────────────────────────────
+paths:
+
+  /[recursos]:
+    get:
+      summary: Listar [recursos]
+      description: |
+        Retorna lista paginada de [recursos].
+        [Regras de negócio relevantes]
+      operationId: listar[Recursos]
+      tags: [- "[Recurso 1]"]
+      parameters:
+        - name: page
+          in: query
+          description: Número da página (começa em 1)
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+            example: 1
+        - name: limit
+          in: query
+          description: Itens por página (máx 100)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+            example: 20
+        - name: [filtro]
+          in: query
+          description: "[Descrição do filtro]"
+          schema:
+            type: string
+            example: "[valor de exemplo]"
+      responses:
+        "200":
+          description: Lista retornada com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/[Recurso]ListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+      x-frontend-notes: "Implementar infinite scroll ou paginação — preferência do time de UX"
+      x-backend-notes: "Adicionar índice em [campo] para performance do filtro"
+
+    post:
+      summary: Criar [recurso]
+      operationId: criar[Recurso]
+      tags: [- "[Recurso 1]"]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Criar[Recurso]Request"
+      responses:
+        "201":
+          description: Recurso criado com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/[Recurso]Response"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /[recursos]/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: ID único do recurso
+        schema:
+          type: string
+          format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440000"
+
+    get:
+      summary: Buscar [recurso] por ID
+      operationId: buscar[Recurso]PorId
+      tags: [- "[Recurso 1]"]
+      responses:
+        "200":
+          description: Recurso encontrado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/[Recurso]Response"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+    patch:
+      summary: Atualizar [recurso]
+      operationId: atualizar[Recurso]
+      tags: [- "[Recurso 1]"]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Atualizar[Recurso]Request"
+      responses:
+        "200":
+          description: Recurso atualizado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/[Recurso]Response"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+    delete:
+      summary: Remover [recurso]
+      operationId: remover[Recurso]
+      tags: [- "[Recurso 1]"]
+      responses:
+        "204":
+          description: Recurso removido com sucesso
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+# ─── Components ──────────────────────────────────────────────────────────────
+components:
+
+  # Segurança
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: "Token JWT obtido via endpoint de autenticação"
+
+  # Respostas reutilizáveis
+  responses:
+    BadRequest:
+      description: Requisição inválida — erro de validação de campos
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            code: "VALIDATION_ERROR"
+            message: "Dados inválidos na requisição"
+            details:
+              - field: "email"
+                message: "Formato de e-mail inválido"
+
+    Unauthorized:
+      description: Não autenticado — token ausente ou inválido
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            code: "UNAUTHORIZED"
+            message: "Token de autenticação inválido ou expirado"
+
+    Forbidden:
+      description: Sem permissão para esta operação
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            code: "FORBIDDEN"
+            message: "Você não tem permissão para realizar esta operação"
+
+    NotFound:
+      description: Recurso não encontrado
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            code: "NOT_FOUND"
+            message: "Recurso não encontrado"
+
+    UnprocessableEntity:
+      description: Erro de regra de negócio
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            code: "BUSINESS_RULE_VIOLATION"
+            message: "Não é possível realizar esta operação no estado atual"
+
+    InternalServerError:
+      description: Erro interno do servidor
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            code: "INTERNAL_ERROR"
+            message: "Ocorreu um erro interno. Tente novamente mais tarde."
+            traceId: "abc123xyz"
+
+  # Schemas
+  schemas:
+
+    # ── Entidade principal ──
+    [Recurso]:
+      type: object
+      description: "Representa um(a) [recurso] no sistema"
+      required:
+        - id
+        - [campo_obrigatorio]
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Identificador único
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        [campo_obrigatorio]:
+          type: string
+          description: "[Descrição do campo]"
+          example: "[valor de exemplo realista]"
+        [campo_opcional]:
+          type: string
+          nullable: true
+          description: "[Descrição do campo]"
+          example: null
+        status:
+          type: string
+          enum: [ativo, inativo, pendente]
+          description: |
+            Status do recurso:
+            - `ativo`: [quando é ativo]
+            - `inativo`: [quando é inativo]
+            - `pendente`: [quando é pendente]
+          example: "ativo"
+        createdAt:
+          type: string
+          format: date-time
+          description: Data de criação (ISO 8601)
+          example: "2024-01-15T10:30:00Z"
+        updatedAt:
+          type: string
+          format: date-time
+          description: Data da última atualização (ISO 8601)
+          example: "2024-01-15T14:22:00Z"
+
+    # ── Responses ──
+    [Recurso]Response:
+      type: object
+      description: "Response de um único [recurso]"
+      allOf:
+        - $ref: "#/components/schemas/[Recurso]"
+
+    [Recurso]ListResponse:
+      type: object
+      required:
+        - data
+        - pagination
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/[Recurso]"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+
+    # ── Requests ──
+    Criar[Recurso]Request:
+      type: object
+      required:
+        - [campo_obrigatorio]
+      properties:
+        [campo_obrigatorio]:
+          type: string
+          description: "[Descrição]"
+          minLength: 1
+          maxLength: 255
+          example: "[valor de exemplo realista]"
+        [campo_opcional]:
+          type: string
+          nullable: true
+          description: "[Descrição]"
+          example: null
+
+    Atualizar[Recurso]Request:
+      type: object
+      description: "Todos os campos são opcionais — atualização parcial (PATCH)"
+      properties:
+        [campo_atualizavel]:
+          type: string
+          description: "[Descrição]"
+          example: "[valor de exemplo]"
+
+    # ── Compartilhados ──
+    Pagination:
+      type: object
+      required:
+        - page
+        - limit
+        - total
+        - totalPages
+      properties:
+        page:
+          type: integer
+          description: Página atual
+          example: 1
+        limit:
+          type: integer
+          description: Itens por página
+          example: 20
+        total:
+          type: integer
+          description: Total de itens
+          example: 142
+        totalPages:
+          type: integer
+          description: Total de páginas
+          example: 8
+
+    ErrorResponse:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          description: Código de erro legível por máquina
+          example: "VALIDATION_ERROR"
+        message:
+          type: string
+          description: Mensagem de erro legível por humano
+          example: "Dados inválidos na requisição"
+        details:
+          type: array
+          nullable: true
+          description: Detalhes adicionais (ex: erros por campo)
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+                example: "email"
+              message:
+                type: string
+                example: "Formato inválido"
+        traceId:
+          type: string
+          nullable: true
+          description: ID de rastreamento para debug (presente em erros 5xx)
+          example: "abc123xyz"

@@ -1,6 +1,10 @@
 # my-skills
 
-Repositório de skills que utilizo no meu dia a dia. Cada skill vive em `skills/<nome>/SKILL.md` e segue o formato com frontmatter (`name`, `description`) seguido do corpo normativo.
+Repositório de skills que utilizo no meu dia a dia. `skills/` é a fonte canônica: cada skill ativa vive em `skills/<nome>/SKILL.md` e segue o formato com frontmatter (`name`, `description`) seguido do corpo normativo. `novas/` é apenas staging para comparação e não deve ser usado como fonte de instalação.
+
+O [guia de uso do TSG Flow](docs/tsg-flow-guide.md) explica os handoffs entre Vision, Domain Map,
+Domain, PRD, Contract, TechSpec, Frontend TechSpec, Tasks e as skills de execução. O
+[diagrama do fluxo](docs/diagrams/tsg-flow-pipeline.md) mostra a cadeia e o ciclo por task.
 
 ---
 
@@ -22,15 +26,54 @@ Exemplos:
 
 ```bash
 npx skills add tassosgomes/my-skills/flow-qa-orchestrator
+npx skills add tassosgomes/my-skills/tsg-flow-prd-creator
+npx skills add tassosgomes/my-skills/tsg-flow-techspec-creator
+npx skills add tassosgomes/my-skills/tsg-flow-task-creator
 npx skills add tassosgomes/my-skills/common-mermaid-creator
 npx skills add tassosgomes/my-skills/java-architecture
 ```
+
+Funciona com qualquer harness suportado pela CLI `skills` (Claude Code, Codex, GitHub Copilot,
+Cursor, Windsurf, etc.) — use `-a <agente>` para direcionar um harness específico ou `-a '*'`
+para todos os detectados. Repositórios privados funcionam via SSH (`git@github.com:...`) ou
+HTTPS com `gh auth login` / `GITHUB_TOKEN`.
+
+### Instalação por grupo
+
+O repositório declara grupos de skills em [`.claude-plugin/marketplace.json`](.claude-plugin/marketplace.json):
+`tsg-flow`, `flow-qa`, `dotnet`, `java` e `react`. Rodando `npx skills add tassosgomes/my-skills`
+sem `-s`, o picker interativo agrupa as skills por família e permite selecionar um grupo inteiro
+de uma vez (ex.: todo o `tsg-flow`, para não instalar `tsg-flow-implementer` sem `tsg-flow-orchestrator`).
+Cada `SKILL.md` do grupo também documenta a família no próprio frontmatter (`metadata.group`) —
+é só uma convenção legível para humanos, quem decide o agrupamento real no instalador é o
+`marketplace.json`.
+
+O agrupamento é uma conveniência de instalação, não uma dependência obrigatória: `-s <skill>`
+continua instalando skills avulsas normalmente.
 
 ---
 
 ## Visão geral das skills
 
 > :star: Skills de minha autoria.
+
+### Pipeline TSG de Produto e Implementação
+
+| Skill | Etapa | Propósito |
+|-------|-------|-----------|
+| :star: [tsg-flow-vision-creator](skills/tsg-flow-vision-creator/) | Vision | Define a visão macro e os limites do sistema |
+| :star: [tsg-flow-domain-decomposer](skills/tsg-flow-domain-decomposer/) | Domain Map | Decompõe a visão em bounded contexts conceituais |
+| :star: [tsg-flow-domain-creator](skills/tsg-flow-domain-creator/) | Domain | Detalha um domínio, suas features e regras de negócio |
+| :star: [tsg-flow-prd-creator](skills/tsg-flow-prd-creator/) | PRD | Conduz discovery e cria requisitos de produto rastreáveis |
+| :star: [tsg-flow-contract-creator](skills/tsg-flow-contract-creator/) | API Contract | Define o contrato OpenAPI como fonte de verdade |
+| :star: [tsg-flow-techspec-creator](skills/tsg-flow-techspec-creator/) | TechSpec | Traduz o PRD em decisões e artefatos técnicos |
+| :star: [tsg-flow-frontend-techspec-creator](skills/tsg-flow-frontend-techspec-creator/) | Frontend TechSpec | Define a implementação frontend baseada no contrato |
+| :star: [tsg-flow-task-creator](skills/tsg-flow-task-creator/) | Tasks | Gera tasks verticais, rastreáveis e prontas para agentes |
+| :star: [tsg-flow-gate-creator](skills/tsg-flow-gate-creator/) | Gate | Gera o gate determinístico do TSG Flow |
+
+O fluxo de execução utiliza ainda `tsg-flow-orchestrator`, `tsg-flow-implementer`,
+`tsg-flow-validator` e `tsg-flow-integrator`. As skills `flow-qa-*` pertencem ao pipeline de QA
+e permanecem com esse namespace nesta etapa.
 
 ### Pipeline de QA
 
@@ -44,7 +87,7 @@ npx skills add tassosgomes/my-skills/java-architecture
 
 | Skill | Tipo | Propósito |
 |-------|------|-----------|
-| [common-mermaid-creator](#common-mermaid-creator) | Gerador | Gera diagramas Mermaid de alta qualidade a partir de PRDs e especificações de arquitetura |
+| [common-mermaid-creator](#common-mermaid-creator) | Gerador | Gera diagramas Mermaid de alta qualidade a partir de documentos de requisitos e especificações de arquitetura |
 | [find-docs](#find-docs) | Utilitário | Busca documentação atualizada de qualquer lib via Context7 MCP ou CLI |
 
 ### Testes

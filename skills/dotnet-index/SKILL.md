@@ -1,16 +1,30 @@
 ---
 name: dotnet-index
-description: "Indice das skills .NET C# / ASP.NET Core: mapa de navegacao entre os 7 modulos de skills consolidados (architecture, code-quality, dependency-config, observability, performance, testing, production-readiness). Usar quando: decidir qual skill consultar; entender a organizacao das skills; mapear uma tarefa especifica ao modulo correto."
+description: "Router das skills .NET C# / ASP.NET Core. Use somente quando precisar escolher o módulo correto, combinar dois módulos para uma tarefa ou revisar o roteamento; tarefas comuns devem acionar diretamente a skill do domínio."
+metadata:
+  group: dotnet
 ---
 
-# Indice de Skills .NET C# / ASP.NET Core
+# Router de Skills .NET C# / ASP.NET Core
 
-Ponto de entrada para navegacao entre as skills consolidadas.
-Use a tabela de roteamento para encontrar rapidamente o modulo correto.
+Este arquivo é um mapa curto. Ele existe para evitar que um agente carregue todos os módulos
+.NET para uma tarefa que precisa de apenas um deles.
+
+## Política de carregamento
+
+1. Escolha uma skill primária pelo objetivo do diff.
+2. Adicione no máximo uma skill secundária quando houver dependência explícita.
+3. Não carregue `dotnet-production-readiness` para uma alteração rotineira.
+4. Não carregue `dotnet-code-quality` apenas porque algum código será gerado; use-a para revisar
+   o diff ou aplicar as regras de qualidade nele.
+5. Não carregue `dotnet-testing` se a tarefa não cria, altera ou diagnostica testes.
+
+Quando a tarefa mistura domínios, preserve o foco: arquitetura decide a estrutura, dependências
+configuram a infraestrutura, testes validam o comportamento e production-readiness fecha o gate.
 
 ---
 
-## Skills Disponiveis
+## Roteamento
 
 | # | Skill | Escopo |
 |---|-------|--------|
@@ -22,9 +36,7 @@ Use a tabela de roteamento para encontrar rapidamente o modulo correto.
 | 6 | **dotnet-testing** | Testes unitarios (xUnit + AwesomeAssertions + Moq), integracao (WebApplicationFactory + Testcontainers PostgreSQL), E2E (Playwright), Dev Containers |
 | 7 | **dotnet-production-readiness** | OpenTelemetry (OTLP), logging estruturado, sanitizacao de dados, niveis de log, checklist consolidado de deploy |
 
----
-
-## Guia Rapido por Tarefa
+## Decisão rápida
 
 | Tarefa | Skill |
 |--------|-------|
@@ -57,24 +69,21 @@ Use a tabela de roteamento para encontrar rapidamente o modulo correto.
 | Configurar Testcontainers | dotnet-testing |
 | Criar testes E2E (Playwright) | dotnet-testing |
 | Configurar Dev Containers | dotnet-testing |
-| Configurar OpenTelemetry | dotnet-production-readiness |
-| Sanitizar dados em logs | dotnet-production-readiness |
+| Implementar OpenTelemetry, logs ou tracing | dotnet-observability |
+| Validar OpenTelemetry e logs no deploy | dotnet-production-readiness |
+| Sanitizar dados em logs durante implementação | dotnet-observability |
 | Preparar deploy para producao | dotnet-production-readiness |
 | Validar checklist pre-deploy | dotnet-production-readiness |
 
 ---
 
-## Decisoes Arquiteturais
+## Combinações permitidas
 
-| Decisao | Padrao Oficial | Alternativa |
-|---------|---------------|-------------|
-| Banco de dados | PostgreSQL | Oracle (legado/excecao) |
-| Logging/Tracing | OpenTelemetry (OTLP) | — |
-| ORM | Entity Framework Core | — |
-| Validacao | FluentValidation | — |
-| Mapping | Mapster | — |
-| Resiliencia HTTP | Polly | — |
-| Testes unitarios | xUnit + AwesomeAssertions | — |
-| Testes integracao | Testcontainers (PostgreSQL) | — |
-| Testes E2E | Playwright | — |
-| CQRS | Nativo (sem MediatR) | — |
+| Objetivo primário | Secundária possível | Motivo |
+|---|---|---|
+| Nova feature ou endpoint | `dotnet-testing` | Criar o comportamento e sua regressão |
+| EF Core, migration ou integração | `dotnet-architecture` | Manter fronteiras e contratos |
+| Bug de performance | `dotnet-dependency-config` | Só quando a causa estiver na infraestrutura |
+| Preparação para deploy | `dotnet-observability` ou `dotnet-testing` | Apenas pelo item concreto do gate |
+
+Se nenhuma combinação se encaixar, selecione somente a skill mais próxima e declare a lacuna.

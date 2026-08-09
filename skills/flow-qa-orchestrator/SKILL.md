@@ -1,6 +1,8 @@
 ---
 name: flow-qa-orchestrator
 description: "Orquestrador de testes QA end-to-end. Recebe PRD e/ou techspec, conduz entrevista para extrair expectativas do usuario, analisa requisitos, propoe plano de tasks por user story/feature, aguarda aprovacao do usuario, cria estrutura de evidencias, dispara subagentes via qa-task-runner e consolida relatorio final. Usar quando: executar testes QA; validar PRD/techspec; criar plano de testes E2E; orquestrar subagentes de teste."
+metadata:
+  group: flow-qa
 ---
 
 # QA Orchestrator

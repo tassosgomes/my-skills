@@ -1,0 +1,76 @@
+{
+  "name": "my-skills",
+  "owner": {
+    "name": "Tasso Gomes"
+  },
+  "plugins": [
+    {
+      "name": "tsg-flow",
+      "description": "Pipeline TSG de produto e implementacao: Vision, Domain Map, Domain, PRD, Contract, TechSpec, Frontend TechSpec, Tasks, Gate e execucao (orchestrator/implementer/validator/integrator).",
+      "skills": [
+        "./skills/tsg-flow-vision-creator",
+        "./skills/tsg-flow-domain-decomposer",
+        "./skills/tsg-flow-domain-creator",
+        "./skills/tsg-flow-prd-creator",
+        "./skills/tsg-flow-contract-creator",
+        "./skills/tsg-flow-techspec-creator",
+        "./skills/tsg-flow-frontend-techspec-creator",
+        "./skills/tsg-flow-task-creator",
+        "./skills/tsg-flow-gate-creator",
+        "./skills/tsg-flow-orchestrator",
+        "./skills/tsg-flow-implementer",
+        "./skills/tsg-flow-validator",
+        "./skills/tsg-flow-integrator"
+      ]
+    },
+    {
+      "name": "flow-qa",
+      "description": "Pipeline de QA E2E: orquestracao, execucao por user story e consolidacao de relatorio.",
+      "skills": [
+        "./skills/flow-qa-orchestrator",
+        "./skills/flow-qa-task-runner",
+        "./skills/flow-qa-report-builder"
+      ]
+    },
+    {
+      "name": "dotnet",
+      "description": "Suite .NET C# / ASP.NET Core: arquitetura, qualidade, dependencias, observabilidade, performance, production readiness e testes.",
+      "skills": [
+        "./skills/dotnet-index",
+        "./skills/dotnet-architecture",
+        "./skills/dotnet-code-quality",
+        "./skills/dotnet-dependency-config",
+        "./skills/dotnet-observability",
+        "./skills/dotnet-performance",
+        "./skills/dotnet-production-readiness",
+        "./skills/dotnet-testing"
+      ]
+    },
+    {
+      "name": "java",
+      "description": "Suite Java / Spring Boot: arquitetura, qualidade, dependencias, observabilidade, performance, production readiness e testes.",
+      "skills": [
+        "./skills/java-architecture",
+        "./skills/java-code-quality",
+        "./skills/java-dependency-config",
+        "./skills/java-observability",
+        "./skills/java-performance",
+        "./skills/java-production-readiness",
+        "./skills/java-testing"
+      ]
+    },
+    {
+      "name": "react",
+      "description": "Suite React / Vite / TypeScript: arquitetura, qualidade, observabilidade, production readiness, runtime config, subpath deploy e testes.",
+      "skills": [
+        "./skills/react-architecture",
+        "./skills/react-code-quality",
+        "./skills/react-observability",
+        "./skills/react-production-readiness",
+        "./skills/react-runtime-config",
+        "./skills/react-subpath-deploy",
+        "./skills/react-testing"
+      ]
+    }
+  ]
+}

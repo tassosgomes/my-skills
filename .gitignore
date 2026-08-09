@@ -1,4 +1,5 @@
 _repos/*
 .claude
 .agents
-pdf
+docs
+opencode.json

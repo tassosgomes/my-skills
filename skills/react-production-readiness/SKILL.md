@@ -1,132 +1,45 @@
-```skill
 ---
 name: react-production-readiness
-description: "Skill agregadora de validacao de producao para React + Vite + TypeScript: verifica telemetria em prod (OpenTelemetry), propagacao W3C Trace Context, config runtime 12-factor (sem rebuild por ambiente), tratamento global de erros, sanitizacao de dados sensiveis (LGPD/PCI-DSS), CI pipeline (type-check/lint/test/build), Dockerfile otimizado, cobertura de testes. Usar quando: antes de merge; antes de deploy; validacao pre-producao; review de readiness; auditoria de repositorio frontend."
+description: "Use somente antes de merge, release, deploy ou auditoria pré-produção de um frontend React + Vite + TypeScript, quando o usuário pedir um readiness gate completo. Não acione para configurar isoladamente um log, teste, container, runtime config ou subpath."
+metadata:
+  group: react
 ---
 
-# React Production Readiness (Vite + TypeScript)
+# Production Readiness React
 
-Skill agregadora para validacao pre-producao.
-Usada antes de: merge, deploy, geracao de build final.
+Este é o gate agregado: verifica se os controles necessários estão integrados para o ambiente alvo.
+Não substitui as skills especializadas nem deve bloquear uma alteração local por itens irrelevantes.
 
-Esta skill consolida verificacoes de todas as outras skills React em um checklist unificado.
+## Gate mínimo
 
----
+- **Observabilidade:** OpenTelemetry em produção, propagação W3C, captura de erros, sanitização e
+  exportação configurada.
+- **Runtime e segurança:** `runtime-env.js` carregado antes do bundle, sem URLs de backend vindas
+  de `import.meta.env`, sem secrets no código e com uma imagem para todos os ambientes.
+- **Container/deploy:** Dockerfile multi-stage, entrypoint que falha cedo, configuração Nginx,
+  probes e documentação das variáveis; valide subpath quando o app não roda na raiz.
+- **Qualidade/arquitetura:** strict TypeScript, sem `any`, componentes funcionais, aliases,
+  fronteiras de feature e tratamento de estados/erros.
+- **Testes/CI:** unitários e integração com MSW quando há API, E2E para fluxos críticos, lint,
+  type-check, testes, cobertura conforme baseline e build aprovados.
 
-# 1. Telemetria e Observabilidade
+## Limites com outras skills
 
-- [ ] OpenTelemetry inicializado apenas em producao (`import.meta.env.PROD`)
-- [ ] service.name configurado (= nome da pasta do servico)
-- [ ] Auto-instrumentacoes ativas (fetch, document-load, user-interaction)
-- [ ] Propagacao W3C Trace Context funcionando para APIs
-- [ ] Interceptor Axios/fetch propagando headers de trace
-- [ ] Hook `useTracing` disponivel para spans customizados
-- [ ] Tratamento global de erros (`error` + `unhandledrejection`)
-- [ ] BatchSpanProcessor configurado (nao SimpleSpanProcessor)
-- [ ] Endpoint OTLP configurado corretamente
+- `react-observability` implementa sinais.
+- `react-runtime-config` implementa configuração em runtime e container.
+- `react-subpath-deploy` implementa base path, Router, Nginx e Ingress fora da raiz.
+- `react-testing` cria ou diagnostica testes.
+- `react-architecture` e `react-code-quality` corrigem estrutura e código.
 
----
+## Referência sob demanda
 
-# 2. Seguranca e Dados Sensiveis
+Leia [a referência completa de readiness](references/full-guide.md) durante o gate de release,
+auditoria ou revisão pré-produção; carregue somente as seções aplicáveis ao ambiente.
 
-- [ ] Nenhum dado sensivel logado (CPF, senhas, tokens, cartoes)
-- [ ] Sanitizacao implementada para dados pessoais (`sanitize.ts`)
-- [ ] Sem segredos hard-coded no codigo
-- [ ] Template `runtime-env.template.js` nao contem valores reais
-- [ ] Conformidade LGPD em atributos de span/trace
+## Checklist de saída
 
----
-
-# 3. Configuracao Runtime (12-Factor)
-
-- [ ] `public/runtime-env.template.js` existe com todas as chaves
-- [ ] `index.html` carrega `runtime-env.js` antes do bundle
-- [ ] `src/config/runtimeConfig.ts` centraliza acesso a configs
-- [ ] Nenhuma URL de backend via `import.meta.env` ou hard-coded
-- [ ] Defaults seguros para dev local em `runtimeConfig.ts`
-- [ ] Uma unica imagem Docker para todos os ambientes
-
----
-
-# 4. Container e Deploy
-
-- [ ] Dockerfile multi-stage (Node build -> nginx:alpine runtime)
-- [ ] `docker/40-runtime-env.sh` existe e e executavel
-- [ ] Script valida env vars obrigatorias (falha cedo)
-- [ ] `envsubst` gera `runtime-env.js` a partir do template
-- [ ] Template removido apos geracao (nao exposto)
-- [ ] Porta 80 exposta
-- [ ] Documentacao lista todas as env vars por ambiente
-
----
-
-# 5. Qualidade de Codigo
-
-- [ ] TypeScript `strict: true` habilitado
-- [ ] Nenhum `any` em codigo de producao
-- [ ] Todo codigo em Ingles
-- [ ] Componentes funcionais apenas (sem class components)
-- [ ] Props tipadas com `interface` ou `type`
-- [ ] Componentes com max ~300 linhas
-- [ ] Sem imports relativos complexos (`../../../`)
-- [ ] Path aliases configurados (@/)
-- [ ] `useEffect` com cleanup quando necessario
-- [ ] `useCallback`/`useMemo` com motivo documentado
-
----
-
-# 6. Arquitetura
-
-- [ ] Estrutura de pastas coerente (base, intermediaria ou feature-based)
-- [ ] Componentes reutilizaveis em `shared/components` ou `components/ui`
-- [ ] Logica de dominio em `features/*`
-- [ ] `index.ts` como public API de cada feature
-- [ ] Hooks genericos em `shared/hooks`
-- [ ] Hooks de dominio em `features/*/hooks`
-
----
-
-# 7. Testes
-
-- [ ] Componentes principais tem testes
-- [ ] Hooks de negocio tem testes separados
-- [ ] Fluxos com API usam MSW (nao fetch real)
-- [ ] Formularios tem pelo menos 1 teste sucesso + 1 erro
-- [ ] Padrão AAA em todos os testes
-- [ ] Queries semanticas (getByRole, getByLabelText)
-- [ ] Cobertura minima >= 70%
-- [ ] `npm run test` passa localmente
-
----
-
-# 8. CI Pipeline
-
-- [ ] `npm ci` para instalar dependencias
-- [ ] `npm run lint` configurado (ESLint)
-- [ ] `npm run type-check` configurado (`tsc --noEmit`)
-- [ ] `npm run test:coverage` com gates de cobertura
-- [ ] `npm run build` sem erros
-- [ ] Pipeline falha em qualquer etapa com erro
-
----
-
-# 9. Renderizacao e UX
-
-- [ ] Sem renderizacao condicional com valores falsy perigosos
-- [ ] Sem props drilling excessivo (>2 niveis)
-- [ ] Estados de loading/error/empty tratados
-- [ ] Mensagens de erro amigaveis na UI
-
----
-
-# Resumo de Validacao
-
-Antes de aprovar para producao, TODAS as secoes acima devem estar com checklist completo.
-
-Prioridade de correcao:
-
-1. **Critico**: Seguranca (dados sensiveis), Config Runtime, Container
-2. **Alto**: Telemetria, CI Pipeline, Testes
-3. **Medio**: Qualidade de Codigo, Arquitetura
-4. **Baixo**: UX refinements, Code style (se ja funcional)
-```
+- [ ] Build, lint, type-check, testes e gates de cobertura passaram.
+- [ ] Observabilidade e sanitização estão prontas para o ambiente alvo.
+- [ ] Runtime, secrets, container, probes e rollback estão definidos.
+- [ ] Arquitetura, UX e tratamento de erros não têm bloqueios conhecidos.
+- [ ] Exceções bloqueantes têm evidência e responsável.
