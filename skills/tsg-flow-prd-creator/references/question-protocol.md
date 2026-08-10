@@ -13,9 +13,60 @@ Antes de qualquer pergunta, extrair e apresentar o contexto herdado:
 
 - Vision Doc: objetivos de negócio, restrições globais, non-goals, glossário, perfis de usuário
 - Domain Doc: ID e descrição da feature, entidades, regras RN-XX, dependências, eventos
+- Product Decision Records: decisões `Accepted` e `Proposed` relevantes, com escopo e termos afetados
 
 Apresentar ao usuário um resumo do que foi herdado para que ele saiba o que **não** será
 perguntado novamente. Confirmar a feature alvo se identificada por ID no Domain Doc.
+
+### Motor de Discovery: árvore de decisões
+
+Modele a feature como uma árvore de decisões, não como uma lista fixa de perguntas.
+
+- Identifique decisões-raiz e decisões dependentes antes de começar.
+- A **fronteira** é o conjunto de decisões cujas dependências já foram resolvidas.
+- Pergunte apenas sobre a fronteira atual; uma decisão que depende de outra resposta fica para
+  depois.
+- Após cada resposta, atualize a árvore e recalcule a próxima pergunta.
+- A interface continua sendo sequencial: faça uma pergunta por mensagem, mesmo quando houver
+  mais de uma decisão independente disponível.
+- O discovery termina quando não houver decisões bloqueantes ou premissas silenciosas e o
+  usuário confirmar que o entendimento está compartilhado.
+
+Mantenha uma matriz de decisões durante a sessão:
+
+| ID | Decisão | Resposta confirmada | Fonte/contexto | Desbloqueia | Persistência | Destino |
+|---|---|---|---|---|---|---|
+| DP-01 | [decisão] | [resposta] | [usuário/upstream] | [próximas decisões] | [PRD/PD/Domain/Vision] | [seção/RF/métrica] |
+
+Não descarte a matriz ao terminar: use-a para verificar que decisões materiais foram refletidas
+no PRD. Ela pode permanecer como registro de trabalho; o documento final deve conter pelo menos
+as decisões relevantes para escopo, comportamento, prioridade e métricas.
+
+### Persistência das decisões de produto
+
+Classifique cada decisão confirmada antes de redigir:
+
+- **PRD** — decisão específica desta feature; registre no PRD e não crie um documento separado.
+- **PD-XXX** — decisão reutilizável por outros PRDs, política de negócio, termo canônico,
+  limite de escopo ou trade-off material; use `references/product-decision-template.md`.
+- **Domain Doc** — decisão que altera fronteiras, entidades, regras ou eventos do domínio; atualize
+  o Domain Doc e referencie o PD quando houver rationale reutilizável.
+- **Vision Doc** — decisão que altera objetivos, escopo macro ou restrições globais; atualize o
+  Vision Doc e referencie o PD quando houver rationale reutilizável.
+- **TechSpec/ADR** — decisão de arquitetura ou implementação; não registre como PD.
+
+Não crie PD para escolhas locais, reversíveis ou que já estejam suficientemente expressas em um
+requisito. Para persistir um PD, a decisão deve estar confirmada pelo usuário e atender pelo
+menos um dos critérios de reutilização, política, vocabulário, fronteira ou trade-off relevante.
+
+Durante o discovery, registre o PD como `Proposed`. Depois da aprovação final do PRD, marque-o
+como `Accepted` e atualize `docs/product-decisions/index.md`. Se o usuário descartar ou substituir
+a decisão, marque o registro como `Withdrawn` ou `Superseded`; nunca deixe uma decisão antiga
+parecendo vigente. Um PD `Proposed` pode orientar a conversa, mas nunca deve ser tratado como
+restrição normativa sem nova confirmação.
+
+Nunca altere um PD `Accepted` em lugar para mudar sua decisão: crie um novo PD `Proposed` com
+`Substitui: PD-XXX` e, após a aprovação, marque o anterior como `Superseded`.
 
 ### 2. Discovery
 
@@ -68,7 +119,10 @@ Refinar a abordagem selecionada com follow-ups dirigidos.
 Gerar o documento PRD usando o contexto coletado.
 
 - Ler e preencher o template `prd-template.md`
+- Ler `references/product-decision-template.md` quando a matriz indicar persistência em `PD-XXX`
 - Cada seção deve refletir decisões confirmadas
+- Preencher `Termos Canônicos` e `Decisões de Produto` quando forem aplicáveis
+- Conferir a matriz de decisões contra o draft para não perder decisões materiais
 - Itens não resolvidos vão para "Questões em Aberto"
 - Apresentar draft completo ao usuário (não seção por seção)
 
@@ -104,6 +158,9 @@ Isso são duas perguntas. Divida em duas mensagens separadas.
 - Formate como opções rotuladas (A, B, C...) para resposta com letra única.
 - Use perguntas abertas apenas quando o espaço de resposta for genuinamente ilimitado
   (ex: "Qual problema você está tentando resolver?").
+- Quando houver uma opção recomendável, apresente-a explicitamente depois das opções, com uma
+  justificativa curta. A recomendação é uma proposta do agente; a decisão continua sendo do
+  usuário.
 
 ### Fallback Obrigatório
 
@@ -128,12 +185,37 @@ CORRETO (decomposta + multiple-choice):
 > D) Feed de atividade
 > E) Outro — descreva"
 
+### Fatos versus decisões
+
+- **Fatos** devem ser obtidos pelo agente lendo `_idea.md`, Vision Doc, Domain Doc e outros
+  documentos explicitamente fornecidos. Não pergunte ao usuário algo que esses artefatos já
+  respondem.
+- **Decisões de produto** pertencem ao usuário. Não responda suas próprias perguntas nem trate
+  uma recomendação como aprovação.
+- Como esta skill não explora o codebase, perguntas sobre implementação, arquitetura ou estado
+  atual do código devem ser deixadas para a TechSpec ou para ferramentas especializadas.
+
+### Cenários de estresse
+
+Quando uma decisão envolver comportamento, estados, papéis ou fronteiras, teste-a com cenários
+concretos antes de considerá-la resolvida:
+
+- fluxo principal;
+- variação de permissão, perfil ou estado;
+- entrada inválida ou caso extremo;
+- resultado esperado quando a ação não puder ser concluída.
+
+Use um cenário por vez e converta cada ambiguidade encontrada em uma nova pergunta na próxima
+mensagem.
+
 ### Portões de Progressão
 
 - Concluir pelo menos uma rodada completa de Discovery + Understanding antes de apresentar
   Options.
 - Ter clareza sobre propósito, restrições e critérios de sucesso antes de apresentar abordagens.
 - Ter aprovação do usuário sobre uma abordagem antes de entrar em Refinement.
+- Esvaziar a fronteira de decisões bloqueantes e confirmar entendimento compartilhado antes de
+  iniciar Creation.
 - Não escrever o PRD até completar Refinement sem ambiguidades bloqueantes.
 
 ### Limites de Foco
@@ -172,6 +254,17 @@ Em Pipeline Mode, **nunca** pergunte ao usuário o que já está no Vision Doc o
 Liste explicitamente o contexto herdado antes de qualquer pergunta. Se houver divergência entre
 o input do usuário e os docs upstream, aponte explicitamente — não silenciosamente ignore.
 
+### Anti-Pattern: Criar estado paralelo de engenharia
+
+- Não criar ou atualizar `CONTEXT.md` durante o PRD. Em Pipeline Mode, Vision/Domain Docs são a
+  fonte de verdade; em Standalone Mode, registre termos canônicos relevantes no próprio PRD.
+- Não criar ADRs para decisões de produto. Registre decisões de escopo e comportamento em
+  `Decisões de Produto` ou `Alternativas Consideradas`; decisões arquiteturais ficam para a
+  TechSpec.
+- Um `PD-XXX` é permitido somente para uma decisão de produto reutilizável e deve seguir o
+  template, o status e o índice definidos em `product-decision-template.md`.
+- Não deixar decisões materiais somente na conversa: mapeie-as na matriz e no documento final.
+
 ### Anti-Pattern: Drift Técnico em Features Tecnicamente Nomeadas
 
 Quando o nome da feature soa técnico ("notificações por webhook", "exportação CSV", "modo
@@ -182,3 +275,9 @@ escuro"), traduza para a pergunta de necessidade do usuário por trás:
 
 - ERRADO: "Qual formato de biblioteca CSV adotar?"
 - CORRETO: "Quais informações os usuários precisam nos relatórios exportados?"
+
+### Idioma
+
+Conduza perguntas, recomendações, notas e drafts no idioma usado pelo usuário. Para esta skill,
+use Português Brasileiro por padrão. Preserve IDs, nomes próprios e termos canônicos em seu
+formato original quando isso evitar ambiguidade.

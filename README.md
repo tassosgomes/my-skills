@@ -29,7 +29,7 @@ npx skills add tassosgomes/my-skills/flow-qa-orchestrator
 npx skills add tassosgomes/my-skills/tsg-flow-prd-creator
 npx skills add tassosgomes/my-skills/tsg-flow-techspec-creator
 npx skills add tassosgomes/my-skills/tsg-flow-task-creator
-npx skills add tassosgomes/my-skills/common-mermaid-creator
+npx skills add tassosgomes/my-skills/mermaid
 npx skills add tassosgomes/my-skills/java-architecture
 ```
 
@@ -87,7 +87,7 @@ e permanecem com esse namespace nesta etapa.
 
 | Skill | Tipo | Propósito |
 |-------|------|-----------|
-| [common-mermaid-creator](#common-mermaid-creator) | Gerador | Gera diagramas Mermaid de alta qualidade a partir de documentos de requisitos e especificações de arquitetura |
+| [mermaid](#mermaid) | Gerador | Gera diagramas Mermaid de alta qualidade a partir de documentos de requisitos e especificações de arquitetura |
 | [find-docs](#find-docs) | Utilitário | Busca documentação atualizada de qualquer lib via Context7 MCP ou CLI |
 
 ### Testes
@@ -222,7 +222,7 @@ e permanecem com esse namespace nesta etapa.
 
 ---
 
-## common-mermaid-creator
+## mermaid
 
 **Papel:** Especialista em diagramas técnicos — gera diagramas Mermaid de alta qualidade a partir de PRDs e especificações de arquitetura.
 

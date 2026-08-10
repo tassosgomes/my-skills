@@ -39,6 +39,16 @@
 - **Eventos consumidos**: [Eventos do domínio que esta feature ouve]
 - **Eventos produzidos**: [Eventos do domínio que esta feature emite]
 
+## Termos Canônicos
+
+> **Seção condicional.** Inclua quando o discovery resolver termos novos, sinônimos ou
+> ambiguidades relevantes. Em Pipeline Mode, não redefina termos do Vision/Domain Doc; registre
+> apenas esclarecimentos compatíveis ou divergências que foram resolvidas.
+
+| Termo | Definição de negócio | Escopo/Fonte |
+|---|---|---|
+| [Termo] | [Definição curta, sem implementação] | [Vision Doc, Domain Doc ou decisão desta feature] |
+
 ---
 
 ## Objetivos
@@ -115,6 +125,17 @@
 - Onboarding e descoberta da funcionalidade]
 
 > Foco no comportamento percebido pelo usuário, não em escolhas de tecnologia ou framework.
+
+## Decisões de Produto
+
+> **Seção condicional.** Inclua decisões confirmadas que alteram escopo, comportamento,
+> priorização ou métricas e que não ficam suficientemente claras nos requisitos. Não registre
+> decisões arquiteturais ou de implementação; elas pertencem à TechSpec. Quando a decisão for
+> reutilizável, inclua o link do `PD-XXX` correspondente.
+
+| ID | Decisão confirmada | Alternativas descartadas e motivo | Impacto no PRD | Registro |
+|---|---|---|---|---|
+| DP-01 | [Decisão] | [Alternativas e trade-off] | [RF, métrica, fase ou non-goal afetado] | [PD-XXX ou —] |
 
 ---
 

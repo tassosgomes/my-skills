@@ -31,11 +31,14 @@ Por isso:
   especializadas de mapeamento de código (ex: Graphify) ou o próprio Domain Doc cumprem esse
   papel upstream.
 - **Sem pesquisa de mercado** — se relevante, deveria estar consolidada no Vision Doc.
-- **Sem ADRs** — decisões arquiteturais pertencem à TechSpec. Decisões de produto ficam
-  registradas inline na seção "Alternativas Consideradas" do próprio PRD.
+- **Sem artefatos paralelos de engenharia** — não criar `CONTEXT.md` ou `docs/adr/` durante o
+  PRD. O vocabulário global pertence ao Vision/Domain Doc e ADRs arquiteturais pertencem à
+  TechSpec. Decisões de produto reutilizáveis podem virar `PD-XXX`, conforme
+  `references/product-decision-template.md`.
 - **Foco total em discovery conversacional estruturado** — perguntas cirúrgicas, uma por vez,
-  multiple-choice, com fallback. A qualidade do PRD vem da qualidade do discovery, não de
-  research automatizado.
+  multiple-choice, com fallback; a qualidade do PRD vem do discovery, não de research automatizado.
+
+O discovery deve ser conduzido como uma **árvore de decisões**: resolver primeiro decisões dependentes, recalcular a pergunta após cada resposta, nunca deixar premissas implícitas e seguir `references/question-protocol.md`.
 
 ## Hard-Gate
 
@@ -43,6 +46,7 @@ Por isso:
 NÃO escrever o PRD até que:
 - A verificação de contexto upstream (Vision Doc / Domain Doc) esteja completa
 - O Discovery tenha pelo menos uma rodada completa
+- Não existam decisões bloqueantes na fronteira da árvore de discovery
 - 2-3 abordagens tenham sido apresentadas com trade-offs
 - O usuário tenha selecionado uma abordagem
 - O Refinement tenha resolvido todas as ambiguidades bloqueantes
@@ -97,6 +101,10 @@ Sempre use o mecanismo bloqueante.
 Se o runtime não fornecer tal ferramenta, apresente a pergunta como sua mensagem completa e
 pare de gerar. Não responda à própria pergunta nem prossiga sem input do usuário.
 
+Conduza perguntas, recomendações, notas e drafts no idioma usado pelo usuário; o padrão é
+Português Brasileiro. Preserve em seu idioma original termos canônicos, IDs, nomes próprios e
+palavras técnicas que funcionem como vocabulário compartilhado.
+
 ### Regras de pergunta (estritas)
 
 - **Uma pergunta por mensagem.** Sua mensagem deve ter exatamente um ponto de interrogação.
@@ -111,6 +119,10 @@ pare de gerar. Não responda à própria pergunta nem prossiga sem input do usu�
   rotuladas (A, B, C, etc.) para o usuário responder com uma única letra. Use perguntas
   abertas apenas quando o espaço de resposta for genuinamente ilimitado (ex: "Qual problema
   você está tentando resolver?").
+
+- **Recomendação explícita.** Quando houver uma opção defensável, apresente a recomendação do
+  agente e uma justificativa curta. A recomendação orienta a decisão, mas nunca substitui a
+  resposta do usuário.
 
 - **Fallback obrigatório.** Inclua sempre uma opção de escape (ex: "D) Outro — descreva").
 
@@ -132,6 +144,8 @@ pare de gerar. Não responda à própria pergunta nem prossiga sem input do usu�
 - Nome da funcionalidade ou ideia de produto.
 - Opcional: arquivo `_idea.md` existente no diretório alvo, usado como contexto inicial.
 - Opcional: arquivo `prd.md` existente no diretório alvo (ativa fluxo de update).
+- Opcional: índice `docs/product-decisions/index.md` e PDs relevantes (decisões de produto
+  reutilizáveis herdadas por esta feature).
 
 ## Workflow
 
@@ -162,7 +176,9 @@ Antes de qualquer pergunta:
 
 1. Verificar se `vision.md` está disponível no contexto ou em local conhecido do projeto.
 2. Verificar se `domains/[nome]/domain.md` está disponível.
-3. Determinar o modo de operação:
+3. Verificar se `docs/product-decisions/index.md` está disponível. Se estiver, ler o índice e os
+   PDs `Accepted` ou `Proposed` relevantes para o domínio, feature, termos e escopo atual.
+4. Determinar o modo de operação:
    - **Pipeline Mode** — pelo menos um dos dois documentos existe.
    - **Standalone Mode** — nenhum dos dois existe.
 
@@ -191,6 +207,17 @@ Se o Domain Doc identificar a feature por ID, confirmar com o usuário:
 > "Identifiquei que vamos detalhar a feature **F03 — Aprovação de Pagamentos** do Domain Doc.
 > Confirma?"
 
+#### O que extrair dos Product Decision Records
+
+- ID, título, status e escopo (`Global`, domínio ou feature)
+- Decisão registrada, distinguindo a vigente (`Accepted`) da pendente (`Proposed`), e termos canônicos afetados
+- Impactos e limites que futuros PRDs devem respeitar
+- Relações de substituição (`Superseded`) e documentos relacionados
+
+Se um PD conflitar com o input do usuário ou com o Vision/Domain Doc, apontar a divergência e
+perguntar se a decisão deve ser atualizada ou marcada como substituída (`Superseded`). Nunca
+sobrescrever silenciosamente.
+
 #### Apresentação do contexto herdado
 
 Antes de fazer qualquer pergunta de discovery, listar explicitamente o que foi extraído:
@@ -208,9 +235,30 @@ Antes de fazer qualquer pergunta de discovery, listar explicitamente o que foi e
 > Vou focar minhas perguntas no comportamento detalhado, casos extremos, métricas e critérios
 > de aceitação que ainda não estão cobertos."
 
+Se houver decisões de produto herdadas, listá-las também: PDs `Accepted` são restrições do
+discovery; PDs `Proposed` são contexto pendente e devem ser revalidados, sem serem tratados como
+fonte normativa.
+
 ### Fase 3: Discovery Estruturado
 
-Aplicar as **regras de pergunta** definidas acima (uma por vez, multiple-choice, fallback).
+Antes de iniciar as perguntas, leia `references/question-protocol.md` e construa mentalmente a
+árvore de decisões da feature. Aplique as regras de pergunta definidas ali (uma por vez,
+multiple-choice, fallback).
+
+#### Dimensionamento do discovery
+
+- Se a solicitação abranger múltiplos domínios, várias features independentes ou decisões que
+  não cabem em uma única sessão de PRD, interromper o discovery e recomendar
+  `tsg-flow-vision-creator`, `tsg-flow-domain-creator` ou a divisão em PRDs menores.
+- Não substituir esse redirecionamento por um mapa de issues, exploração de codebase ou execução
+  da implementação.
+
+#### Registro de decisões
+
+Durante o discovery, manter a matriz definida em `references/question-protocol.md`, incluindo a
+coluna de persistência (`PRD`, `PD-XXX`, `Domain Doc`, `Vision Doc` ou `TechSpec/ADR`). Para
+decisões reutilizáveis, ler `references/product-decision-template.md` e criar/atualizar o PD
+como `Proposed` somente depois da confirmação explícita do usuário.
 
 #### Em Pipeline Mode
 
@@ -284,6 +332,8 @@ coletado.
 - Voz ativa, omitir palavras desnecessárias, linguagem específica e definida.
 - Idioma: **Português Brasileiro**.
 - Tom: técnico, claro, consistente com artefatos corporativos.
+- Quando a matriz indicar `PD-XXX`, ler `references/product-decision-template.md` e garantir que
+  o PRD contenha o link para o registro correspondente.
 
 #### Seções obrigatórias (sempre incluir)
 
@@ -304,6 +354,12 @@ coletado.
 - **Rastreabilidade** *(apenas Pipeline Mode)* — referências ao Vision Doc (objetivos
   atendidos) e ao Domain Doc (ID da feature, regras RN-XX referenciadas, entidades envolvidas,
   eventos consumidos/produzidos).
+- **Termos Canônicos** *(quando o discovery resolver termos novos ou ambiguidades relevantes)* —
+  definições de negócio concisas, sem detalhes de implementação.
+- **Decisões de Produto** *(quando houver decisões materiais além da abordagem escolhida)* —
+  decisões confirmadas, alternativas descartadas e impacto no escopo ou comportamento.
+- **Referências a Product Decision Records** *(quando aplicável)* — IDs, links e status dos
+  `PD-XXX` criados, atualizados ou herdados na seção `Decisões de Produto`.
 - **Restrições Técnicas de Alto Nível** *(quando aplicável)* — apenas restrições que delimitam
   escopo, sem prescrever solução.
 
@@ -345,6 +401,11 @@ Antes de apresentar ao usuário, executar autoavaliação. Marcar mentalmente ca
 - [ ] **[Pipeline Mode]** O PRD é consistente com o Domain Doc (entidades, regras RN-XX,
   dependências)?
 - [ ] **[Pipeline Mode]** A seção Rastreabilidade está completa?
+- [ ] Termos canônicos novos ou ambíguos foram definidos sem contradizer os documentos upstream?
+- [ ] Cada decisão material foi registrada no PRD ou mapeada para requisito, métrica, non-goal ou
+      questão em aberto?
+- [ ] Cada `PD-XXX` relevante está com status correto, linkado ao PRD e indexado em
+      `docs/product-decisions/index.md`?
 - [ ] As alternativas consideradas estão registradas com trade-offs?
 - [ ] Nenhuma decisão de implementação técnica vazou para o PRD?
 
@@ -360,9 +421,11 @@ Apresentar o draft completo ao usuário e perguntar:
 > C) Reescrever a seção X (me diga o que mudar)
 > D) Descartar e começar de novo"
 
-- Se A: salvar em `tasks/prd-[slug]/prd.md` e confirmar o caminho.
+- Se A: salvar em `tasks/prd-[slug]/prd.md`, marcar os PDs desta sessão como `Accepted`, atualizar
+  `docs/product-decisions/index.md` e confirmar os caminhos.
 - Se B ou C: aplicar as mudanças e apresentar novamente.
-- Se D: voltar à Fase 3 (Discovery).
+- Se D: voltar à Fase 3 (Discovery). PDs ainda `Proposed` devem ser marcados como `Withdrawn` se
+  já tiverem sido escritos.
 
 Em caso de divergência detectada com Vision Doc ou Domain Doc, **apontar explicitamente** ao
 usuário ao invés de silenciosamente ignorar.
@@ -376,7 +439,8 @@ A resposta final, após salvar o arquivo, deve conter:
    nesta sessão.
 3. Caminho do arquivo salvo: `tasks/prd-[slug]/prd.md`.
 4. Lista de questões em aberto (se houver).
-5. Indicação do próximo passo:
+5. Lista de `PD-XXX` criados, atualizados ou herdados, com status e caminhos.
+6. Indicação do próximo passo:
    > "Para gerar a Especificação Técnica a partir deste PRD, use a skill `tsg-flow-techspec-creator`.
    > A TechSpec é onde decisões arquiteturais (incluindo ADRs) serão tomadas."
 
@@ -390,55 +454,38 @@ A resposta final, após salvar o arquivo, deve conter:
   comunicada ao usuário explicitamente.
 - **Non-Goals do sistema (Vision Doc) são Non-Goals do PRD** — não expandir o escopo global.
 - **YAGNI ruthlessly** — questionar cada feature; remover qualquer coisa que o MVP não precise.
+- **Discovery é uma árvore de decisões** — ordenar perguntas por dependências e recalcular a
+  fronteira após cada resposta.
+- **Fatos vêm das fontes; decisões vêm do usuário** — ler `_idea.md`, Vision Doc e Domain Doc
+  quando disponíveis; não pedir ao usuário fatos que esses documentos já respondem.
+- **Termos e decisões precisam sobreviver à conversa** — registrar o que for material no PRD,
+  ou em `PD-XXX` quando for reutilizável, sem criar um glossário global ou ADR antes da TechSpec.
 - **Uma pergunta por vez, multiple-choice, fallback** — não há exceção.
+- **Idioma acompanha o usuário** — usar Português Brasileiro por padrão e preservar vocabulário
+  canônico quando necessário.
 - **Update mode preserva trabalho prévio** — só altera o que o usuário pediu para alterar.
 
 ## Process Flow
 
 ```
-Determinar projeto/diretório
-        │
-        ▼
-PRD existe? ──Sim──► Update / Sobrescrever / Cancelar?
-        │                            │
-       Não                           ▼
-        │                    [aplicar escolha]
-        ▼                            │
-Verificar contexto upstream ◄────────┘
-        │
-        ▼
-Pipeline Mode? ──Sim──► Confirmar feature do Domain Doc
-        │                            │
-       Não                           ▼
-        │                    Listar contexto herdado
-        ▼                            │
-Discovery completo            Discovery focado em lacunas
-        │                            │
-        └────────────┬───────────────┘
-                     ▼
-        Apresentar 2-3 abordagens com trade-offs
-                     │
-                     ▼
-        Usuário seleciona abordagem
-                     │
-                     ▼
-              Refinement
-                     │
-                     ▼
-            Redigir PRD completo
-                     │
-                     ▼
-            Validação interna
-                     │
-                     ▼
-        Review com usuário (A/B/C/D)
-                     │
-              Aprovado?
-              │       │
-            Sim       Não ──► [revisar / voltar a Discovery]
-              │
-              ▼
-        Salvar em tasks/prd-[slug]/prd.md
+Determinar diretório → verificar PRD existente → verificar Vision/Domain/PDs
+                                      │
+                                      ▼
+                    Discovery por árvore de decisões
+                                      │
+                                      ▼
+                    Abordagens → seleção → Refinement
+                                      │
+                                      ▼
+                    Draft PRD + PDs `Proposed`
+                                      │
+                                      ▼
+                    Validação → review do usuário
+                                      │
+                     aprovado? ── não → revisar Discovery
+                         │
+                         ▼
+             salvar PRD + marcar PDs `Accepted` + atualizar índice
 ```
 
 ## Tratamento de Erros
