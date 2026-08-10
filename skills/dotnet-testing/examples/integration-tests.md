@@ -8,7 +8,7 @@
 public class CustomWebApplicationFactory : WebApplicationFactory<Program>, IAsyncLifetime
 {
     private readonly PostgreSqlContainer _dbContainer = new PostgreSqlBuilder()
-        .WithImage("postgres:16-alpine")
+        .WithImage("postgres:18-alpine")
         .WithDatabase("testdb")
         .WithUsername("testuser")
         .WithPassword("testpass")

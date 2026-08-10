@@ -35,6 +35,7 @@ configuram a infraestrutura, testes validam o comportamento e production-readine
 | 5 | **dotnet-performance** | EF Core otimizado (AsNoTracking, projections, pagination, bulk), caching (Memory/Redis), HttpClient (IHttpClientFactory, Polly) |
 | 6 | **dotnet-testing** | Testes unitarios (xUnit + AwesomeAssertions + Moq), integracao (WebApplicationFactory + Testcontainers PostgreSQL), E2E (Playwright), Dev Containers |
 | 7 | **dotnet-production-readiness** | OpenTelemetry (OTLP), logging estruturado, sanitizacao de dados, niveis de log, checklist consolidado de deploy |
+| 8 | **dotnet-program-setup** | Organizacao do `Program.cs`: metodos de extensao por concern (CORS, autenticacao, Swagger, health checks, pipeline de middlewares) |
 
 ## Decisão rápida
 
@@ -42,6 +43,7 @@ configuram a infraestrutura, testes validam o comportamento e production-readine
 |--------|-------|
 | Criar novo servico / projeto | dotnet-architecture |
 | Definir estrutura de pastas | dotnet-architecture |
+| Escolher API simples / Monolito Modular / Microsservicos | dotnet-architecture |
 | Implementar CQRS | dotnet-architecture |
 | Implementar Repository Pattern | dotnet-architecture |
 | Configurar FluentValidation | dotnet-architecture |
@@ -52,10 +54,13 @@ configuram a infraestrutura, testes validam o comportamento e production-readine
 | Aplicar SOLID / DI | dotnet-code-quality |
 | Configurar EF Core / DbContext | dotnet-dependency-config |
 | Setup PostgreSQL / Oracle | dotnet-dependency-config |
+| Diagnosticar migration que nao aplica / sintaxe incompativel | dotnet-dependency-config |
 | Configurar Mapster | dotnet-dependency-config |
 | Gerenciar pacotes NuGet | dotnet-dependency-config |
 | Criar biblioteca NuGet | dotnet-dependency-config |
-| Configurar connection strings | dotnet-dependency-config |
+| Configurar connection strings, appsettings ou segredos | dotnet-dependency-config |
+| Configurar dotnet user-secrets | dotnet-dependency-config |
+| Padronizar containers locais (Postgres/Mongo/Valkey/RabbitMQ) | dotnet-dependency-config |
 | Implementar health checks | dotnet-observability |
 | Configurar Kubernetes probes | dotnet-observability |
 | Logging com scopes / correlacao | dotnet-observability |
@@ -74,6 +79,8 @@ configuram a infraestrutura, testes validam o comportamento e production-readine
 | Sanitizar dados em logs durante implementação | dotnet-observability |
 | Preparar deploy para producao | dotnet-production-readiness |
 | Validar checklist pre-deploy | dotnet-production-readiness |
+| Organizar Program.cs em extensions (CORS, auth, Swagger, etc.) | dotnet-program-setup |
+| Program.cs grande demais / dificil de ler | dotnet-program-setup |
 
 ---
 
@@ -85,5 +92,6 @@ configuram a infraestrutura, testes validam o comportamento e production-readine
 | EF Core, migration ou integração | `dotnet-architecture` | Manter fronteiras e contratos |
 | Bug de performance | `dotnet-dependency-config` | Só quando a causa estiver na infraestrutura |
 | Preparação para deploy | `dotnet-observability` ou `dotnet-testing` | Apenas pelo item concreto do gate |
+| Novo serviço/projeto (bootstrap) | `dotnet-program-setup` | Registrar CORS/auth/Swagger/health checks já organizados desde o início |
 
 Se nenhuma combinação se encaixar, selecione somente a skill mais próxima e declare a lacuna.

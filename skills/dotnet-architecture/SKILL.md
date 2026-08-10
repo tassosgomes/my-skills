@@ -49,15 +49,31 @@ Infrastructure → Domain.
 8. Propague `CancellationToken` em operações assíncronas e mantenha controllers sem lógica de
    persistência.
 
+## Escolha de formato de solução
+
+Os três formatos abaixo compartilham o mesmo modelo de camadas; o que muda é a fronteira entre
+unidades de deploy. Escolha pelo estágio real do projeto, não pelo tamanho esperado no futuro:
+
+| Formato | Quando usar | Exemplo |
+|---|---|---|
+| **API simples** (um serviço) | Ponto de partida padrão; domínio ainda não tem fronteiras internas claras | `examples/project-setup.md` |
+| **Monolito Modular** | Fronteiras de domínio já claras, mas deploy/escala ainda não precisam ser independentes | `examples/modular-monolith.md` |
+| **Microsserviços** | Módulos já precisam escalar, implantar ou versionar de forma independente | `examples/microservices.md` |
+
+Não comece por Monolito Modular ou Microsserviços "para o caso de precisar depois" — evolua a
+partir da API simples quando a dor de acoplamento ou de deploy for real.
+
 ## Carregamento sob demanda
 
 | Necessidade | Recurso a ler |
 |---|---|
-| árvore de solução, projetos e referências | `examples/project-setup.md` |
+| árvore de solução, projetos e referências (API simples) | `examples/project-setup.md` |
 | entidade, use case e fronteiras | `examples/clean-architecture.md` |
 | portas, repositório EF e mapeamento | `examples/repository-pattern.md` |
 | command/query, dispatcher, DI e controller | `examples/cqrs.md` |
 | exceções, ProblemDetails, middleware e validação | `examples/error-handling.md` |
+| estrutura de módulos, fronteira in-process, host único | `examples/modular-monolith.md` |
+| estrutura multi-serviço, contrato compartilhado, comunicação entre serviços | `examples/microservices.md` |
 
 Não leia todos os exemplos por padrão. Se a tarefa é apenas criar um endpoint, comece pelo core,
 leia `cqrs.md` e `error-handling.md` somente se esses padrões forem usados.

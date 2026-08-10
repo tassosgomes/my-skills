@@ -43,7 +43,8 @@
         "./skills/dotnet-observability",
         "./skills/dotnet-performance",
         "./skills/dotnet-production-readiness",
-        "./skills/dotnet-testing"
+        "./skills/dotnet-testing",
+        "./skills/dotnet-program-setup"
       ]
     },
     {

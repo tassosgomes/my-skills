@@ -1,6 +1,9 @@
 # Dev Containers para Testes de Integracao — Exemplos
 
-Ambiente PostgreSQL isolado e reproduzivel para testes de integracao, com cleanup automatico.
+Ambiente PostgreSQL isolado e reproduzivel para testes de integracao, com cleanup automatico. A
+versao de imagem usada aqui deve ser a mesma do baseline de infraestrutura local
+(`dotnet-dependency-config/examples/local-infrastructure.md`) — nao escolha uma tag diferente so
+para o ambiente de teste.
 
 ## Estrutura de Arquivos
 
@@ -42,7 +45,7 @@ services:
       - POSTGRES_TEST_CONNECTION=Host=postgres-test-db;Port=5432;Database=testdb;Username=testuser;Password=Test123;
 
   postgres-test-db:
-    image: postgres:16-alpine
+    image: postgres:18-alpine
     environment:
       - POSTGRES_USER=testuser
       - POSTGRES_PASSWORD=Test123
