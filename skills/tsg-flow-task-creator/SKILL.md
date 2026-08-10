@@ -8,9 +8,17 @@ description: >
   em tarefas", "plano de implementação", "o que preciso implementar", "gerar tickets", ou qualquer
   variação que indique a necessidade de transformar um PRD/TechSpec em trabalho executável. Esta skill
   é a terceira etapa do pipeline PRD → TechSpec → Tasks. Requer que o PRD e a TechSpec já existam.
-  As tarefas geradas são otimizadas para consumo por agentes de código (Cursor, Claude Code, etc.).
+  As tarefas geradas são persistidas em arquivos, explicadas para consumo por agentes de código
+  (Cursor, Claude Code, etc.) e priorizam fatias verticais com feedback por comportamento.
 metadata:
   group: tsg-flow
+  pipeline_stage: tasks
+  requires:
+    - "tasks/prd-[slug]/prd.md"
+    - "tasks/prd-[slug]/techspec.md"
+  produces:
+    - "tasks/prd-[slug]/tasks.md"
+    - "tasks/prd-[slug]/<num>_task.md"
 ---
 
 # Task Creator
@@ -23,12 +31,33 @@ Antes de gerar, leia os templates empacotados nesta skill:
 - `templates/tasks-template.md` — formato do resumo de tarefas
 - `templates/task-template.md` — formato de cada tarefa individual
 
+Leia também [references/vertical-slicing.md](references/vertical-slicing.md) antes de dividir o
+trabalho. A conversa serve para explicar o resultado, mas os arquivos gravados são a fonte de
+verdade para o Orquestrador e para os agentes de código.
+
 ## Entradas e Saídas
 
 - **PRD requerido:** `tasks/prd-[nome-funcionalidade]/prd.md`
 - **TechSpec requerida:** `tasks/prd-[nome-funcionalidade]/techspec.md`
 - **Resumo de saída:** `tasks/prd-[nome-funcionalidade]/tasks.md`
 - **Tarefas individuais:** `tasks/prd-[nome-funcionalidade]/<num>_task.md`
+
+### Contrato de persistência e explicação
+
+Esta skill DEVE produzir os arquivos acima; não encerre entregando apenas uma lista no chat.
+Antes de responder ao usuário:
+
+1. Crie o diretório da feature se necessário e escreva `tasks.md` usando o template.
+2. Escreva um arquivo `<num>_task.md` para cada tarefa principal, sempre com `status: pending`.
+3. Releia os arquivos gravados e confirme que cada task tem contexto suficiente para um agente
+   implementar sem reconstruir a intenção a partir do PRD inteiro.
+4. Remova placeholders do template e substitua cada comando genérico por uma verificação real ou
+   por `N/A — [justificativa]` quando a categoria não se aplica.
+5. Só depois apresente o resumo e peça confirmação para iniciar a implementação. A confirmação
+   controla apenas o início da execução; o plano já deve estar disponível no filesystem.
+
+Se a TechSpec estiver com `Status: Em Revisão` ou `Handoff: draft`, pare antes de gerar tasks finais;
+um plano executável só pode consumir `techspec.md` aprovada.
 
 **Parâmetro opcional:** `--target-model-tier=budget|frontier` (padrão `budget`)
 
@@ -76,10 +105,17 @@ Inclua no `tasks.md` uma seção "Skills de Stack Consultadas" listando quais sk
 - Identificar componentes principais
 - Identificar explicitamente as user stories cobertas por cada tarefa principal
 - Extrair o **Inventário de Artefatos** da TechSpec (seção que lista todos os arquivos/componentes a criar ou modificar)
+- Extrair o **Mapa de Fatias Verticais** e os checkpoints de feedback da TechSpec
+- Se a TechSpec não tiver esse mapa, reconstruí-lo a partir de comportamentos do PRD e registrar a
+  lacuna; nunca usar o inventário de camadas como substituto de uma fatia
 
 ### 3. Varredura por Categorias Obrigatórias (Não pule esta etapa)
 
 Antes de gerar qualquer tarefa, verifique se o plano cobre TODAS as categorias abaixo. Para cada categoria, gere pelo menos uma tarefa OU declare explicitamente "N/A — [justificativa]":
+
+As categorias abaixo são uma lente de cobertura, não uma ordem de agrupamento. Não crie uma task
+"modelos", "validators" ou "testes" só para preencher uma linha: inclua esses elementos na fatia
+vertical do comportamento que eles sustentam.
 
 | # | Categoria | O que verificar | Skill de Stack Relacionada |
 |---|-----------|-----------------|---------------------------|
@@ -96,8 +132,13 @@ Antes de gerar qualquer tarefa, verifique se o plano cobre TODAS as categorias a
 
 ### 4. Gerar Estrutura de Tarefas
 
-- Organizar sequenciamento
-- Definir trilhas paralelas
+- Começar pelo menor comportamento demonstrável do mapa de fatias e expandir por valor entregue
+- Organizar sequenciamento por fatias, com dependências mínimas e checkpoints de feedback
+- Definir trilhas paralelas somente quando os arquivos e contratos forem realmente independentes
+- Colocar controller/handler, regra, persistência, integração, teste e observabilidade da mesma
+  jornada na mesma task, respeitando o orçamento de arquivos
+- Criar uma tarefa horizontal apenas como `enabling` quando ela for tecnicamente inevitável; registrar
+  a razão, o menor escopo e a fatia que ela desbloqueia
 - **Aplicar o Orçamento de Fragmentação (etapa 4A) a cada tarefa antes de prosseguir**
 
 ### 4A. Orçamento de Fragmentação (Obrigatório — Regra Dura)
@@ -109,7 +150,7 @@ Cada tarefa principal DEVE respeitar o orçamento do tier alvo:
 | Arquivos a **criar** | ≤ 3 | ≤ 6 |
 | Arquivos a **modificar** | ≤ 3 | ≤ 5 |
 | Subtarefas | ≤ 4 | ≤ 8 |
-| Fatias verticais | **exatamente 1** | 1 |
+| Fatias verticais por task `vertical` | **exatamente 1** | 1 |
 
 **Estourou qualquer limite → a tarefa DEVE ser quebrada.** Não gere a tarefa e siga
 adiante; divida-a antes de continuar.
@@ -118,6 +159,12 @@ adiante; divida-a antes de continuar.
 comportamento observável de ponta a ponta para *um* recurso ou regra. Agrupar por
 camada arquitetural ("todos os endpoints", "todos os validators", "todos os
 handlers") é o modo de falha mais comum e mais caro desta skill.
+
+Toda task deve declarar `slice_type: vertical` ou `slice_type: enabling`. Tasks `vertical` seguem a
+regra de exatamente uma fatia. Tasks `enabling` são exceções horizontais temporárias: só podem existir
+quando nenhum comportamento observável pode ser entregue sem o habilitador, devem ter o menor escopo
+possível e precisam apontar a fatia desbloqueada. Se habilitadores passarem de aproximadamente 20%
+do plano, reavalie a decomposição antes de finalizar.
 
 ```
 ❌ ERRADO  10.0 Expor as 20 operações Minimal API
@@ -159,6 +206,19 @@ mal aplicado ou a fragmentação está grosseira — revise antes de finalizar.
 - Declarar as decisões fechadas, limites de decisão e ambiguidades bloqueantes antes de finalizar a task
 - **Na seção "Detalhes de Implementação" de cada task, incluir as convenções relevantes das skills de stack** — ex: padrão de teste da skill de testing, padrão de error handling da skill de code-quality
 
+### 5A. Persistir e revisar os arquivos (Obrigatório)
+
+Após gerar o conteúdo, escreva imediatamente:
+
+- `tasks/prd-<slug>/tasks.md`, com o mapa de fatias, checkpoints de feedback e validações cruzadas;
+- um `<num>_task.md` por tarefa principal, com `slice_type`, comportamento observável e critérios
+  verificáveis.
+
+Releia cada arquivo do disco. A explicação de uma task deve permitir que o implementer entenda o
+valor entregue, o fluxo ponta a ponta, os arquivos exatos, as decisões que não pode reinventar e o
+checkpoint que provará a fatia. Se a única evidência for "a camada foi criada", a task é horizontal:
+reagrupe-a numa fatia ou marque-a como `enabling` com justificativa explícita.
+
 ### 6. Validação Cruzada (Obrigatório — Não pule esta etapa)
 
 Antes de finalizar, execute esta checagem e inclua o resultado no `tasks.md`:
@@ -192,14 +252,25 @@ Confirme que todas as 10 categorias obrigatórias foram endereçadas (tarefa ou 
 Gere esta tabela no `tasks.md`. Nenhuma linha pode ficar com ❌ na versão final:
 
 ```
-| Task | Criar | Modificar | Subtarefas | Fatias | complexity | Status |
-|------|-------|-----------|------------|--------|------------|--------|
-| 1.0  | 3     | 1         | 4          | 1      | medium     | ✅ |
-| 10.0 | 8     | 2         | 9          | 5      | high       | ❌ ESTOUROU → quebrar |
+| Task | slice_type | Criar | Modificar | Subtarefas | Fatias | complexity | Status |
+|------|------------|-------|-----------|------------|--------|------------|--------|
+| 1.0  | vertical   | 3     | 1         | 4          | 1      | medium     | ✅ |
+| 10.0 | vertical   | 8     | 2         | 9          | 5      | high       | ❌ ESTOUROU → quebrar |
 ```
 
 Feche com a distribuição de `complexity`. Se `high` passar de ~20% do total,
 declare explicitamente por que cada `high` é acoplamento irredutível — ou refragmente.
+
+**E) Entrega vertical e feedback:**
+
+- toda task `vertical` tem exatamente um comportamento observável, uma jornada ponta a ponta e um
+  checkpoint executável sem esperar as outras tasks;
+- o checkpoint contém comando, cenário, saída esperada ou evidência concreta — "testar depois" não
+  é checkpoint;
+- testes, validações, observabilidade e documentação específica da jornada estão na própria task;
+- toda task `enabling` explica por que não pode ser incorporada a uma fatia, qual é seu menor escopo
+  e qual fatia desbloqueia;
+- não há uma task que agrupe a mesma camada para vários comportamentos independentes.
 
 ## Otimização para Agentes de Código
 
@@ -225,6 +296,9 @@ Como o consumidor principal é um agente de código, cada tarefa DEVE incluir:
    - dependências que precisam estar concluídas;
    - ambiguidades bloqueantes, que devem ser `Nenhuma` antes de a task entrar em `pending`.
 
+5. **Feedback incremental** — cada task deve indicar a menor demonstração ou comando que valida o
+   comportamento entregue e o que ainda ficará fora do escopo daquele checkpoint.
+
 ## Diretrizes de Criação de Tarefas
 
 - Agrupar tarefas por **fatia vertical de domínio**, nunca por camada arquitetural
@@ -235,6 +309,8 @@ Como o consumidor principal é um agente de código, cada tarefa DEVE incluir:
 - Definir escopo e entregáveis claros para cada tarefa
 - Incluir testes como subtarefas dentro de cada tarefa principal
 - Amarrar cada tarefa principal às user stories do PRD sempre que possível
+- Fazer o feedback aparecer depois de cada fatia vertical; não agrupar tarefas para só validar no
+  fim de todas as camadas
 
 ## Análise de Paralelização
 
@@ -255,4 +331,5 @@ Para a análise de execução paralela, considere:
 - **Nunca finalize com uma tarefa fora do Orçamento de Fragmentação** — prefira 20 tarefas pequenas a 12 grandes; o custo de uma tarefa a mais é marginal, o custo de uma tarefa grande demais é o loop implementer↔validator
 - **Cada tarefa deve referenciar as skills de stack relevantes** para que o agente de código possa consultá-las durante a implementação
 
-Após completar a análise e gerar todos os arquivos necessários, apresente os resultados ao usuário e aguarde confirmação para prosseguir com a implementação.
+Após completar a análise, persistir e reler todos os arquivos necessários, apresente os resultados ao
+usuário e aguarde confirmação para prosseguir com a implementação. Não implemente código nesta skill.

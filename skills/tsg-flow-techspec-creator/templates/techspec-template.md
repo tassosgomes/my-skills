@@ -5,6 +5,7 @@
 > **API Contract:** `tasks/prd-[nome-funcionalidade]/api-contract.yaml` *(quando modo API-First)*
 > **Data:** [YYYY-MM-DD]
 > **Status:** [Rascunho | Em Revisão | Aprovado]
+> **Handoff:** [draft — não gerar Tasks | approved — pode alimentar o Task Creator]
 
 ---
 
@@ -47,6 +48,29 @@
 ### Diagrama de Componentes *(opcional)*
 
 [Diagrama em mermaid/dot/ascii ilustrando relações entre componentes.]
+
+## Estratégia de Entrega Incremental
+
+A implementação deve maximizar fatias verticais: cada linha abaixo entrega um comportamento
+observável de ponta a ponta, atravessando somente as camadas necessárias. O objetivo é permitir
+implementer → gate focado → validator → checkpoint após cada linha, sem esperar o fechamento de uma
+camada inteira.
+
+### Mapa de Fatias Verticais
+
+| Slice | Comportamento observável | US/RF/RN cobertos | Entrada → processamento → saída | Artefatos principais | Evidência / checkpoint | Bloqueado por |
+|-------|--------------------------|-------------------|--------------------------------|----------------------|-----------------------|---------------|
+| V-01 | [resultado demonstrável] | [IDs] | [fluxo em uma linha] | [arquivos] | [comando/cenário] | [IDs ou Nenhum] |
+
+Cada slice deve incluir seus testes e telemetria necessários no mesmo fluxo. Se uma entrega não
+produzir comportamento observável, classifique-a como habilitadora na tabela abaixo, explique por que
+ela é inevitável e aponte a primeira fatia que ela desbloqueia.
+
+### Habilitadores inevitáveis
+
+| Habilitador | Por que não pode fazer parte de uma fatia | Menor escopo | Fatias desbloqueadas |
+|-------------|--------------------------------------------|--------------|----------------------|
+| [enabler] | [justificativa concreta] | [arquivos] | [V-XX] |
 
 ---
 
@@ -118,15 +142,15 @@ interface NomeServico {
 
 ### Arquivos a Criar
 
-| Caminho | Tipo | Skills Aplicáveis | Descrição |
-|---------|------|-------------------|-----------|
-| `[caminho/arquivo]` | [Controller/UseCase/Entity/Repository/DTO/Mapper/Migration/Test/Config] | `[skill-1]`, `[skill-2]` | [Descrição em 1 linha] |
+| Caminho | Fatia | Tipo | Skills Aplicáveis | Descrição |
+|---------|-------|------|-------------------|-----------|
+| `[caminho/arquivo]` | [V-XX ou EN-XX] | [Controller/UseCase/Entity/Repository/DTO/Mapper/Migration/Test/Config] | `[skill-1]`, `[skill-2]` | [Descrição em 1 linha] |
 
 ### Arquivos a Modificar
 
-| Caminho | Skills Aplicáveis | Alteração |
-|---------|-------------------|-----------|
-| `[caminho/arquivo]` | `[skill]` | [Descrição da alteração] |
+| Caminho | Fatia | Skills Aplicáveis | Alteração |
+|---------|-------|-------------------|-----------|
+| `[caminho/arquivo]` | [V-XX ou EN-XX] | `[skill]` | [Descrição da alteração] |
 
 ### Arquivos de Referência (não alterar)
 
@@ -196,7 +220,8 @@ interface NomeServico {
 
 ### Build Order
 
-[Sequência ordenada respeitando dependências. Cada passo após o primeiro DEVE declarar suas dependências:]
+[Sequência ordenada por fatias verticais, respeitando dependências. Cada passo após o primeiro DEVE
+declarar suas dependências e a evidência de feedback que ficará disponível:]
 
 1. [Primeiro componente] — sem dependências
 2. [Segundo componente] — depende de 1
@@ -284,6 +309,9 @@ interface NomeServico {
 ## Architecture Decision Records
 
 [ADRs criadas durante o processo de design (incluindo herdadas do PRD):]
+
+> Durante a revisão, os links apontam para `adrs/adr-NNN.draft.md`; após a aprovação, remova o
+> sufixo `.draft` junto com a promoção dos arquivos.
 
 - [ADR-001: Título](adrs/adr-001.md) — Resumo da decisão em 1 linha
 - [ADR-002: Título](adrs/adr-002.md) — Resumo da decisão em 1 linha

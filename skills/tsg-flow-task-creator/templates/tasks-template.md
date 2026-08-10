@@ -1,5 +1,9 @@
 # Resumo de Tarefas de Implementacao de [Funcionalidade]
 
+> **TechSpec de origem:** `tasks/prd-[nome-funcionalidade]/techspec.md`
+> **Status do plano:** [Em revisao | Confirmado para implementacao]
+> **Regra de entrega:** cada task de comportamento e uma fatia vertical validavel isoladamente
+
 ## Visao Geral
 
 [Breve descricao da funcionalidade e objetivo do conjunto de tarefas]
@@ -15,11 +19,25 @@
 
 ## Fases de Implementacao
 
-### Fase 1 - [Nome da Fase]
-[Descricao da fase]
+As fases agrupam uma sequencia de comportamento e feedback, nao uma camada arquitetural.
 
-### Fase 2 - [Nome da Fase]
-[Descricao da fase]
+### Fase 1 - [Nome da fatia ou grupo de fatias]
+[Qual comportamento sera demonstrado e qual checkpoint sera executado]
+
+### Fase 2 - [Nome da fatia ou grupo de fatias]
+[Qual comportamento sera demonstrado e qual checkpoint sera executado]
+
+## Mapa de Entrega e Feedback
+
+| Slice | Task | Comportamento observavel | Checkpoint executavel | Bloqueado por |
+|-------|------|--------------------------|-----------------------|---------------|
+| V-01 | 1.0 | [resultado ponta a ponta] | [comando/cenario + saida esperada] | [Nenhum/IDs] |
+
+### Habilitadores inevitaveis
+
+| Enabler | Task | Justificativa de horizontalidade | Menor validacao | Desbloqueia |
+|---------|------|----------------------------------|------------------|-------------|
+| EN-01 | [X.0] | [por que nao pode estar em uma fatia] | [evidencia] | [V-XX] |
 
 ## Tarefas
 
@@ -64,6 +82,15 @@
 | 9 | Documentacao | V.0 | — | ✅ |
 | 10 | Seguranca | U.0 | [stack]-production-readiness | ✅ |
 
+### Conformidade com o Orcamento de Fragmentacao
+
+| Task | slice_type | Criar | Modificar | Subtarefas | Fatias | complexity | Status |
+|------|------------|-------|-----------|------------|--------|------------|--------|
+| 1.0 | vertical | 0 | 0 | 0 | 1 | medium | ✅ |
+
+Tasks `vertical` devem ter exatamente uma fatia. Tasks `enabling` exigem justificativa na seção
+"Habilitadores inevitaveis" e não podem virar agrupamentos horizontais por conveniência.
+
 ## Analise de Paralelizacao
 
 ### Lanes de Execucao Paralela
@@ -75,7 +102,8 @@
 
 ### Caminho Critico
 
-[Sequencia de tarefas que determina o tempo minimo de conclusao]
+[Sequencia de fatias e habilitadores que determina o tempo minimo de conclusao. Cada fatia deve
+liberar feedback antes da proxima etapa; nao aguarde todas as camadas.]
 
 ### Diagrama de Dependencias
 

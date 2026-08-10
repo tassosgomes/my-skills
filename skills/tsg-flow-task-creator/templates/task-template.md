@@ -7,6 +7,7 @@
 #   done        -> ✅ Concluido
 # Tarefas recem-criadas nascem sempre como `pending`.
 status: pending
+slice_type: vertical # vertical | enabling
 parallelizable: false # Se pode executar em paralelo
 blocked_by: [] # IDs de tarefas que devem ser completadas primeiro
 ---
@@ -22,8 +23,10 @@ blocked_by: [] # IDs de tarefas que devem ser completadas primeiro
 <complexity>low|medium|high</complexity>
 <dependencies>external_apis|database|temporal|http_server</dependencies>
 <unblocks>"[IDs de tarefas desbloqueadas]"</unblocks>
-<!-- Orcamento (tier budget): criar <=3, modificar <=3, subtarefas <=4, 1 fatia vertical -->
-<vertical_slice>[o comportamento unico e observavel que esta task entrega]</vertical_slice>
+<feedback_checkpoint>[comando, cenario ou evidencia que valida esta task]</feedback_checkpoint>
+<!-- Orcamento (tier budget): criar <=3, modificar <=3, subtarefas <=4, 1 fatia para vertical;
+     0 somente para enabling com justificativa explícita -->
+<vertical_slice>[o comportamento unico e observavel que esta task entrega; N/A para enabling]</vertical_slice>
 </task_context>
 
 # Tarefa X.0: [Titulo da Tarefa Principal]
@@ -34,7 +37,14 @@ blocked_by: [] # IDs de tarefas que devem ser completadas primeiro
 
 ## Visao Geral
 
-[Breve descricao da tarefa, contexto e motivacao]
+[Breve descricao da tarefa, contexto, motivacao e valor que chega ao usuario ou ao sistema]
+
+## Entrega Observavel
+
+- **Entrada ou gatilho:** [request, evento, comando ou acao]
+- **Resultado esperado:** [resposta, estado, evento, tela ou efeito observavel]
+- **Checkpoint de feedback:** [comando/cenario + saida esperada]
+- **Fora deste checkpoint:** [o que ainda nao sera comprovado nesta task]
 
 ## Requisitos
 
@@ -56,9 +66,9 @@ blocked_by: [] # IDs de tarefas que devem ser completadas primeiro
 
 ## Subtarefas
 
-- [ ] X.1 [Descricao da subtarefa]
-- [ ] X.2 [Descricao da subtarefa]
-- [ ] X.3 [Testes unitarios]
+- [ ] X.1 [Implementar o fluxo ponta a ponta da fatia]
+- [ ] X.2 [Cobrir regra/caso negativo relevante]
+- [ ] X.3 [Executar teste focalizado e registrar a evidencia]
 
 ## Sequenciamento
 
@@ -73,7 +83,9 @@ blocked_by: [] # IDs de tarefas que devem ser completadas primeiro
 
 ## Detalhes de Implementacao
 
-[Secoes relevantes da spec tecnica, incluindo snippets de codigo, assinaturas de interfaces e decisoes de design. Copie o contexto necessario aqui para que o agente de codigo nao precise consultar outros documentos.]
+[Secoes relevantes da spec tecnica, incluindo o fluxo ponta a ponta, snippets de codigo, assinaturas
+de interfaces e decisoes de design. Copie o contexto necessario aqui para que o agente de codigo nao
+precise reconstruir a intencao consultando camadas sem relacao com esta fatia.]
 
 **Convencoes da stack (das skills consultadas):**
 - [Convencao 1 — ex: "Usar Repository Pattern conforme dotnet-architecture"]
@@ -94,3 +106,5 @@ blocked_by: [] # IDs de tarefas que devem ser completadas primeiro
 - [ ] [Verificacao funcional especifica — ex: endpoint responde 200 para request valido]
 - [ ] [Verificacao de edge case — ex: endpoint responde 422 para input invalido]
 - [ ] [Verificacao de qualidade — ex: lint passa sem warnings]
+- [ ] Checkpoint de feedback executado: `[comando/cenario]` → `[saida esperada]`
+- [ ] A evidencia acima prova somente esta fatia e nao depende de tasks futuras

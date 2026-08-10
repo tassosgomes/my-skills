@@ -42,7 +42,10 @@ PRD (O QUÊ)
 ```
 
 <HARD-GATE>
-- NÃO escrever o arquivo TechSpec até TODAS as fases estarem completas E o usuário ter aprovado o draft final
+- NÃO tratar um rascunho como TechSpec aprovada nem entregá-lo ao `tsg-flow-task-creator`
+- Após as fases de discovery, decisões e revisão de qualidade, PERSISTIR o draft completo em disco
+  para que o usuário possa revisá-lo como arquivo; a promoção para os artefatos canônicos só ocorre
+  após a aprovação explícita
 - NÃO pular a exploração do codebase — toda TechSpec DEVE ser informada pela arquitetura existente
 - NÃO pular interações com o usuário — o usuário DEVE participar das decisões técnicas
 - NÃO exigir aprovação seção-por-seção — gere o draft completo e deixe o usuário revisar
@@ -60,7 +63,7 @@ Toda TechSpec passa pelo processo completo. Um único endpoint, um refactor meno
 configuração — todos eles. Mudanças "simples" são onde suposições não examinadas sobre a arquitetura
 existente causam o maior número de falhas de integração. O design review pode ser breve para mudanças
 genuinamente simples, mas você DEVE fazer perguntas técnicas e obter aprovação na abordagem antes de
-escrever o artefato.
+promover o artefato. O draft em disco serve justamente para tornar essa revisão verificável.
 
 ### Anti-Pattern 2: "Burocracia de fim de fluxo"
 
@@ -160,9 +163,10 @@ Você DEVE executar as fases na ordem abaixo:
 5. **Fazer perguntas técnicas** — uma por vez, focadas nas lacunas do modo detectado
 6. **Criar ADRs** — registrar decisões técnicas significativas (status "Proposed")
 7. **Gerar draft da TechSpec** — usando o template canônico
-8. **Revisar com o usuário** — loop A/B/C/D até aprovação
-9. **Salvar arquivos** — TechSpec final + ADRs com status "Accepted"
-10. **Reportar resultados** — caminhos, próximos passos, questões em aberto
+8. **Persistir o draft** — TechSpec e ADRs em arquivos de revisão, nunca apenas no chat
+9. **Revisar com o usuário** — loop A/B/C/D até aprovação
+10. **Promover os arquivos** — TechSpec final + ADRs com status "Accepted"
+11. **Reportar resultados** — caminhos, próximos passos, questões em aberto
 
 ## Workflow Detalhado
 
@@ -275,11 +279,16 @@ Para cada ADR:
 5. Preencha: contexto, decisão, alternativas consideradas (com prós/contras/motivo da rejeição),
    consequências (positivas, negativas, riscos)
 6. Date com a data atual
-7. NÃO escreva os arquivos ainda — guarde-os em memória para escrever junto com a TechSpec
+7. Não publique a ADR como aceita. O contrato de persistência e os nomes dos arquivos de draft estão
+   em [references/delivery-contract.md](references/delivery-contract.md).
 
 ### 7. Gerar Draft da TechSpec (Obrigatório)
 
 Use `templates/techspec-template.md` como estrutura exata. Diretrizes:
+
+Antes de renderizar, leia [references/delivery-contract.md](references/delivery-contract.md). O
+draft deve conter o mapa de fatias verticais e seus checkpoints de feedback; não basta produzir uma
+análise em texto na conversa.
 
 **Princípio editorial:** Cada seção deve ter o tamanho mínimo necessário para informar a
 implementação. Evite verbosidade decorativa.
@@ -302,14 +311,15 @@ implementação. Evite verbosidade decorativa.
 
 **Inventário de Artefatos exaustivo:**
 
-Liste TODOS os arquivos com 4 colunas:
+Liste TODOS os arquivos com 5 colunas, vinculando cada artefato a uma fatia ou habilitador:
 
 ```markdown
-| Caminho | Tipo | Skills Aplicáveis | Descrição |
+| Caminho | Fatia | Tipo | Skills Aplicáveis | Descrição |
 ```
 
 Cada arquivo deve ter:
 - Caminho completo (relativo à raiz do projeto)
+- Fatia vertical (`V-XX`) ou habilitador inevitável (`EN-XX`)
 - Tipo (Controller, Use Case, Domain Entity, Repository, DTO, Mapper, Migration, Test, Config, etc.)
 - Skills aplicáveis (lista das SKILL.md identificadas na Phase 0 que se aplicam ao arquivo)
 - Descrição breve (1 linha)
@@ -330,6 +340,10 @@ Build Order numerada com dependências explícitas:
 3. [Componente C] — depende de 1 e 2
 ```
 
+Ordene preferencialmente **fatias verticais**, não camadas. Cada passo deve terminar em um
+comportamento demonstrável e uma evidência de validação; componentes compartilhados só entram
+isoladamente quando forem um habilitador técnico inevitável.
+
 **Architecture Decision Records (Seção Final Obrigatória):**
 
 Listar todas as ADRs criadas (incluindo herdadas do PRD), com link e resumo de uma linha:
@@ -344,9 +358,11 @@ Listar todas as ADRs criadas (incluindo herdadas do PRD), com link e resumo de u
 - Voz ativa, palavras precisas, sem generalidades vagas
 - Cada frase deve justificar sua presença
 
-### 8. Revisar com o Usuário (Obrigatório)
+### 9. Revisar com o Usuário (Obrigatório)
 
-Apresente o draft completo da TechSpec e os drafts das ADRs. Use a ferramenta interativa:
+Depois de persistir os arquivos de draft, releia-os e apresente ao usuário os caminhos e um resumo
+do conteúdo. O arquivo é a fonte de revisão; não substitua a escrita por uma resposta longa no chat.
+Use a ferramenta interativa:
 
 ```
 Aqui está o draft da TechSpec e das ADRs criadas. Por favor revise e indique:
@@ -358,18 +374,19 @@ D) Descartar e recomeçar do zero
 
 - **B ou C:** aplicar mudanças e apresentar novamente
 - **D:** voltar à fase 4 (perguntas)
-- **A:** prosseguir para fase 9
+- **A:** prosseguir para fase 10
 
-### 9. Salvar Arquivos (Obrigatório)
+### 10. Promover e Salvar Arquivos (Obrigatório)
 
 Após aprovação:
 
-1. Atualizar status de TODAS as novas ADRs para `Accepted`
-2. Escrever cada ADR em `tasks/prd-<nome>/adrs/adr-NNN.md`
-3. Escrever a TechSpec em `tasks/prd-<nome>/techspec.md`
-4. Confirmar todos os caminhos de escrita ao usuário
+1. Atualizar o status da TechSpec para `Aprovado`
+2. Atualizar status de TODAS as novas ADRs para `Accepted`
+3. Promover o draft para `tasks/prd-<nome>/techspec.md`
+4. Promover cada ADR para `tasks/prd-<nome>/adrs/adr-NNN.md`
+5. Confirmar todos os caminhos de escrita ao usuário
 
-### 10. Reportar Resultados
+### 11. Reportar Resultados
 
 Mensagem final deve conter:
 
@@ -377,7 +394,7 @@ Mensagem final deve conter:
 2. **[Modo Pipeline]** O que foi herdado do Vision/Domain Doc vs. decidido nesta sessão
 3. **[Modo API-First]** Mapeamento dos endpoints do contrato para componentes de implementação
 4. **Lista de ADRs criadas** (números, títulos, resumos)
-5. **Caminhos dos arquivos salvos** (TechSpec + ADRs)
+5. **Caminhos dos arquivos salvos** (drafts durante revisão; TechSpec + ADRs canônicos após A)
 6. **Resumo do Inventário de Artefatos** (quantidade de arquivos a criar/modificar/referenciar)
 7. **Questões em aberto** e follow-ups para stakeholders
 8. **Próximo passo:** "Para gerar as tarefas de implementação, use a skill `tsg-flow-task-creator`. Para
@@ -394,6 +411,7 @@ digraph create_techspec {
     "Perguntas técnicas (uma por vez)" [shape=box];
     "Criar ADRs (status Proposed)" [shape=box];
     "Gerar draft TechSpec + ADRs" [shape=box];
+    "Persistir draft em disco" [shape=box];
     "Usuário aprova?" [shape=diamond];
     "Salvar (ADRs viram Accepted)" [shape=doublecircle];
 
@@ -403,7 +421,8 @@ digraph create_techspec {
     "Explorar codebase" -> "Perguntas técnicas (uma por vez)";
     "Perguntas técnicas (uma por vez)" -> "Criar ADRs (status Proposed)";
     "Criar ADRs (status Proposed)" -> "Gerar draft TechSpec + ADRs";
-    "Gerar draft TechSpec + ADRs" -> "Usuário aprova?";
+    "Gerar draft TechSpec + ADRs" -> "Persistir draft em disco";
+    "Persistir draft em disco" -> "Usuário aprova?";
     "Usuário aprova?" -> "Gerar draft TechSpec + ADRs" [label="B/C: revisar"];
     "Usuário aprova?" -> "Perguntas técnicas (uma por vez)" [label="D: recomeçar"];
     "Usuário aprova?" -> "Salvar (ADRs viram Accepted)" [label="A: aprovado"];
@@ -455,8 +474,11 @@ digraph create_techspec {
 - [ ] **[Modo Pipeline]** Regras de negócio (RN-XX) mapeadas para validações e testes
 - [ ] **[Modo API-First]** Endpoints da TechSpec apenas referenciam o contrato (sem duplicação)
 - [ ] Inventário de Artefatos completo (caminho + tipo + skills + descrição)
+- [ ] Mapa de fatias verticais completo, com comportamento observável e checkpoint por fatia
+- [ ] Tarefas habilitadoras horizontais justificadas e mantidas no menor escopo possível
 - [ ] Build Order com dependências explícitas
 - [ ] Seção Architecture Decision Records linkando todas as ADRs
+- [ ] Draft completo persistido em `techspec.draft.md` e ADRs `.draft.md`
 - [ ] Usuário aprovou o draft (resposta A)
 - [ ] ADRs com status atualizado para "Accepted"
 - [ ] Arquivos salvos em `tasks/prd-<nome>/techspec.md` e `tasks/prd-<nome>/adrs/adr-NNN.md`
