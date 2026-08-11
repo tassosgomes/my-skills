@@ -352,3 +352,120 @@ builder.Services.AddDbContext<AppDbContext>((sp, options) =>
            .AddInterceptors(new AuditInterceptor());
 });
 ```
+
+## Troubleshooting de Migrations
+
+A causa mais comum de migration gerada com sintaxe antiga/incompatível ou que "não aplica" não é
+o modelo em si — é descompasso de versão entre a ferramenta `dotnet-ef` e o pacote
+`Microsoft.EntityFrameworkCore.Design` do projeto, ou build desatualizado. Antes de investigar o
+modelo, descarte essas causas na ordem abaixo.
+
+### 1. Fixar a versão da ferramenta `dotnet-ef` no projeto
+
+Se `dotnet-ef` estiver instalado globalmente com uma versão diferente da major do EF Core do
+projeto, ele gera migrations com a sintaxe da versão instalada — não da versão referenciada no
+`.csproj`. Trave a ferramenta por projeto com um manifest versionado:
+
+```bash
+# Uma vez por repositório
+dotnet new tool-manifest
+dotnet tool install dotnet-ef --version 9.0.0   # mesma major do Microsoft.EntityFrameworkCore.Design
+
+# Em qualquer clone novo ou pipeline de CI
+dotnet tool restore
+dotnet tool run dotnet-ef migrations add MigrationName
+```
+
+`.config/dotnet-tools.json` fica versionado no repositório — assim todo desenvolvedor e o CI usam
+exatamente a mesma versão de `dotnet-ef`, nunca a instalada globalmente na máquina de quem gerou a
+migration.
+
+### 2. Confirmar que `dotnet-ef` e `Microsoft.EntityFrameworkCore.Design` batem de versão
+
+```bash
+dotnet list package | grep EntityFrameworkCore.Design
+dotnet tool list
+```
+
+As duas versões devem ter a mesma major (idealmente a mesma minor). Um `dotnet-ef` mais novo que o
+pacote `Design` do projeto é a causa mais frequente de migration com API que não existe na versão
+do projeto (ex.: método novo do EF 9 gerado em um projeto ainda no EF 8).
+
+### 3. Migration vazia ou que ignora uma alteração real do modelo
+
+Normalmente é build desatualizado, não ausência de mudança. `dotnet ef` compila o projeto antes de
+inspecionar o modelo via reflection; se o `obj`/`bin` estiver com artefato antigo (comum depois de
+merge ou troca de branch), a migration é gerada a partir do modelo antigo.
+
+```bash
+dotnet clean
+dotnet build
+dotnet ef migrations add MigrationName
+```
+
+### 4. Detectar model desatualizado antes de aplicar (EF Core 8+)
+
+```bash
+dotnet ef migrations has-pending-model-changes
+```
+
+Retorna erro se o modelo atual diverge da última migration — use isso no CI para bloquear merge de
+um PR que mudou entidade sem gerar a migration correspondente, antes de descobrir em produção.
+
+### 5. DbContext que depende de DI não resolvível em design-time
+
+Se o `DbContext` recebe no construtor algo além de `DbContextOptions<T>` (ex.: um serviço de
+tenant resolvido em runtime), o `dotnet-ef` não consegue instanciá-lo fora do host da aplicação.
+Sintoma típico: comando trava, falha com erro genérico de DI, ou usa a connection string errada.
+Resolva com uma factory explícita para design-time:
+
+```csharp
+public class AppDbContextFactory : IDesignTimeDbContextFactory<AppDbContext>
+{
+    public AppDbContext CreateDbContext(string[] args)
+    {
+        var configuration = new ConfigurationBuilder()
+            .SetBasePath(Directory.GetCurrentDirectory())
+            .AddJsonFile("appsettings.json")
+            .AddEnvironmentVariables()
+            .Build();
+
+        var optionsBuilder = new DbContextOptionsBuilder<AppDbContext>();
+        optionsBuilder.UseNpgsql(configuration.GetConnectionString("DefaultConnection"));
+
+        return new AppDbContext(optionsBuilder.Options);
+    }
+}
+```
+
+### 6. Múltiplos `DbContext` ou múltiplos projetos na solution
+
+Sem os flags corretos, `dotnet-ef` escolhe o `DbContext` ou o projeto errado silenciosamente:
+
+```bash
+dotnet ef migrations add MigrationName \
+  --project src/4-Infra/ProjectName.Infra \
+  --startup-project src/1-Services/ProjectName.API \
+  --context AppDbContext
+```
+
+`--startup-project` precisa apontar para o projeto executável (tem `appsettings.json` e DI
+completo); `--project` aponta para onde a pasta `Migrations/` deve ser criada.
+
+### 7. Não aplicar migration automaticamente em produção dentro do `Program.cs`
+
+`Database.Migrate()` chamado direto no boot do `Program.cs` acopla o start da aplicação à
+disponibilidade do banco e roda a cada réplica subindo — em produção isso vira condição de corrida
+entre pods e falha de boot mascarando falha de schema. Separe em um step de deploy/job dedicado:
+
+```bash
+# Pipeline de deploy — antes do rollout da aplicação
+dotnet ef database update --project src/4-Infra/ProjectName.Infra --startup-project src/1-Services/ProjectName.API
+
+# Ou, para ambientes sem acesso direto ao dotnet-ef, gere um script idempotente
+dotnet ef migrations script --idempotent -o migrate.sql
+```
+
+Em desenvolvimento local, aplicar via `dotnet ef database update` (ou `Database.Migrate()` atrás de
+um `if (environment.IsDevelopment())`) é aceitável — o risco descrito acima é específico de
+produção com múltiplas réplicas.

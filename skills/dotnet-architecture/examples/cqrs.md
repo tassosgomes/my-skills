@@ -1,5 +1,9 @@
 # CQRS Nativo (Sem MediatR) — Exemplo
 
+> Use este padrão quando a complexidade do caso de uso justificar (ver `CQRS ou Service Pattern
+> simples?` no `SKILL.md`). Para CRUD simples ou poucas operações, prefira
+> `examples/simple-service-pattern.md` — menos peças móveis, mesmo modelo de camadas.
+
 Implementacao completa de CQRS sem MediatR: interfaces base, dispatcher nativo via reflection, commands/queries com handlers, registro no DI e uso em controllers.
 
 ## Interfaces Base para CQRS
