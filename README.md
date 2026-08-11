@@ -124,7 +124,7 @@ e permanecem com esse namespace nesta etapa.
 | Skill | Tipo | Propósito |
 |-------|------|-----------|
 | :star: [dotnet-index](#dotnet-index) | Índice | Mapa de navegação entre os 8 módulos de skills .NET |
-| :star: [dotnet-architecture](#dotnet-architecture) | Normativo | Clean Architecture com camadas numeradas, CQRS nativo, Repository Pattern, FluentValidation, API simples/Monolito Modular/Microsserviços |
+| :star: [dotnet-architecture](#dotnet-architecture) | Normativo | Clean Architecture com camadas numeradas, CQRS nativo ou Service Pattern simples, Repository Pattern, FluentValidation, API simples/Monolito Modular/Microsserviços |
 | :star: [dotnet-code-quality](#dotnet-code-quality) | Transversal | Naming conventions, SOLID, async/await, CancellationToken, DI, estilo C# |
 | :star: [dotnet-dependency-config](#dotnet-dependency-config) | Baseline | NuGet baseline, EF Core + PostgreSQL (com troubleshooting de migrations), Mapster, Polly, RabbitMQ, appsettings/env vars/user-secrets, containers locais padronizados |
 | :star: [dotnet-observability](#dotnet-observability) | Normativo | Health Checks, Kubernetes probes, OpenTelemetry logging integrado a tracing |
@@ -402,7 +402,7 @@ security-audit-workflow/
 
 | Módulo | Escopo |
 |--------|--------|
-| `dotnet-architecture` | Camadas, estrutura de pastas (API simples/Monolito Modular/Microsserviços), CQRS, Repository Pattern, error handling |
+| `dotnet-architecture` | Camadas, estrutura de pastas (API simples/Monolito Modular/Microsserviços), CQRS ou Service Pattern simples, Repository Pattern, error handling |
 | `dotnet-code-quality` | Naming, SOLID, async/await, CancellationToken, DI |
 | `dotnet-dependency-config` | NuGet baseline, EF Core + troubleshooting de migrations, Mapster, Polly, messaging, appsettings/env vars/user-secrets, containers locais |
 | `dotnet-observability` | Health checks, Kubernetes probes, OpenTelemetry logging |
@@ -424,7 +424,7 @@ security-audit-workflow/
 **Formatos de solução:** três exemplos completos que evoluem com o estágio do projeto — API simples (um serviço), Monolito Modular (módulos isolados com fronteira in-process, host único) e Microsserviços (solutions independentes, contrato compartilhado via pacote NuGet, banco por serviço).
 
 **Pilares normativos:**
-- **CQRS nativo** (sem MediatR) com `ICommand<R>` / `IQuery<R>`, handlers e `Dispatcher` com DI — proibido lookup por nome.
+- **CQRS nativo ou Service Pattern simples**, escolhido pela complexidade real do caso de uso — CQRS (sem MediatR) com `ICommand<R>` / `IQuery<R>`, handlers e `Dispatcher` com DI para casos elaborados; serviço de aplicação direto para CRUD simples. Proibido lookup por nome em ambos.
 - **Repository Pattern** com interface no `Domain` e implementação no `Infrastructure`; Mapster para mapeamento; nunca expor entidade EF fora do `Infrastructure`.
 - **Tratamento de erros** via `IExceptionHandler` + `ProblemDetails` (RFC 9457); Custom Exceptions por domínio; Result Pattern apenas para integrações resilientes.
 - **FluentValidation** nos handlers de command/query.

@@ -45,6 +45,7 @@ configuram a infraestrutura, testes validam o comportamento e production-readine
 | Definir estrutura de pastas | dotnet-architecture |
 | Escolher API simples / Monolito Modular / Microsservicos | dotnet-architecture |
 | Implementar CQRS | dotnet-architecture |
+| Decidir entre CQRS e Service Pattern simples | dotnet-architecture |
 | Implementar Repository Pattern | dotnet-architecture |
 | Configurar FluentValidation | dotnet-architecture |
 | Error handling / Result Pattern | dotnet-architecture |

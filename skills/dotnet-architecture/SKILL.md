@@ -37,9 +37,11 @@ Infrastructure → Domain.
 ## Regras não negociáveis
 
 1. Mantenha regras de negócio no Domain e contratos de infraestrutura atrás de interfaces.
-2. Use CQRS nativo (`ICommand<T>`, `IQuery<T>` e handlers) sem MediatR.
-3. Resolva handlers por tipos e DI/assembly scan; nunca por nome de bean, string ou
-   `ApplicationContext.GetBean`.
+2. Escolha entre CQRS nativo e Service Pattern simples pela complexidade real do caso de uso (ver
+   `CQRS ou Service Pattern simples?` abaixo); qualquer uma das duas é válida, mas nenhuma usa
+   MediatR.
+3. Se optar por CQRS, resolva handlers por tipos e DI/assembly scan; nunca por nome de bean, string
+   ou `ApplicationContext.GetBean`.
 4. Coloque interfaces de repositório no Domain/Application e implementações EF Core na
    Infrastructure; entidades EF não atravessam essa fronteira.
 5. Use `IExceptionHandler` global e `ProblemDetails` (RFC 9457) para erros HTTP.
@@ -48,6 +50,27 @@ Infrastructure → Domain.
 7. Valide commands/queries com FluentValidation antes de executar efeitos colaterais.
 8. Propague `CancellationToken` em operações assíncronas e mantenha controllers sem lógica de
    persistência.
+
+## CQRS ou Service Pattern simples?
+
+CQRS nativo não é o padrão obrigatório para todo caso de uso — é a resposta certa quando a
+complexidade do caso de uso justifica a indireção de command/query/handler/dispatcher. Para o
+resto, um serviço de aplicação simples (interface + implementação com métodos diretos, sem
+dispatcher) segue o mesmo modelo de camadas com menos peças móveis.
+
+| Sinal | Padrão |
+|---|---|
+| CRUD simples, poucos passos, sem regra de negócio elaborada | Service Pattern simples (`examples/simple-service-pattern.md`) |
+| Módulo/serviço com poucas operações (endpoint administrativo, ferramenta interna, protótipo) | Service Pattern simples |
+| Caso de uso com múltiplos passos, validação elaborada, efeitos colaterais coordenados ou que precisa de rastreabilidade por tipo de operação | CQRS nativo (`examples/cqrs.md`) |
+| Leitura precisa de um modelo de projeção diferente da escrita (DTOs otimizados, agregações, relatórios) | CQRS nativo |
+| Um serviço de aplicação já cresceu demais (muitos métodos, muitos `if`/`switch` por tipo de operação) | CQRS nativo — extrair para commands/queries reduz esse acoplamento |
+| O restante do sistema já usa CQRS nativo de forma consistente | CQRS nativo — priorize consistência com o que já existe sobre economizar uma classe |
+
+Dentro de um mesmo módulo os dois padrões podem conviver enquanto a migração for gradual, mas cada
+caso de uso individual segue um dos dois por completo — nunca uma mistura dos dois no mesmo método.
+Independente da escolha, as regras não negociáveis (Domain puro, FluentValidation,
+`CancellationToken`, repositório atrás de interface, `ProblemDetails` para erros) valem igual.
 
 ## Escolha de formato de solução
 
@@ -71,19 +94,22 @@ partir da API simples quando a dor de acoplamento ou de deploy for real.
 | entidade, use case e fronteiras | `examples/clean-architecture.md` |
 | portas, repositório EF e mapeamento | `examples/repository-pattern.md` |
 | command/query, dispatcher, DI e controller | `examples/cqrs.md` |
+| serviço de aplicação sem dispatcher, para casos de uso simples | `examples/simple-service-pattern.md` |
 | exceções, ProblemDetails, middleware e validação | `examples/error-handling.md` |
 | estrutura de módulos, fronteira in-process, host único | `examples/modular-monolith.md` |
 | estrutura multi-serviço, contrato compartilhado, comunicação entre serviços | `examples/microservices.md` |
 
 Não leia todos os exemplos por padrão. Se a tarefa é apenas criar um endpoint, comece pelo core,
-leia `cqrs.md` e `error-handling.md` somente se esses padrões forem usados.
+decida entre `cqrs.md` e `simple-service-pattern.md` pelo critério acima, e leia `error-handling.md`
+só se o tratamento de erro específico for o foco da tarefa.
 
 ## Checklist do diff
 
 - [ ] A dependência entre camadas aponta para dentro.
 - [ ] O Domain continua independente de framework e persistência.
 - [ ] O controller é fino e o caso de uso está na Application.
-- [ ] O handler é resolvido por tipo/DI, sem lookup nominal.
+- [ ] A escolha entre CQRS e Service Pattern simples foi deliberada pela complexidade real, não copiada por hábito.
+- [ ] Se CQRS, o handler é resolvido por tipo/DI, sem lookup nominal.
 - [ ] Repositório e entidade EF não vazam para a API.
 - [ ] DTOs e validação pertencem ao contrato/caso de uso correto.
 - [ ] Erros produzem ProblemDetails sem stack trace exposto.
