@@ -4,6 +4,8 @@ description: >
   Transforma a visão do produto, o mapa de domínios e, opcionalmente, a referência arquitetural em um
   backlog priorizado de capacidades de negócio. Use quando for necessário definir o MVP, organizar a
   evolução por fases ou sequenciar capacidades antes de detalhar domínios e criar PRDs.
+metadata:
+  group: tsg-flow
 ---
 # Backlog de Capacidades
 
