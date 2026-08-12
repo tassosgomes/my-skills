@@ -108,7 +108,9 @@ Evite endpoints procedurais (`/criarPedido`) — prefira recursos + verbos HTTP 
 
 ### 4. Gerar o Contrato OpenAPI 3.1
 
-Leia o template em `templates/openapi-template.yaml` (empacotado nesta skill) e gere o `api-contract.yaml` seguindo estas diretrizes:
+Leia o template em `templates/openapi-template.yaml` e o ruleset em
+`rulesets/openapi.yaml` (empacotados nesta skill) e gere o `api-contract.yaml` seguindo
+estas diretrizes:
 
 **Estrutura obrigatória por endpoint:**
 - `summary` — descrição curta (máx 10 palavras)
@@ -125,8 +127,12 @@ Leia o template em `templates/openapi-template.yaml` (empacotado nesta skill) e 
 **Schemas em `components/schemas`:**
 - Definir cada entidade uma vez, reutilizar com `$ref`
 - Separar schemas de request, response e entidade base quando diferirem
-- Incluir `example` em todos os campos
-- Usar `nullable: true` explicitamente onde aplicável
+- Incluir `examples` como array nos Schema Objects onde houver exemplo — não use o campo
+  depreciado `example` em schemas OpenAPI 3.1
+- Usar união de tipos com `null` (`type: [string, "null"]`, por exemplo) quando aplicável;
+  não usar `nullable: true` como convenção de OpenAPI 3.0
+- Em Media Type Objects e Parameters, prefira `examples` nomeados quando houver exemplos de
+  request/response; esse mapa não deve ser confundido com o array `examples` de um Schema Object
 - Documentar enums com `description` explicando cada valor
 
 **Boas práticas:**
@@ -159,6 +165,13 @@ Antes de salvar, verifique:
 - [ ] Exemplos são realistas (não `string`, `123`, mas dados que façam sentido)?
 - [ ] Paginação está consistente em todos os endpoints de listagem?
 
+### 6.1. Lint obrigatório com Spectral
+
+Depois de gerar o YAML, execute o ruleset da skill conforme
+`references/spectral.md`. Corrija todos os erros antes de salvar e registre no protocolo de saída
+que a validação foi executada. O lint deve ser repetível pelo backend e pelo frontend usando o mesmo
+arquivo de regras.
+
 Se encontrar falhas, corrija antes de salvar.
 
 ### 7. Salvar os Arquivos (Obrigatório)
@@ -176,7 +189,8 @@ A resposta final deve conter:
 3. **Conteúdo completo do `api-contract.yaml`**
 4. **Caminhos dos arquivos salvos**
 5. **Questões em aberto** — pontos que precisam de validação antes da implementação
-6. **Próximos passos:**
+6. **Resultado do lint Spectral** — comando/ruleset usado e eventuais warnings restantes
+7. **Próximos passos:**
    - Backend: "Use a skill `tsg-flow-techspec-creator` referenciando este contrato como input adicional"
    - Frontend: "Use a skill `tsg-flow-frontend-techspec-creator` referenciando este contrato — os schemas são a fonte de verdade para os tipos"
    - Mocks: "Execute `npx @stoplight/prism-cli mock api-contract.yaml` para ter um servidor mock imediatamente"
@@ -185,7 +199,7 @@ A resposta final deve conter:
 
 - **O contrato é neutro** — não favorece implementação do backend nem do frontend
 - **Schemas são a fonte de verdade** — tipos do frontend devem ser gerados a partir deles
-- **Exemplos realistas** — exemplos ruins geram código ruim no frontend
+- **Exemplos realistas e não depreciados** — exemplos ruins ou incompatíveis com OpenAPI 3.1 geram código ruim no frontend
 - **Extensões customizadas são bem-vindas** — `x-frontend-notes`, `x-backend-notes`, `x-deprecated-at`
 - **Erros são first-class** — documentar erros é tão importante quanto o happy path
 
@@ -206,5 +220,6 @@ Após o contrato gerado e aprovado:
 - [ ] Dúvidas críticas esclarecidas ou premissas documentadas
 - [ ] Contrato YAML válido e completo
 - [ ] Versão Markdown gerada e legível
+- [ ] Lint Spectral executado com `rulesets/openapi.yaml` e sem erros
 - [ ] Ambos os arquivos salvos nos caminhos corretos
 - [ ] Próximos passos comunicados claramente

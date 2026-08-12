@@ -29,22 +29,23 @@ security:
   - BearerAuth: []
 
 tags:
-  - name: [Recurso 1]
+  - name: Recurso
     description: "Operações relacionadas a [recurso 1]"
-  - name: [Recurso 2]
+  - name: OutroRecurso
     description: "Operações relacionadas a [recurso 2]"
 
 # ─── Paths ───────────────────────────────────────────────────────────────────
 paths:
 
-  /[recursos]:
+  /recursos:
     get:
-      summary: Listar [recursos]
+      summary: Listar recursos
       description: |
         Retorna lista paginada de [recursos].
         [Regras de negócio relevantes]
-      operationId: listar[Recursos]
-      tags: [- "[Recurso 1]"]
+      operationId: listarRecursos
+      tags:
+        - Recurso
       parameters:
         - name: page
           in: query
@@ -53,7 +54,8 @@ paths:
             type: integer
             minimum: 1
             default: 1
-            example: 1
+            examples:
+              - 1
         - name: limit
           in: query
           description: Itens por página (máx 100)
@@ -62,54 +64,62 @@ paths:
             minimum: 1
             maximum: 100
             default: 20
-            example: 20
-        - name: [filtro]
+            examples:
+              - 20
+        - name: filtro
           in: query
           description: "[Descrição do filtro]"
           schema:
             type: string
-            example: "[valor de exemplo]"
+            examples:
+              - "[valor de exemplo]"
       responses:
         "200":
           description: Lista retornada com sucesso
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/[Recurso]ListResponse"
+                $ref: "#/components/schemas/RecursoListResponse"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "500":
           $ref: "#/components/responses/InternalServerError"
       x-frontend-notes: "Implementar infinite scroll ou paginação — preferência do time de UX"
       x-backend-notes: "Adicionar índice em [campo] para performance do filtro"
 
     post:
-      summary: Criar [recurso]
-      operationId: criar[Recurso]
-      tags: [- "[Recurso 1]"]
+      summary: Criar recurso
+      description: Cria um novo recurso.
+      operationId: criarRecurso
+      tags:
+        - Recurso
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Criar[Recurso]Request"
+              $ref: "#/components/schemas/CriarRecursoRequest"
       responses:
         "201":
           description: Recurso criado com sucesso
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/[Recurso]Response"
+                $ref: "#/components/schemas/RecursoResponse"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "422":
           $ref: "#/components/responses/UnprocessableEntity"
         "500":
           $ref: "#/components/responses/InternalServerError"
 
-  /[recursos]/{id}:
+  /recursos/{id}:
     parameters:
       - name: id
         in: path
@@ -118,47 +128,56 @@ paths:
         schema:
           type: string
           format: uuid
-          example: "550e8400-e29b-41d4-a716-446655440000"
+          examples:
+            - "550e8400-e29b-41d4-a716-446655440000"
 
     get:
-      summary: Buscar [recurso] por ID
-      operationId: buscar[Recurso]PorId
-      tags: [- "[Recurso 1]"]
+      summary: Buscar recurso por ID
+      description: Retorna um recurso pelo seu identificador.
+      operationId: buscarRecursoPorId
+      tags:
+        - Recurso
       responses:
         "200":
           description: Recurso encontrado
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/[Recurso]Response"
+                $ref: "#/components/schemas/RecursoResponse"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
         "500":
           $ref: "#/components/responses/InternalServerError"
 
     patch:
-      summary: Atualizar [recurso]
-      operationId: atualizar[Recurso]
-      tags: [- "[Recurso 1]"]
+      summary: Atualizar recurso
+      description: Atualiza parcialmente um recurso existente.
+      operationId: atualizarRecurso
+      tags:
+        - Recurso
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Atualizar[Recurso]Request"
+              $ref: "#/components/schemas/AtualizarRecursoRequest"
       responses:
         "200":
           description: Recurso atualizado
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/[Recurso]Response"
+                $ref: "#/components/schemas/RecursoResponse"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
         "422":
@@ -167,14 +186,18 @@ paths:
           $ref: "#/components/responses/InternalServerError"
 
     delete:
-      summary: Remover [recurso]
-      operationId: remover[Recurso]
-      tags: [- "[Recurso 1]"]
+      summary: Remover recurso
+      description: Remove um recurso existente.
+      operationId: removerRecurso
+      tags:
+        - Recurso
       responses:
         "204":
           description: Recurso removido com sucesso
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
         "500":
@@ -199,12 +222,14 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/ErrorResponse"
-          example:
-            code: "VALIDATION_ERROR"
-            message: "Dados inválidos na requisição"
-            details:
-              - field: "email"
-                message: "Formato de e-mail inválido"
+          examples:
+            default:
+              value:
+                code: "VALIDATION_ERROR"
+                message: "Dados inválidos na requisição"
+                details:
+                  - field: "email"
+                    message: "Formato de e-mail inválido"
 
     Unauthorized:
       description: Não autenticado — token ausente ou inválido
@@ -212,9 +237,11 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/ErrorResponse"
-          example:
-            code: "UNAUTHORIZED"
-            message: "Token de autenticação inválido ou expirado"
+          examples:
+            default:
+              value:
+                code: "UNAUTHORIZED"
+                message: "Token de autenticação inválido ou expirado"
 
     Forbidden:
       description: Sem permissão para esta operação
@@ -222,9 +249,11 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/ErrorResponse"
-          example:
-            code: "FORBIDDEN"
-            message: "Você não tem permissão para realizar esta operação"
+          examples:
+            default:
+              value:
+                code: "FORBIDDEN"
+                message: "Você não tem permissão para realizar esta operação"
 
     NotFound:
       description: Recurso não encontrado
@@ -232,9 +261,11 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/ErrorResponse"
-          example:
-            code: "NOT_FOUND"
-            message: "Recurso não encontrado"
+          examples:
+            default:
+              value:
+                code: "NOT_FOUND"
+                message: "Recurso não encontrado"
 
     UnprocessableEntity:
       description: Erro de regra de negócio
@@ -242,9 +273,11 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/ErrorResponse"
-          example:
-            code: "BUSINESS_RULE_VIOLATION"
-            message: "Não é possível realizar esta operação no estado atual"
+          examples:
+            default:
+              value:
+                code: "BUSINESS_RULE_VIOLATION"
+                message: "Não é possível realizar esta operação no estado atual"
 
     InternalServerError:
       description: Erro interno do servidor
@@ -252,21 +285,23 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/ErrorResponse"
-          example:
-            code: "INTERNAL_ERROR"
-            message: "Ocorreu um erro interno. Tente novamente mais tarde."
-            traceId: "abc123xyz"
+          examples:
+            default:
+              value:
+                code: "INTERNAL_ERROR"
+                message: "Ocorreu um erro interno. Tente novamente mais tarde."
+                traceId: "abc123xyz"
 
   # Schemas
   schemas:
 
     # ── Entidade principal ──
-    [Recurso]:
+    Recurso:
       type: object
       description: "Representa um(a) [recurso] no sistema"
       required:
         - id
-        - [campo_obrigatorio]
+        - campoObrigatorio
         - createdAt
         - updatedAt
       properties:
@@ -274,16 +309,20 @@ components:
           type: string
           format: uuid
           description: Identificador único
-          example: "550e8400-e29b-41d4-a716-446655440000"
-        [campo_obrigatorio]:
+          examples:
+            - "550e8400-e29b-41d4-a716-446655440000"
+        campoObrigatorio:
           type: string
           description: "[Descrição do campo]"
-          example: "[valor de exemplo realista]"
-        [campo_opcional]:
-          type: string
-          nullable: true
+          examples:
+            - "[valor de exemplo realista]"
+        campoOpcional:
+          type:
+            - string
+            - "null"
           description: "[Descrição do campo]"
-          example: null
+          examples:
+            - null
         status:
           type: string
           enum: [ativo, inativo, pendente]
@@ -292,26 +331,29 @@ components:
             - `ativo`: [quando é ativo]
             - `inativo`: [quando é inativo]
             - `pendente`: [quando é pendente]
-          example: "ativo"
+          examples:
+            - "ativo"
         createdAt:
           type: string
           format: date-time
           description: Data de criação (ISO 8601)
-          example: "2024-01-15T10:30:00Z"
+          examples:
+            - "2024-01-15T10:30:00Z"
         updatedAt:
           type: string
           format: date-time
           description: Data da última atualização (ISO 8601)
-          example: "2024-01-15T14:22:00Z"
+          examples:
+            - "2024-01-15T14:22:00Z"
 
     # ── Responses ──
-    [Recurso]Response:
+    RecursoResponse:
       type: object
       description: "Response de um único [recurso]"
       allOf:
-        - $ref: "#/components/schemas/[Recurso]"
+        - $ref: "#/components/schemas/Recurso"
 
-    [Recurso]ListResponse:
+    RecursoListResponse:
       type: object
       required:
         - data
@@ -320,36 +362,40 @@ components:
         data:
           type: array
           items:
-            $ref: "#/components/schemas/[Recurso]"
+            $ref: "#/components/schemas/Recurso"
         pagination:
           $ref: "#/components/schemas/Pagination"
 
     # ── Requests ──
-    Criar[Recurso]Request:
+    CriarRecursoRequest:
       type: object
       required:
-        - [campo_obrigatorio]
+        - campoObrigatorio
       properties:
-        [campo_obrigatorio]:
+        campoObrigatorio:
           type: string
           description: "[Descrição]"
           minLength: 1
           maxLength: 255
-          example: "[valor de exemplo realista]"
-        [campo_opcional]:
-          type: string
-          nullable: true
+          examples:
+            - "[valor de exemplo realista]"
+        campoOpcional:
+          type:
+            - string
+            - "null"
           description: "[Descrição]"
-          example: null
+          examples:
+            - null
 
-    Atualizar[Recurso]Request:
+    AtualizarRecursoRequest:
       type: object
       description: "Todos os campos são opcionais — atualização parcial (PATCH)"
       properties:
-        [campo_atualizavel]:
+        campoAtualizavel:
           type: string
           description: "[Descrição]"
-          example: "[valor de exemplo]"
+          examples:
+            - "[valor de exemplo]"
 
     # ── Compartilhados ──
     Pagination:
@@ -363,19 +409,23 @@ components:
         page:
           type: integer
           description: Página atual
-          example: 1
+          examples:
+            - 1
         limit:
           type: integer
           description: Itens por página
-          example: 20
+          examples:
+            - 20
         total:
           type: integer
           description: Total de itens
-          example: 142
+          examples:
+            - 142
         totalPages:
           type: integer
           description: Total de páginas
-          example: 8
+          examples:
+            - 8
 
     ErrorResponse:
       type: object
@@ -386,26 +436,33 @@ components:
         code:
           type: string
           description: Código de erro legível por máquina
-          example: "VALIDATION_ERROR"
+          examples:
+            - "VALIDATION_ERROR"
         message:
           type: string
           description: Mensagem de erro legível por humano
-          example: "Dados inválidos na requisição"
+          examples:
+            - "Dados inválidos na requisição"
         details:
-          type: array
-          nullable: true
-          description: Detalhes adicionais (ex: erros por campo)
+          type:
+            - array
+            - "null"
+          description: "Detalhes adicionais (ex: erros por campo)"
           items:
             type: object
             properties:
               field:
                 type: string
-                example: "email"
+                examples:
+                  - "email"
               message:
                 type: string
-                example: "Formato inválido"
+                examples:
+                  - "Formato inválido"
         traceId:
-          type: string
-          nullable: true
+          type:
+            - string
+            - "null"
           description: ID de rastreamento para debug (presente em erros 5xx)
-          example: "abc123xyz"
+          examples:
+            - "abc123xyz"

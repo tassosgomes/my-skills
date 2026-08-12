@@ -1,0 +1,67 @@
+extends:
+  - spectral:oas
+
+rules:
+  tsg-openapi-version:
+    description: Contratos desta skill devem usar OpenAPI 3.1.
+    message: Use uma versão OpenAPI 3.1.x neste contrato.
+    severity: error
+    given: $.openapi
+    then:
+      function: pattern
+      functionOptions:
+        match: '^3\.1\.\d+$'
+
+  tsg-no-deprecated-schema-example:
+    description: Schema Objects devem usar o keyword JSON Schema examples.
+    message: "Não use `example` em Schema Objects; prefira `examples: [valor]` no OpenAPI 3.1."
+    severity: error
+    given:
+      - >-
+        $.components.schemas..[?(@property !== 'properties' && @ &&
+        @.example !== void 0 && (@.enum || @.type || @.format || @.$ref ||
+        @.properties || @.items || @.allOf || @.oneOf || @.anyOf ||
+        @.description || @.required))]
+      - >-
+        $..content..[?(@property !== 'properties' && @ && @.example !== void 0 &&
+        (@.enum || @.type || @.format || @.$ref || @.properties || @.items ||
+        @.allOf || @.oneOf || @.anyOf || @.description || @.required))]
+      - >-
+        $..parameters..[?(@property !== 'properties' && @ && @.example !== void 0 &&
+        (@.enum || @.type || @.format || @.$ref || @.properties || @.items ||
+        @.allOf || @.oneOf || @.anyOf || @.description || @.required))]
+      - >-
+        $..headers..[?(@property !== 'properties' && @ && @.example !== void 0 &&
+        (@.enum || @.type || @.format || @.$ref || @.properties || @.items ||
+        @.allOf || @.oneOf || @.anyOf || @.description || @.required))]
+    then:
+      function: schema
+      functionOptions:
+        schema:
+          not:
+            required:
+              - example
+
+  tsg-schema-examples-array:
+    description: O keyword JSON Schema examples deve ser uma lista.
+    message: "Em Schema Objects, `examples` deve ser um array; exemplos nomeados pertencem ao Media Type/Parameter Object."
+    severity: error
+    given:
+      - $.components.schemas[*].examples
+      - $.components.schemas[*]..examples
+      - $.components.parameters[*].schema..examples
+      - $.components.parameters[*].content[*].schema..examples
+      - $.components.requestBodies[*].content[*].schema..examples
+      - $.components.responses[*].content[*].schema..examples
+      - $.components.headers[*].schema..examples
+      - $.paths[*].parameters[*].schema..examples
+      - $.paths[*][*].parameters[*].schema..examples
+      - $.paths[*][*].parameters[*].content[*].schema..examples
+      - $.paths[*][*].requestBody.content[*].schema..examples
+      - $.paths[*][*].responses[*].content[*].schema..examples
+      - $.paths[*][*].responses[*].headers[*].schema..examples
+    then:
+      function: schema
+      functionOptions:
+        schema:
+          type: array

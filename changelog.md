@@ -1,5 +1,23 @@
 # Changelog das skills TSG Flow
 
+## 2026-08-12 — Lint Spectral para contratos OpenAPI
+
+### Objetivo
+
+Evitar que a `tsg-flow-contract-creator` entregue contratos OpenAPI 3.1 com exemplos depreciados
+ou inconsistentes com JSON Schema.
+
+### Mudanças
+
+- Adicionado o ruleset `skills/tsg-flow-contract-creator/rulesets/openapi.yaml`, baseado em
+  `spectral:oas`, com validações para OpenAPI 3.1, `example` depreciado em Schema Objects e
+  `examples` como array nesse contexto.
+- Adicionado o guia operacional `references/spectral.md`, incluindo o comando reproduzível com
+  `npx @stoplight/spectral-cli`.
+- Atualizada a `SKILL.md` para tornar o lint parte obrigatória da validação e do protocolo de saída.
+- Atualizado o template OpenAPI para usar `examples`, mapas nomeados em Media Type Objects e
+  união de tipos com `null` no lugar de `nullable`.
+
 ## 2026-08-08 — Renomeação dos creators para `tsg-flow-*`
 
 ### Objetivo
