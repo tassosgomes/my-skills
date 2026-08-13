@@ -61,10 +61,11 @@ um plano executável só pode consumir `techspec.md` aprovada.
 
 **Parâmetro opcional:** `--target-model-tier=budget|frontier` (padrão `budget`)
 
-Define o orçamento de fragmentação. Tasks são executadas por um agente de código
+Define a faixa de tamanho por tier. Tasks são executadas por um agente de código
 com contexto e capacidade finitos; o tamanho da task deve caber no modelo que vai
-implementá-la. Na dúvida, use `budget` — tasks menores nunca prejudicam um modelo
-mais capaz, mas tasks grandes quebram um modelo mais barato.
+implementá-la. Na dúvida, use `budget`, mas preserve primeiro a unidade mínima que compila e pode
+ser provada por um gate próprio. Tasks pequenas demais também prejudicam a execução quando separam
+código de seu teste, criam estados intermediários inválidos ou dependem de artefatos futuros.
 
 ## Pré-requisitos
 
@@ -136,24 +137,51 @@ vertical do comportamento que eles sustentam.
 - Organizar sequenciamento por fatias, com dependências mínimas e checkpoints de feedback
 - Definir trilhas paralelas somente quando os arquivos e contratos forem realmente independentes
 - Colocar controller/handler, regra, persistência, integração, teste e observabilidade da mesma
-  jornada na mesma task, respeitando o orçamento de arquivos
+  jornada na mesma task, usando a faixa de arquivos como alerta de revisão, não como corte mecânico
 - Criar uma tarefa horizontal apenas como `enabling` quando ela for tecnicamente inevitável; registrar
   a razão, o menor escopo e a fatia que ela desbloqueia
-- **Aplicar o Orçamento de Fragmentação (etapa 4A) a cada tarefa antes de prosseguir**
+- **Aplicar a Coesão e Viabilidade do Gate (etapa 4A) a cada tarefa antes de prosseguir**
 
-### 4A. Orçamento de Fragmentação (Obrigatório — Regra Dura)
+### 4A. Coesão e Viabilidade do Gate (Obrigatório — Regra Dura)
 
-Cada tarefa principal DEVE respeitar o orçamento do tier alvo:
+O gate define a fronteira da task. Uma task principal só é válida quando deixa o repositório em
+estado compilável e possui evidência executável que prova exatamente o incremento entregue.
 
-| Limite | `budget` (padrão) | `frontier` |
+**Regras duras de gateabilidade:**
+
+1. Todo arquivo, teste, fixture, comando, módulo ou script citado no checkpoint DEVE existir antes
+   da task por uma dependência declarada, ou ser criado/modificado pela própria task.
+2. Nunca usar no gate um teste criado por uma task futura. Nunca criar uma dependência circular na
+   qual A valida com artefato de B e B é bloqueada por A.
+3. Toda task de comportamento DEVE criar ou modificar o teste focalizado que a comprova. Exceção:
+   teste preexistente que já ofereça caso/método/tag isolado e esteja listado em `Referência`.
+4. O comando do gate DEVE selecionar um caso identificável por classe+método, tag, caminho ou filtro
+   determinístico. Executar somente uma suíte compartilhada inteira não prova isolamento da task.
+5. `compile`, `build`, `lint`, busca textual ou inspeção manual podem validar tasks `enabling`, mas
+   não substituem teste comportamental em task `vertical`.
+6. Nenhuma task pode exigir um arquivo produzido depois dela para compilar ou testar. Registre todas
+   as dependências de artefato em `blocked_by`.
+7. Checkpoints vagos como "validar exemplos", "verificar manualmente" ou "testar depois" são
+   proibidos. Declare comando completo, seleção do teste e resultado esperado.
+
+**Faixas orientativas de tamanho:**
+
+| Indicador | `budget` (padrão) | `frontier` |
 |---|---|---|
-| Arquivos a **criar** | ≤ 3 | ≤ 6 |
-| Arquivos a **modificar** | ≤ 3 | ≤ 5 |
-| Subtarefas | ≤ 4 | ≤ 8 |
+| Arquivos a **criar** | 4–8 | 6–12 |
+| Arquivos a **modificar** | 1–4 | 1–6 |
+| Subtarefas | ≤ 6 | ≤ 8 |
 | Fatias verticais por task `vertical` | **exatamente 1** | 1 |
 
-**Estourou qualquer limite → a tarefa DEVE ser quebrada.** Não gere a tarefa e siga
-adiante; divida-a antes de continuar.
+As faixas não são limites mecânicos. Acima da faixa, tente dividir por comportamento independente;
+abaixo dela, verifique se houve microfragmentação. Preserve uma task maior quando a separação
+romperia compilação, transação, teste ou gate. Registre no `tasks.md` a justificativa de coesão
+para qualquer task acima da faixa.
+
+**Regra de tamanho mínimo:** DTO, mapper, exception, interface, entity, repository, configuração ou
+contrato isolado não constitui fatia vertical. Incorpore-o ao comportamento que o consome. Uma task
+abaixo da faixa só permanece separada quando for `enabling` inevitável com gate estático próprio ou
+quando entregar comportamento independente com teste focalizado próprio.
 
 **Fatia vertical, nunca camada.** Uma tarefa é uma fatia vertical quando entrega um
 comportamento observável de ponta a ponta para *um* recurso ou regra. Agrupar por
@@ -179,16 +207,17 @@ do plano, reavalie a decomposição antes de finalizar.
            → arquivos disjuntos, logo TODAS paralelizáveis entre si
 ```
 
-Se a justificativa de `parallelizable: false` for "evita colisão de arquivos/DTOs/rotas",
-isso é prova de que a tarefa agrupa fatias independentes: quebre-a. Colisão real de
-contrato deve ser resolvida por uma tarefa anterior que fixa os tipos compartilhados.
+Se a justificativa de `parallelizable: false` for "evita colisão de arquivos/DTOs/rotas", revise a
+fronteira. Pode haver fatias independentes que devem ser quebradas, ou microtasks que deveriam ser
+fundidas ao incremento que altera o arquivo compartilhado. Colisão real de contrato deve ser
+resolvida por uma tarefa anterior somente quando esse contrato tiver validação autônoma.
 
 **Calibração de `complexity`** — o campo precisa discriminar, não ser constante:
 
 | Valor | Critério | Consequência |
 |---|---|---|
 | `low` | 1 arquivo, configuração/wiring, sem regra de negócio | validação só pelo gate determinístico |
-| `medium` | fatia vertical dentro do orçamento | fluxo padrão |
+| `medium` | fatia vertical coesa, gate focalizado e tamanho gerenciável | fluxo padrão |
 | `high` | acoplamento irredutível (agregado de domínio, migration com dados, invariante transversal) | **exige revisão humana do plano antes de implementar** |
 
 `high` é exceção. Se mais de ~20% das tarefas forem `high`, o critério está sendo
@@ -202,6 +231,8 @@ mal aplicado ou a fragmentação está grosseira — revise antes de finalizar.
   (`in_progress`, `validating`, `blocked`) e `tsg-flow-integrator` (`done`). Valores canônicos:
   `pending` | `in_progress` | `validating` | `blocked` | `done` — nunca gere um alias.
 - Detalhar subtarefas e critérios de sucesso
+- Declarar `gate_command`, `gate_test_selector` e `gate_expected_result`; usar `N/A` para selector
+  somente em task `enabling`, com justificativa
 - Incluir caminhos de arquivo concretos em cada tarefa
 - Declarar as decisões fechadas, limites de decisão e ambiguidades bloqueantes antes de finalizar a task
 - **Na seção "Detalhes de Implementação" de cada task, incluir as convenções relevantes das skills de stack** — ex: padrão de teste da skill de testing, padrão de error handling da skill de code-quality
@@ -248,23 +279,33 @@ Para cada componente/artefato listado no Inventário de Artefatos da TechSpec, v
 **C) Cobertura de Categorias:**
 Confirme que todas as 10 categorias obrigatórias foram endereçadas (tarefa ou N/A explícito).
 
-**D) Conformidade com o Orçamento de Fragmentação:**
-Gere esta tabela no `tasks.md`. Nenhuma linha pode ficar com ❌ na versão final:
+**D) Coesão, tamanho e integridade do gate:**
+
+Gere estas tabelas no `tasks.md`. Nenhuma linha de integridade pode ficar com ❌ na versão final:
 
 ```
-| Task | slice_type | Criar | Modificar | Subtarefas | Fatias | complexity | Status |
-|------|------------|-------|-----------|------------|--------|------------|--------|
-| 1.0  | vertical   | 3     | 1         | 4          | 1      | medium     | ✅ |
-| 10.0 | vertical   | 8     | 2         | 9          | 5      | high       | ❌ ESTOUROU → quebrar |
+| Task | slice_type | Criar | Modificar | Subtarefas | Fatias | Faixa | Justificativa |
+|------|------------|-------|-----------|------------|--------|-------|---------------|
+| 1.0  | vertical   | 7     | 2         | 5          | 1      | ✅ | Dentro da faixa budget |
+| 2.0  | vertical   | 10    | 3         | 6          | 1      | ⚠️ | Coesão transacional e um único teste E2E |
+
+| Task | Gate | Teste/fixture existe no momento da task? | Filtro isolado? | Repo compilável? | Dependência futura? | Status |
+|------|------|-------------------------------------------|-----------------|-------------------|---------------------|--------|
+| 1.0  | `./gradlew test --tests 'X.y'` | Sim, modificado na task | Sim | Sim | Não | ✅ |
 ```
 
-Feche com a distribuição de `complexity`. Se `high` passar de ~20% do total,
-declare explicitamente por que cada `high` é acoplamento irredutível — ou refragmente.
+Construa também uma tabela `artefato → primeira task produtora → tasks consumidoras` para testes,
+fixtures e arquivos compartilhados. Detecte referência antes da produção, ciclo ou consumidor sem
+`blocked_by` e corrija o plano. Feche com a distribuição de `complexity`. Se `high` passar de ~20%
+do total, declare por que cada `high` é acoplamento irredutível — ou refragmente.
 
 **E) Entrega vertical e feedback:**
 
 - toda task `vertical` tem exatamente um comportamento observável, uma jornada ponta a ponta e um
   checkpoint executável sem esperar as outras tasks;
+- o teste focalizado é criado/modificado na mesma task, ou existe por dependência anterior declarada;
+- o filtro do gate seleciona somente o caso/método/tag da task e falha quando selecionar zero testes;
+- nenhum código da task importa, instancia ou executa artefato que será produzido por task futura;
 - o checkpoint contém comando, cenário, saída esperada ou evidência concreta — "testar depois" não
   é checkpoint;
 - testes, validações, observabilidade e documentação específica da jornada estão na própria task;
@@ -303,9 +344,11 @@ Como o consumidor principal é um agente de código, cada tarefa DEVE incluir:
 
 - Agrupar tarefas por **fatia vertical de domínio**, nunca por camada arquitetural
 - Ordenar tarefas logicamente, com dependências antes de dependentes
-- Tornar cada tarefa principal independentemente completável **e independentemente validável**: se o gate determinístico não conseguir provar a tarefa isoladamente (filtro de teste próprio), ela está mal fragmentada
+- Tornar cada tarefa principal independentemente completável **e independentemente validável**:
+  se o gate determinístico não conseguir provar a tarefa isoladamente, funda-a ao incremento que
+  fornece o teste ou redefina a fronteira; não crie uma microtask sem gate próprio
 - Tornar cada tarefa pronta para preflight: uma lacuna que mude comportamento, contrato, dados ou arquitetura deve ser resolvida no PRD/TechSpec antes da execução
-- Respeitar o Orçamento de Fragmentação (etapa 4A) sem exceção
+- Respeitar as regras duras de gateabilidade da etapa 4A; tratar contagem de arquivos como heurística
 - Definir escopo e entregáveis claros para cada tarefa
 - Incluir testes como subtarefas dentro de cada tarefa principal
 - Amarrar cada tarefa principal às user stories do PRD sempre que possível
@@ -327,8 +370,10 @@ Para a análise de execução paralela, considere:
 - Para funcionalidades grandes (>10 tarefas principais), sugira divisão em fases
 - Use o formato X.0 para tarefas principais, X.Y para subtarefas
 - Indique claramente dependências e marque tarefas paralelas
-- **Nunca finalize sem executar a Validação Cruzada (Etapa 6), incluindo a checagem D de orçamento**
-- **Nunca finalize com uma tarefa fora do Orçamento de Fragmentação** — prefira 20 tarefas pequenas a 12 grandes; o custo de uma tarefa a mais é marginal, o custo de uma tarefa grande demais é o loop implementer↔validator
+- **Nunca finalize sem executar a Validação Cruzada (Etapa 6), incluindo a checagem D de gate**
+- **Nunca finalize com uma task cujo teste ou compilação dependa de artefato futuro**
+- Prefira a menor quantidade de tasks que preserve comportamento coeso, contexto gerenciável e
+  gate focalizado; tanto tasks grandes demais quanto microtasks geram loops implementer↔validator
 - **Cada tarefa deve referenciar as skills de stack relevantes** para que o agente de código possa consultá-las durante a implementação
 
 Após completar a análise, persistir e reler todos os arquivos necessários, apresente os resultados ao

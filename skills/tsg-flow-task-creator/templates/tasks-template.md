@@ -29,9 +29,9 @@ As fases agrupam uma sequencia de comportamento e feedback, nao uma camada arqui
 
 ## Mapa de Entrega e Feedback
 
-| Slice | Task | Comportamento observavel | Checkpoint executavel | Bloqueado por |
-|-------|------|--------------------------|-----------------------|---------------|
-| V-01 | 1.0 | [resultado ponta a ponta] | [comando/cenario + saida esperada] | [Nenhum/IDs] |
+| Slice | Task | Comportamento observavel | Gate executavel | Seletor focalizado | Bloqueado por |
+|-------|------|--------------------------|-----------------|---------------------|---------------|
+| V-01 | 1.0 | [resultado ponta a ponta] | [comando + saida esperada] | [classe+metodo/tag/filtro] | [Nenhum/IDs] |
 
 ### Habilitadores inevitaveis
 
@@ -82,14 +82,30 @@ As fases agrupam uma sequencia de comportamento e feedback, nao uma camada arqui
 | 9 | Documentacao | V.0 | — | ✅ |
 | 10 | Seguranca | U.0 | [stack]-production-readiness | ✅ |
 
-### Conformidade com o Orcamento de Fragmentacao
+### Coesao e Faixa de Tamanho
 
-| Task | slice_type | Criar | Modificar | Subtarefas | Fatias | complexity | Status |
-|------|------------|-------|-----------|------------|--------|------------|--------|
-| 1.0 | vertical | 0 | 0 | 0 | 1 | medium | ✅ |
+| Task | slice_type | Criar | Modificar | Subtarefas | Fatias | Faixa | Justificativa |
+|------|------------|-------|-----------|------------|--------|-------|---------------|
+| 1.0 | vertical | 7 | 2 | 5 | 1 | ✅ | Dentro da faixa budget |
 
 Tasks `vertical` devem ter exatamente uma fatia. Tasks `enabling` exigem justificativa na seção
-"Habilitadores inevitaveis" e não podem virar agrupamentos horizontais por conveniência.
+"Habilitadores inevitaveis" e não podem virar agrupamentos horizontais por conveniência. Fora da
+faixa exige justificativa de coesao; nao exige quebra quando isso destruir o gate.
+
+### Integridade dos Gates
+
+| Task | Gate | Teste/fixture disponivel | Filtro isolado | Repo compilavel | Dependencia futura | Status |
+|------|------|--------------------------|-----------------|-----------------|--------------------|--------|
+| 1.0 | `[comando]` | [criado/modificado/preexistente] | Sim | Sim | Nao | ✅ |
+
+### Ciclo de Vida de Artefatos Compartilhados
+
+| Artefato | Primeira task produtora | Tasks consumidoras | Dependencias consistentes | Status |
+|----------|-------------------------|--------------------|---------------------------|--------|
+| `[teste/fixture/arquivo]` | X.0 | Y.0, Z.0 | Sim | ✅ |
+
+Nenhuma task pode validar com teste/fixture futuro, depender de arquivo produzido depois ou usar
+suite compartilhada sem seletor de caso proprio.
 
 ## Analise de Paralelizacao
 
