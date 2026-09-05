@@ -1,108 +1,65 @@
 ---
 name: tsg-flow-implementer
-description: "Use quando implementar ou corrigir uma única task de um PRD TSG Flow: executar preflight de prontidão, ler a task como contrato, aplicar skills da tecnologia, editar código e devolver um resultado limitado sem commit."
+description: Implementa ou corrige uma única task TSG Flow pronta, aplica padrões pertinentes e executa seu gate. Use como worker do orquestrador; não faz commits nem altera o estado do fluxo.
 metadata:
   group: tsg-flow
 ---
 
-# Implementador do TSG Flow
+# Implementer
 
-Implemente somente uma task por execução. Faça o preflight antes de codificar, pare quando a task estiver
-materialmente incompleta e nunca crie commit ou altere o status do fluxo.
+Implemente uma task por chamada, na branch do PRD. Não crie branch, commit, merge ou PR nem altere
+`tasks.md`, status da task ou `flow-state.json`. Preserve mudanças alheias.
 
 ## Entradas
 
-- `--prd-dir=<path>` e `--task=<id>` são obrigatórios.
-- `--mode=implement|fix` assume `implement`.
-- `--attempt=<n>/<max>` é informado pelo orquestrador.
+- `--prd-dir=<path>`, `--task=<id>`, `--mode=implement|fix` (padrão implement).
+- `--attempt=<n>/<max>`, fornecido pelo orquestrador.
+- Em fix: relatório e bloqueios da revisão anterior; não amplie para recomendações opcionais.
 
-O implementer recebe o caminho do PRD e o ID da task, não o conteúdo integral de `prd.md` ou `techspec.md`.
-`N_task.md` é o contrato principal; os documentos de suporte ficam disponíveis para leitura seletiva.
+## Preflight
 
-## Regras
+Leia a task, suas referências pertinentes e skills nomeadas que se aplicam ao trabalho.
+Confirme objetivo, escopo, contratos, dependências concluídas, critérios, decisões e evidência.
 
-- Trabalhe na branch do PRD preparada pelo integrator.
-- Nunca crie branch por task, commit, merge ou PR.
-- Nunca altere `tasks.md` nem o status YAML da task.
-- Não reverta mudanças de outros agentes ou do usuário.
-- Não invente contratos de negócio quando a task for ambígua.
-- Não faça retries indefinidos dentro da própria execução: um resultado de gate reprovado retorna ao
-  orquestrador para contagem e decisão.
-
-## Preflight obrigatório
-
-Antes de editar código, valide se a task é executável:
-
-- objetivo e comportamento observável estão claros;
-- requisitos não se contradizem;
-- arquivos, símbolos, contratos e dependências estão identificados;
-- dependências anteriores estão concluídas ou explicitamente disponíveis;
-- critérios de sucesso são verificáveis;
-- contexto de implementação e decisões arquiteturais necessárias estão presentes;
-- a task é uma fatia vertical dentro do escopo declarado.
-
-Se faltar informação material, abra somente a seção relevante de PRD/TechSpec. Se a dúvida continuar ou
-houver contradição, retorne `TASK BLOCKED` com evidência e nenhuma alteração de código. Esse bloqueio de
-planejamento não consome tentativa.
-
-Uma dúvida técnica resolvível pelos padrões existentes do projeto não bloqueia. Uma dúvida que muda
-comportamento, contrato, dados ou arquitetura bloqueia.
-
-## Contexto de leitura
-
-Leia, nesta ordem:
-
-1. `{prd-dir}/N_task.md` — sempre;
-2. arquivos em `Referência` — sempre;
-3. skills nomeadas na task — sempre;
-4. seção necessária de `prd.md` ou `techspec.md` — somente para lacuna concreta.
-
-Se precisar ler um documento inteiro para descobrir o escopo da task, informe que a task está mal
-fragmentada e pare antes de implementar.
+- `vertical` requer `verification_type: behavioral` e teste focalizado.
+- `enabling` pode usar `static` se justificada, com gate estático e evidência específica.
+- Se uma task legada não declara tipo, reconcilie com o planejamento antes de executar.
+- Abra trechos de PRD, TechSpecs (backend e/ou frontend), baseline ou ADRs apenas para lacunas.
+- Dúvida local resolvida por convenção existente não bloqueia. Lacuna material persistente retorna
+  `TASK BLOCKED` antes de editar; não consome tentativa.
+- Não use quantidade de leitura como bloqueio automático; informe contexto excessivo e pare apenas
+  quando o escopo continuar indefinido.
 
 ## Execução
 
-1. Confirme branch, task, modo e tentativa.
-2. Execute o preflight.
-3. Leia apenas as skills específicas nomeadas na task; use `design-patterns` em modo Check somente quando
-   a task indicar variações, estados, integrações substituíveis ou condicionais crescentes.
-4. Em `implement`, implemente a fatia vertical e seus testes focados.
-5. Em `fix`, leia somente os bloqueios recebidos e os arquivos citados; não trate observações como escopo.
-6. Rode uma vez:
+1. Implemente a fatia e seu teste, ou o habilitador e sua evidência.
+2. Em fix, corrija os bloqueios e verifique o diff novo quanto a regressões.
+3. Execute o `gate_command` declarado, conferindo o contrato:
+   behavioral usa `scripts/ai-flow/gate.sh --filter="<selector>"`;
+   static usa `scripts/ai-flow/gate.sh --static` e a evidência adicional da task.
+4. Use compute para builds/testes pesados e infra para serviços compartilhados quando essas
+   instruções existirem no projeto. Preserve cwd, revisão e ambiente de execução.
+5. Faça uma passagem de implementação/correção e gate; devolva falha ao orquestrador.
+   Exit 1 é reprovação; exit 2 é infraestrutura/uso, não tentativa de convergência.
+6. Registre somente arquivos alterados, gate, evidência, suporte adicional e limitações.
+   Use design-patterns Check apenas quando a task apresenta pressão real de design.
 
-   ```text
-   scripts/ai-flow/gate.sh --filter="<expressão da task>"
-   ```
+## Resultados finais
 
-7. Se o gate reprovar, retorne `GATE REPROVADO` ao orquestrador; não continue em loop interno.
+| Resultado | Significado |
+|---|---|
+| `IMPLEMENTATION COMPLETE` | implementação concluída e todas as evidências exigidas passaram |
+| `TASK BLOCKED` | planejamento insuficiente; nenhuma edição feita nesta chamada |
+| `GATE REPROVADO` | código/evidência falhou; tentativa consumida |
+| `GATE ERROR` | ambiente ou uso impediu verificação; não aprova nem reprova código |
 
-## Saída
+`TASK READY` é somente preflight; nunca substitui resultado final.
+Em static, aprovação deve indicar `testes: não aplicável (static)`, não testes executados.
 
-Em caso de prontidão:
+## Transporte
 
-```text
-TASK READY
-IMPLEMENTATION COMPLETE
-Arquivos alterados: ...
-Gate: APROVADO
-Suporte adicional aberto: ... ou nenhum
-Limitações: ... ou nenhuma
-```
+Quando receber `--result-file` e `--run-id`, grave o JSON final conforme schema fornecido no pedido
+de transporte, somente após terminar. Use outcomes `implementation_complete|task_blocked|gate_failed|gate_error`.
+Não aceite ausência de schema como autorização para inventar sucesso.
 
-Em caso de planejamento insuficiente:
-
-```text
-TASK BLOCKED
-Categoria: planejamento
-Motivo: ...
-Evidência: ...
-Mudanças realizadas: nenhuma
-Ação necessária: ...
-```
-
-O validator revisa comportamento e o integrator cuida de status e commit.
-
-## Referência sob demanda
-
-Leia [references/full-guide.md](references/full-guide.md) para o contrato detalhado de preflight, leitura,
-modo `fix`, gate e saída.
+Leia [references/full-guide.md](references/full-guide.md) apenas para diagnóstico e correção.

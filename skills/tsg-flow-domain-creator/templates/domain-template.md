@@ -3,6 +3,9 @@
 > **Nível 1 da hierarquia de documentação.** Este documento detalha o bounded context de um domínio específico do sistema. Sempre forneça o `vision.md` junto com este arquivo ao iniciar sessões de PRD ou Tech Spec dentro deste domínio.
 
 **Domínio:** [Nome]
+**Domain Map:** [caminho e domínio selecionado]
+**Capacidades relacionadas:** [CAP-XXX e prioridades herdadas, quando houver backlog]
+**Restrições arquiteturais pertinentes:** [referência ao baseline, sem detalhar implementação]
 **Responsável:** [Nome ou "a definir"]
 **Status:** `planned` · `in-progress` · `done`
 **Fase do Roadmap:** Fase [N] — [Nome da Fase]

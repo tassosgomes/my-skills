@@ -1,116 +1,35 @@
-# Referência completa — Integrador do TSG Flow
+# Pré-condições Git e retenção
 
-## Entradas
+## Checkpoints
 
-```text
---mode=prepare-prd-branch|reopen-task|checkpoint-task|complete-prd
---prd-dir=<path>
---task=<id>                    # reopen-task e checkpoint-task
-```
+Confirme aprovação da task atual e arquivos autorizados. Liste staged/unstaged e preserve mudanças
+do usuário. ADRs e docs/adr/index.md afetados pela task integram seu manifesto; não inclua todo docs/.
+Se o commit falhar após atualização de status, reporte o estado parcial para reconciliação.
+Retorno perdido após commit exige consultar Git antes de tentar novamente.
 
-O fluxo é standard por task, com checkpoint individual após cada aprovação.
+## Preparação para full
 
-## Branch e base do PRD
+Prepare a integração com a base alvo antes do full. Guarde original_base_ref para histórico e
+retorne base_ref/target_ref atuais para revisão do diff da feature. Não reduza o diff de uma entrega
+já existente por recalcular a base silenciosamente na retomada.
 
-Use uma branch estável:
+Em conflito, retorne arquivos e estado Git preservado. O orquestrador encaminha correções dentro
+da autoridade existente. Não use reset/checkout destrutivo nem finalize rebase com conflito oculto.
 
-```text
-feature/<slug-do-prd-dir>
-```
+## Finalização
 
-Em `prepare-prd-branch`:
+Compare o conteúdo atual com validated_commit/tree. Somente prd_review.md, N_task_review.md e
+flow-state.json pertencentes ao PRD podem ter mudado como evidência; confira esses diffs.
+Nenhum código, config, lockfile, contrato ou ADR pode ser incluído sem revisão correspondente.
+Após commit de evidência, valide que a diferença continua restrita a essa lista.
 
-1. verifique árvore de trabalho e branch atual;
-2. crie ou reutilize a branch;
-3. não crie commit;
-4. compute o commit-base:
+Confirme que target_ref ainda corresponde à base alvo. Se mudou, retorne REVALIDATION REQUIRED.
+Não rebaseie depois de uma aprovação e publique o novo código como se fosse a mesma revisão.
+Crie/reutilize PR ou faça merge apenas conforme destino autorizado; branch é entrega local.
+Falhas de autenticação/rede são bloqueios de integração, não falhas de qualidade.
 
-   ```text
-   git merge-base HEAD main
-   ```
+## Retenção
 
-5. devolva esse SHA como `BASE_REF` ao orquestrador.
-
-O validator usa o `BASE_REF` no full para comparar a entrega completa, mesmo que o `HEAD` já esteja no
-checkpoint da última task.
-
-## checkpoint-task
-
-Pré-condição: retorno explícito `VALIDAÇÃO APROVADA` do validator focused para a mesma task.
-
-Antes do commit:
-
-1. atualize a checkbox correspondente em `{PRD_DIR}/tasks.md`;
-2. altere somente o campo `status` para `done` em `{PRD_DIR}/N_task.md`;
-3. confirme que `{PRD_DIR}/N_task_review.md` existe;
-4. confirme que código e testes estão dentro dos arquivos autorizados;
-5. liste arquivos staged e unstaged;
-6. não inclua mudanças do usuário ou de outras tasks;
-7. crie um commit usando `git-commit`;
-8. devolva branch, SHA e arquivos.
-
-Arquivos padrão do checkpoint:
-
-- implementação e testes;
-- task com status atualizado;
-- `tasks.md`;
-- relatório focused da task;
-- outros artefatos expressamente autorizados.
-
-## reopen-task
-
-Pré-condição: o validator full atribuiu um bloqueio a uma task já concluída.
-
-1. confirme a task e o bloqueio;
-2. altere a checkbox para `[ ]`;
-3. defina `status: in_progress`;
-4. faça um commit somente de estado com `git-commit`;
-5. retorne o hash ao orquestrador;
-6. não edite código.
-
-## Proteção contra task mal especificada
-
-Se o implementer retornar `TASK BLOCKED`, não faça commit e não altere a task para `done`. O orquestrador
-deve informar o usuário e preservar o checkpoint anterior.
-
-Se houver alterações não commitadas da task bloqueada, não as descarte automaticamente. Liste-as e aguarde
-decisão/limpeza segura; nunca use operação destrutiva sobre arquivos sem escopo confirmado.
-
-## complete-prd
-
-Pré-condições:
-
-- todas as tasks estão `[x]`;
-- todas têm `status: done`;
-- não há task `blocked`;
-- o validator devolveu `FULL VALIDATION APROVADA`;
-- `prd_review.md` existe;
-- a árvore está pronta para o commit final.
-
-Procedimento:
-
-1. inclua `prd_review.md` e correções finais autorizadas no commit final;
-2. confirme `git status` limpo;
-3. rebaseie a branch sobre `main`;
-4. se houver conflito, pare e reporte;
-5. pergunte:
-
-   ```text
-   Todas as tasks e a revisão full do PRD foram aprovadas. Deseja fazer merge direto em main ou abrir um PR?
-   ```
-
-6. Para PR:
-   - execute `gh auth status`;
-   - reporte o usuário autenticado;
-   - faça push da branch;
-   - execute `gh pr create`;
-   - não use navegador nem API direta;
-   - não exclua a branch local.
-
-7. Para merge direto:
-   - sincronize `main` conforme o fluxo do repositório;
-   - execute `git merge <branch> --ff-only`;
-   - faça push conforme autorizado;
-   - pergunte antes de excluir branch local.
-
-O integrator não executa a revisão full nem aplica recomendações de design patterns.
+ADRs em docs/adr/ sobrevivem ao PRD. A finalização não remove docs de planejamento automaticamente.
+Uma futura operação de arquivamento deve preservar decisões autocontidas, contratos consumidos
+por tooling e referências ativas. Use IDs e commits de origem para rastreabilidade histórica.

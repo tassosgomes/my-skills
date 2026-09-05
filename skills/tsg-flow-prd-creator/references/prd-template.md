@@ -22,6 +22,13 @@
 
 > **Esta seção é obrigatória em Pipeline Mode e omitida em Standalone Mode.**
 
+### Capacidade e fronteiras
+
+- **Capacidade selecionada:** [CAP-XXX do backlog, quando disponível]
+- **Domínio no Domain Map:** [nome canônico e fronteiras pertinentes]
+- **Prioridade e dependências:** [herdadas do backlog/domínio]
+- **Restrições do baseline:** [somente as que limitam o escopo, sem decisões de implementação]
+
 ### Vision Doc
 
 - **Objetivos de negócio atendidos**: [Listar IDs ou descrições dos objetivos do Vision Doc

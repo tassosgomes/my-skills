@@ -1,133 +1,95 @@
 ---
 name: tsg-flow-orchestrator
-description: "Use quando coordenar a execução sequencial de um PRD via TSG Flow: preparar a branch, executar tasks com implementer e validator focused, controlar tentativas, parar para intervenção e executar a revisão full no encerramento."
+description: Coordena a execução sequencial de um PRD TSG Flow com tasks prontas, workers de implementação/revisão, checkpoints e validação full antes da entrega. Não use para uma correção pequena sem planejamento TSG.
 metadata:
   group: tsg-flow
 ---
 
-# Orquestrador do TSG Flow
+# Orchestrator
 
-Coordene a entrega de um PRD médio ou grande sem implementar código, corrigir código, validar
-comportamento ou fazer Git diretamente. O fluxo usa o perfil `standard` por task e uma revisão
-`full` do PRD antes da integração final.
+Coordene sem implementar código, revisar comportamento ou fazer Git diretamente.
+Preserve uma branch por PRD, workers frescos e tentativas limitadas.
 
 ## Entradas
 
-- `--prd-dir=<path>` é obrigatório.
-- `--profile=standard` é opcional; `standard` é o único perfil suportado.
-- `--max-attempts=3..5` é opcional e assume `3`.
-- Use `{PRD_DIR}` como base. Um PRD usa uma única ramificação.
+- `--prd-dir=<path>` obrigatório.
+- `--profile=standard` (único perfil).
+- `--max-attempts=3..5`, padrão 3.
+- `--transport=subagent|herdr`, padrão subagent.
+- `--delivery=branch|pr|merge` e base alvo, quando definidos/autorizados.
 
-Ofereça somente `standard`. Alterações pequenas devem usar o Plan Mode do harness; o TSG Flow é reservado
-para features organizadas em PRD, TechSpec e tasks.
+Mudanças pequenas podem usar o fluxo direto do projeto. Não crie PRD ou tasks apenas para executar
+este orquestrador. Não repita aprovação humana já explícita para o mesmo plano e escopo.
 
-## Modelo do fluxo
+## Inicialização e retomada
 
-| Etapa | Responsável | Escopo |
-|---|---|---|
-| Preparar branch | integrator | uma branch e um commit-base por PRD |
-| Implementar | implementer | uma task por vez, após `TASK READY` |
-| Validar task | validator | revisão independente `focused` |
-| Proteger trabalho | integrator | checkpoint/commit após cada task aprovada |
-| Revisar feature | validator | `full` no diff completo do PRD |
-| Finalizar | integrator | commit da revisão, rebase, merge ou PR |
-
-## Invariantes
-
-1. Leia `{PRD_DIR}/tasks.md` primeiro e execute uma task por vez.
-2. `tasks.md` é a fonte de verdade para a ordem; reconcilie checkbox e frontmatter antes de avançar.
-3. Execute o preflight do implementer antes de qualquer alteração de código.
-4. Não trate uma ambiguidade de requisito como escolha técnica. Em dúvida material, pare e peça intervenção.
-5. Use validator independente/fresco para a revisão `focused` quando houver subagentes disponíveis.
-6. Nunca reescreva ou suavize o retorno bloqueante do validator.
-7. O integrator é o único dono de status `done`, checkbox e commit.
-8. Nunca pule o `full` do PRD antes de `complete-prd`.
-9. Nunca continue após o limite de tentativas sem intervenção do usuário.
-10. Antes da primeira task com `complexity: high`, apresente o plano ao usuário e aguarde confirmação.
-
-## Tentativas e Gate de Intervenção
-
-- O limite padrão é `3`; aceite no máximo `5` quando o usuário configurar explicitamente.
-- Uma tentativa é uma execução do implementer seguida por gate/validação. Falha do gate determinístico
-  também conta, mesmo que o validator semântico não seja chamado.
-- Falha de preflight (`TASK BLOCKED`) não consome tentativa: é defeito de planejamento.
-- O implementer não repete correções indefinidamente dentro da própria sessão; devolve o resultado ao
-  orquestrador, que controla o contador.
-- Ao atingir o limite, marque `status: blocked`, preserve o último checkpoint e pare.
-- O relatório de parada deve informar task, tentativas, último commit seguro, timeline curta, bloqueios,
-  arquivos não commitados, diagnóstico e ação esperada do usuário.
-- Após o usuário corrigir a task, PRD ou TechSpec, inicie uma nova execução e preserve o histórico apenas
-  na conversa e no relatório de intervenção.
-
-## Inicialização
-
-1. Leia `tasks.md` e encontre a próxima task `pending`, ou retome `in_progress`, `validating` ou `blocked`
-   somente após a condição de retomada ser resolvida.
-2. Leia `{PRD_DIR}/N_task.md` e verifique se `techspec.md` existe. Não carregue PRD/TechSpec inteiros sem
-   lacuna concreta.
-3. Delegue `tsg-flow-integrator --mode=prepare-prd-branch --prd-dir={PRD_DIR}` antes da primeira task.
-4. Capture o `base-ref` retornado pelo integrator para a revisão full do PRD.
-5. Inicialize o contador por task e o `full-attempt` do PRD.
+1. Leia `tasks.md`, próxima task e `flow-state.json` se existente.
+2. Confira specs selecionadas (backend e/ou frontend), aprovação do plano e gate disponível.
+   Exija contrato de verificação consistente: behavioral/filtro ou enabling/static.
+3. Delegue `prepare-prd-branch` ao integrator; capture branch, base e último checkpoint.
+4. Persista estado mínimo em `{PRD_DIR}/flow-state.json`: branch, original_base_ref, base_ref,
+   target_ref, last_checkpoint, task ativa, tentativa, full_attempt, fase e último resultado.
+   Leia [references/full-guide.md](references/full-guide.md) ao inicializar/retomar para o schema.
+5. Reconcilie estado com Git, checkbox e frontmatter antes de qualquer repetição. Em divergência,
+   investigue sem sobrescrever evidência. Nunca reinicie contadores só porque a conversa mudou.
 
 ## Ciclo por task
 
-1. Defina `status: in_progress`.
-2. Delegue `tsg-flow-implementer --mode=implement --task=N --prd-dir={PRD_DIR}` com o número da tentativa.
-3. Se retornar `TASK BLOCKED`, defina `status: blocked`, informe o usuário e pare sem commit.
-4. Se o gate do implementer reprovar, conte a tentativa; reenvie somente se ainda houver orçamento.
-5. Defina `status: validating` e delegue `tsg-flow-validator --mode=focused --task=N` em worker independente.
-6. Se reprovar e ainda houver tentativas, defina `status: in_progress` e delegue `--mode=fix` com somente
-   os bloqueios recebidos.
-7. Se aprovar, delegue `tsg-flow-integrator --mode=checkpoint-task --task=N`.
-8. Confirme `status: done`, `[x]` em `tasks.md` e o hash do checkpoint antes de avançar.
+1. Confirme dependências done e revisão do plano de tasks high; reutilize revisão já registrada.
+2. Defina status in_progress e registre a tentativa antes da delegação.
+3. Delegue implementer em implement (primeira passagem) ou fix (bloqueios anteriores).
+4. TASK BLOCKED: marque blocked, registre evidência e pare sem consumir tentativa.
+   GATE ERROR/exit 2: trate como infraestrutura. GATE REPROVADO consome tentativa.
+5. IMPLEMENTATION COMPLETE exige gate/evidências aprovados; TASK READY não comprova conclusão.
+6. Defina validating. Delegue validator focused na primeira revisão e revalidation após correção
+   de bloqueios já revisados. Se a falha anterior foi apenas do gate, a primeira revisão é focused.
+7. Em rejeição, preserve bloqueios e encaminhe fix se houver orçamento.
+8. Em aprovação, delegue checkpoint-task. Confirme commit, checkbox e status done; persista o hash.
+9. Avance somente após o checkpoint. Todas as complexidades passam por focused no standard.
 
-O checkpoint é um seguro operacional: protege tasks já concluídas e permite abandonar uma task mal
-especificada sem perder o trabalho anterior.
+## Tentativas e intervenção
 
-## Revisão Full do PRD
+Uma tentativa é implementação/correção seguida por gate e, quando possível, revisão.
+Persista o resultado antes de decidir o próximo passo. Recomendações não bloqueantes não geram retry.
+Ao atingir o limite, marque blocked e reporte tentativas, bloqueios, último checkpoint seguro,
+arquivos pendentes e ação necessária. Não descarte mudanças.
 
-Quando não houver tasks pendentes:
+Falhas de transporte/infraestrutura não são vereditos nem consomem tentativa de convergência.
+Antes de repetir uma delegação interrompida, reconcilie possíveis escritas/commits: timeout não
+garante ausência de efeitos. Repita no máximo duas vezes se a repetição for segura; caso contrário,
+pare com diagnóstico. Após intervenção que resolveu o bloqueio, registre nova rodada preservando
+o histórico mínimo anterior no estado/relatório.
 
-1. Delegue `tsg-flow-validator --mode=full --prd-dir={PRD_DIR} --base-ref={BASE_REF}` sem `--task`.
-2. O validator deve revisar o diff inteiro desde `BASE_REF`, a rastreabilidade PRD → TechSpec → tasks,
-   as interações entre tasks, integração, arquitetura, testes, segurança e regressões.
-3. Carregue `design-patterns` em modo Review. Identifique pressões reais de design, compare a solução
-   atual com alternativa simples e padrões candidatos, mas não refatore automaticamente.
-4. Classifique resultado como `APROVADA`, `APROVADA COM RECOMENDAÇÕES` ou `REPROVADA`.
-5. Recomendações de refatoração não bloqueiam o PRD. Se um bloqueio full for atribuído a uma task já
-   concluída, delegue `tsg-flow-integrator --mode=reopen-task --task=N`, depois corrija, valide focused e
-   crie novo checkpoint.
-6. Conte ciclos de correção do `full` com o mesmo limite; ao excedê-lo, marque o PRD como bloqueado e peça
-   intervenção.
-7. Somente após `FULL VALIDATION APROVADA`, delegue `complete-prd`.
+## Integração e revisão full
 
-## Estados
+1. Após todos os checkpoints, delegue prepare-integration ao integrator.
+2. Persista target_ref e base_ref retornados. Não valide uma branch que ainda será rebaseada.
+3. Delegue validator full sobre o diff completo desde base_ref e specs selecionadas.
+4. Em rejeição atribuída a task, delegue reopen-task; execute fix, focused/revalidation e checkpoint.
+   Para lacuna sem dono, reporte planejamento insuficiente sem inventar task no orquestrador.
+5. Conte ciclos de correção full com o mesmo limite e preserve evidências.
+6. Após FULL VALIDATION APROVADA, persista validated_commit/tree e delegue complete-prd.
+7. REVALIDATION REQUIRED por alteração da base/código invalida aprovação: prepare integração e
+   valide o resultado novamente. Não conte mudança externa da base como defeito de implementação.
+8. Finalize somente após PRD COMPLETE no destino autorizado. Uma escolha externa faltante é
+   solicitada apenas com a entrega concreta pronta para revisão.
 
-Use somente:
+## Estados e propriedade
 
-| Estado | Dono | Significado |
-|---|---|---|
-| `pending` | task creator | ainda não iniciada |
-| `in_progress` | orchestrator | implementação ou correção em andamento |
-| `validating` | orchestrator | aguardando validator focused |
-| `blocked` | orchestrator | intervenção humana necessária |
-| `done` | integrator | task aprovada e commitada |
+pending: Task Creator. in_progress/validating/blocked e flow-state: Orchestrator.
+done, checkbox e commits: Integrator. Implementer/validator não alteram estado do fluxo.
+Falha de commit não autoriza avançar com status done sem checkpoint; reconcilie os arquivos.
 
-Uma task bloqueada não deve ser marcada como concluída. Ao retomar após intervenção, reabra-a como
-`in_progress` e reinicie o contador ativo.
+## Transporte
 
-## Execução com subagentes
+O transporte altera como delegar, não as responsabilidades nem as condições de sucesso.
+Use uma delegação por vez; workers compartilham working tree e branch.
 
-Quando subagentes estiverem disponíveis:
-
-1. mantenha a sessão atual como orquestrador;
-2. use um worker de implementação e um worker fresco de validação;
-3. aguarde cada retorno antes da próxima etapa;
-4. não execute localmente uma etapa delegada;
-5. se não houver isolamento suficiente para a independência do validator, informe a limitação antes de
-   continuar em modo sequencial.
-
-## Referência sob demanda
-
-Leia [references/full-guide.md](references/full-guide.md) para contratos detalhados, preflight, tentativa,
-revisão full e intervenção humana.
+- **subagent:** worker fresco, com task, caminhos e evidência mínima. Não injete toda a conversa.
+  Se o runtime não permitir revisão independente, informe a limitação; não a declare independente.
+- **herdr:** leia [references/transport.md](references/transport.md) antes de usar
+  `scripts/tsg-delegate.sh`. Cada chamada usa pane/agente novo e resultado JSON por run_id.
+  Kind diferente pode oferecer diversidade de revisão, mas não garante ausência de pontos cegos.
+  Use modelos configurados/autorizados, sem substituir escolhas explícitas.
+- Não execute localmente etapas delegadas. Para runtime sem workers, resolva a limitação de
+  transporte antes de iniciar; não simule uma revisão independente.

@@ -25,6 +25,7 @@ ENTRADAS
 
 - `vision.md`
 - `context/domain-map.md`
+- ADRs relevantes em `docs/adr/` e evidências de stack/código existentes, quando disponíveis.
 
 --------------------------------
 REGRAS
@@ -35,6 +36,14 @@ REGRAS
 - Evitar otimização prematura.
 - Priorizar simplicidade e facilidade de manutenção.
 - Garantir que o baseline permita a evolução futura.
+- Herdar decisões aceitas; skills disponíveis orientam padrões, não identificam a stack.
+- Perguntar somente por decisões materiais ainda abertas. Reutilizar aprovações já registradas.
+- Registrar decisões novas com racional no baseline; quando exigirem ADR, usar `docs/adr/`
+  com numeração global e contexto autocontido. Não criar ADR apenas por executar esta etapa.
+- Consultar `docs/adr/index.md`, reservar ID global e salvar `adr-NNN.md` como Proposed.
+  Após aprovação da decisão, atualizar ADR e índice para Accepted; manter Withdrawn se abandonada.
+  Para substituir uma Accepted, criar nova ADR e marcar a anterior Superseded após aprovação.
+  O contexto deve explicar a decisão mesmo sem PRD; não manter o único racional na conversa.
 
 --------------------------------
 FASE 1 — ANÁLISE DO SISTEMA
@@ -96,6 +105,9 @@ SAÍDA
 Gerar:
 
 `context/architecture-baseline.md`
+
+TechSpecs devem consumir este baseline. Backlog e PRDs herdam suas restrições aplicáveis.
+Entregar resumo e link; revisar apenas quando as premissas estruturais mudarem.
 
 Usar a seguinte estrutura:
 

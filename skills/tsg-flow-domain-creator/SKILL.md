@@ -1,13 +1,6 @@
 ---
 name: tsg-flow-domain-creator
-description: >
-  Cria Domain Documents (Nível 1) para domínios específicos de um sistema complexo. Use esta skill
-  sempre que o usuário quiser detalhar um domínio, módulo ou bounded context após o Vision Doc estar
-  aprovado. Dispare quando o usuário mencionar "domain doc", "detalhar o domínio X", "documentar o
-  módulo X", "bounded context", "quais features do domínio X", "vamos detalhar o financeiro/RH/estoque"
-  ou qualquer variação que indique a necessidade de aprofundar um domínio específico antes de criar
-  PRDs. Esta skill é o Nível 1 do pipeline Vision → Domain → PRD → TechSpec → Tasks. Requer que o
-  Vision Doc já exista em `vision.md`. O documento gerado serve como entrada para a skill `tsg-flow-prd-creator`.
+description: Detalha um domínio selecionado no Domain Map, com fronteiras, entidades de negócio, regras e features priorizadas. Use antes dos PRDs desse domínio; para decompor o produto inteiro use domain-decomposer.
 metadata:
   group: tsg-flow
 ---
@@ -25,6 +18,11 @@ Antes de redigir, leia o template em `templates/domain-template.md`.
 ## Entradas e Saída
 
 - **Entrada obrigatória:** `vision.md` (deve estar disponível no contexto ou fornecido pelo usuário)
+- **Contexto de domínio:** `context/domain-map.md`, quando disponível; é a fonte das fronteiras
+  e nomes dos bounded contexts. Se ainda não existe e as fronteiras estão indefinidas, use
+  `tsg-flow-domain-decomposer` antes de detalhar.
+- **Contexto adicional:** capacidade selecionada em `backlog/capabilities.md` e restrições de
+  `context/architecture-baseline.md`, quando disponíveis. Preserve IDs, prioridades e dependências.
 - **Documento de saída:** `domains/[nome-do-dominio]/domain.md`
 
 ## Pré-requisitos
@@ -33,27 +31,27 @@ Antes de começar, confirme:
 
 1. **O `vision.md` foi fornecido?**
    - Se não: solicite ao usuário antes de continuar. Sem ele, não há como garantir coerência de escopo.
-   - Se sim: leia-o completamente antes de qualquer pergunta.
+   - Se sim: extraia objetivo, escopo e restrições pertinentes antes de qualquer pergunta.
 
 2. **O domínio a detalhar foi identificado?**
-   - Se não: liste os domínios disponíveis no Vision Doc e peça ao usuário para escolher.
-   - Se sim: confirme o nome exato conforme registrado no Vision Doc.
+   - Se não: liste os domínios do Domain Map (ou candidatos da visão, se não houver mapa).
+   - Se sim: use o nome canônico do mapa. Não peça nova confirmação de escolha já explícita.
 
 ## Fluxo de Trabalho
 
-### 1. Analisar o Vision Doc
+### 1. Analisar o Contexto Upstream
 
-Antes de fazer qualquer pergunta, extraia do Vision Doc:
+Antes de perguntar, extraia do Domain Map, visão e capacidade selecionada, conforme a fonte:
 
-- Responsabilidade declarada do domínio
-- Dependências já identificadas no mapa de interdependências
+- Responsabilidade e fronteiras declaradas no Domain Map
+- Dependências identificadas no mapa e no backlog de capacidades
 - Fase do roadmap em que o domínio está inserido
 - Perfis de usuário que interagem com este domínio
 - Termos do glossário relevantes para este domínio
 
 ### 2. Esclarecer (Não pule esta etapa)
 
-Faça perguntas focadas apenas no que não está claro no Vision Doc. Não repita o que já foi respondido.
+Faça perguntas apenas sobre lacunas materiais dos documentos herdados. Não repita decisões já dadas.
 
 **Responsabilidade e fronteiras:**
 - Qual é a responsabilidade exata em uma frase?
@@ -93,7 +91,8 @@ Apresente ao usuário antes de redigir:
 - Ordem de implementação sugerida
 - Riscos e questões em aberto
 
-Aguarde confirmação antes de redigir.
+Grave um draft para revisão. Pergunte somente sobre decisões materiais ainda não aprovadas;
+reutilize aprovação explícita já dada para o mesmo domínio e escopo.
 
 ### 4. Redigir o Domain Doc
 
@@ -106,7 +105,7 @@ Diretrizes obrigatórias:
 - **Features numeradas** — use F01, F02... para rastreabilidade nos PRDs
 - **Regras de negócio numeradas** — use RN-01, RN-02... para referenciar nos critérios de aceitação dos PRDs
 - **Eventos no formato `dominio.evento`** — ex: `pagamento.realizado`
-- **Consistência com o Vision Doc** — nomes de domínios, perfis e termos devem ser idênticos ao Vision Doc
+- **Consistência upstream** — nomes e fronteiras vêm do Domain Map; escopo e perfis vêm da visão.
 - **Manter entre ~600 e 1.200 palavras** no corpo principal (excluindo tabelas)
 
 ### 5. Validação Interna
@@ -116,8 +115,8 @@ Antes de finalizar, execute a autoavaliação:
 - [ ] O bounded context está claramente definido sem sobreposição com outros domínios?
 - [ ] As fronteiras (out of scope) estão explícitas e específicas?
 - [ ] Todas as entidades têm descrição de negócio clara, sem jargão técnico?
-- [ ] As features cobrem toda a responsabilidade declarada no Vision Doc?
-- [ ] As dependências são consistentes com o mapa do Vision Doc?
+- [ ] As features cobrem a responsabilidade do Domain Map e a capacidade selecionada?
+- [ ] As dependências são consistentes com o mapa e o backlog?
 - [ ] As regras de negócio estão numeradas e são testáveis?
 - [ ] Os eventos seguem o padrão `dominio.evento`?
 - [ ] A ordem de implementação respeita as dependências internas?
@@ -135,7 +134,7 @@ Se houver falhas, corrija antes de prosseguir.
 A resposta final deve conter:
 
 1. Resumo das decisões principais — bounded context definido, features priorizadas, dependências críticas
-2. Conteúdo completo do Domain Doc em Markdown
+2. Link para o Domain Doc salvo, sem repetir o conteúdo completo
 3. Caminho do arquivo salvo
 4. Próximos passos — quais features estão prontas para ter PRD criado, em ordem sugerida
 5. Questões em aberto que precisam de validação antes dos PRDs
@@ -157,4 +156,5 @@ O agente `tsg-flow-prd-creator` usará as entidades, regras de negócio (RN-XX) 
 - **Fronteiras são contratos** — o que está fora do escopo é tão importante quanto o que está dentro
 - **Entidades são vocabulário de negócio** — evite termos como "tabela", "registro", "endpoint"
 - **Dependências são riscos** — minimize-as sempre que possível no design do domínio
-- **Coerência com o Vision Doc é inegociável** — qualquer divergência deve ser resolvida atualizando o Vision Doc primeiro
+- **Coerência upstream** — resolva conflitos no documento dono da decisão: visão para escopo global,
+  Domain Map para fronteiras e backlog para prioridade. Não reescreva a visão por um detalhe local.

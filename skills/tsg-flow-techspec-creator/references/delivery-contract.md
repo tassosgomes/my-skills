@@ -1,66 +1,51 @@
-# Contrato de entrega da TechSpec
+# Entrega da TechSpec e ciclo de ADRs
 
-Este arquivo define como a TechSpec chega ao disco e como o desenho é organizado para feedback
-incremental. A conversa explica as decisões; os arquivos são a fonte de verdade do handoff.
+## Especificações temporárias
 
-## Ciclo dos artefatos
+Grave `tasks/prd-<slug>/techspec.draft.md` com status `Em Revisão`. Preserve a versão aprovada
+durante updates. Releia o draft, confira rastreabilidade e apresente resumo e link.
+Após aprovação das decisões novas, promova para `techspec.md`, status `Aprovado`.
+Aprovação explícita já concedida para o mesmo escopo pode ser registrada sem uma nova pergunta.
+Draft não é handoff executável para Task Creator.
 
-1. Depois de completar discovery, exploração do codebase, perguntas, ADRs e checklist de qualidade,
-   renderize uma TechSpec completa usando o template.
-2. Grave o rascunho em `tasks/prd-<slug>/techspec.draft.md`, com `Status: Em Revisão`.
-3. Grave cada ADR novo em `tasks/prd-<slug>/adrs/adr-NNN.draft.md`, com `Status: Proposed`.
-4. Reabra os arquivos gravados e confirme que não há seções vazias, placeholders de template,
-   decisões sem racional ou artefatos sem tarefa/cobertura.
-5. Mostre os caminhos ao usuário e faça a revisão sobre esses arquivos. Em B/C, atualize os mesmos
-   drafts e repita a checagem.
-6. Só após A promova `techspec.draft.md` para `techspec.md`, remova o sufixo `.draft` das ADRs,
-   mude o status da TechSpec para `Aprovado` e das ADRs para `Accepted`.
+Cada fatia deve declarar entrada, regra/processamento, saída, arquivos, teste e checkpoint.
+Inclua código, teste e observabilidade pertinente no mesmo incremento. Habilitadores horizontais
+exigem justificativa, evidência própria e a primeira fatia desbloqueada.
 
-Se a resposta for D, substitua ou marque os drafts atuais como descartados antes de reiniciar; nunca
-deixe um draft antigo parecer ser a revisão vigente.
+## ADRs permanentes
 
-Se já existir uma TechSpec aprovada, preserve-a durante o update: escreva o novo desenho nos caminhos
-`.draft.md` até a aprovação. Nunca sobrescreva silenciosamente um handoff aprovado.
+1. Consulte `docs/adr/index.md` e leia somente decisões pertinentes. Referenciar decisões aceitas
+   é suficiente quando a feature apenas aplica arquitetura existente.
+2. Crie ADR apenas para decisão nova ou mudança significativa. Use o template da skill.
+3. Reserve o próximo número global em `docs/adr/index.md`, considerando arquivos e entradas
+   Proposed, Accepted, Withdrawn e Superseded. A numeração é compartilhada entre todas as features
+   e frontend/backend; não reutilize nem sobrescreva IDs.
+4. Grave `docs/adr/adr-NNN.md` desde o draft, com status `Proposed`. O status representa o ciclo
+   de revisão; não é necessário sufixo .draft para uma ADR.
+5. Torne o registro autocontido: contexto, escopo/domínios, forças/restrições, decisão, alternativas
+   relevantes, consequências e referências duráveis. O PRD é origem histórica opcional, nunca a
+   única explicação. Se útil, registre slug e commit da origem.
+6. Após aprovação da decisão, altere para `Accepted` e atualize o índice. Se abandonada, mantenha
+   o registro como `Withdrawn`.
+7. Para substituir uma Accepted, crie nova ADR com `Substitui: ADR-NNN`; após aprovação, marque a
+   anterior como `Superseded by ADR-NNN`. Não reescreva o histórico para ocultar a decisão anterior.
 
-Um `techspec.draft.md` não é entrada válida para o `tsg-flow-task-creator`; ele só pode consumir
-`techspec.md` com `Status: Aprovado`.
+O índice contém ID, título, status, escopo e link relativo. O índice e as ADRs devem ser versionados.
+Quando houver sessões concorrentes, serialize a reserva de IDs ou use o mecanismo do projeto;
+verifique colisões antes de salvar. O TSG Flow standard não executa essas escritas em paralelo.
 
-## Explicação mínima obrigatória
+## Links e retenção
 
-Cada decisão ou componente deve deixar claro:
+Na TechSpec em `tasks/prd-<slug>/`, use `../../docs/adr/adr-NNN.md`. Recalcule caminhos relativos
+se a especificação estiver em outro diretório. Dentro de `docs/adr/`, links entre ADRs são locais.
 
-- qual comportamento do PRD viabiliza;
-- qual evidência comprovará a implementação;
-- por que a opção foi escolhida e qual trade-off foi aceito;
-- quais arquivos serão criados, modificados ou apenas consultados;
-- quais riscos, dependências e questões em aberto permanecem.
+A remoção/arquivamento do PRD não remove ADRs. Antes de descartar artefatos temporários, preserve
+contratos usados por geração/testes no local canônico do projeto e corrija referências ativas.
+Arquivar é uma operação separada da implementação; não apague PRDs automaticamente.
 
-Evite inventário de classes sem fluxo. O leitor deve conseguir seguir a jornada desde a entrada até
-o resultado observável sem reconstruir a intenção a partir de nomes de camadas.
+## Migração de ADRs antigas
 
-## Fatiamento vertical
-
-Modele cada fatia como uma entrega de comportamento, atravessando apenas as camadas necessárias:
-
-`entrada → validação/regra → persistência ou integração → saída observável → teste/telemetria`
-
-Uma linha do mapa de fatias deve informar:
-
-- ID e título orientado ao comportamento;
-- user stories, requisitos e regras cobertos;
-- entrada, processamento e saída demonstrável;
-- artefatos envolvidos, incluindo testes e observabilidade;
-- dependências mínimas;
-- checkpoint de feedback: comando, cenário ou evidência que pode ser executado após aquela fatia.
-
-Uma tarefa puramente horizontal só é aceitável como **habilitador** quando nenhum comportamento
-demonstrável pode ser entregue sem ele (por exemplo, uma migration compartilhada inevitável). Registre
-o motivo, limite os arquivos e indique a primeira fatia desbloqueada. Não use "preparar camada X"
-como justificativa.
-
-## Feedback rápido
-
-O build order deve priorizar a menor fatia que prove valor e depois adicionar comportamentos. Cada
-fatia deve poder passar por implementer → gate focado → validator → checkpoint sem esperar a conclusão
-de todas as entidades, endpoints ou testes da feature. A TechSpec deve declarar também o que ainda não
-é coberto por cada checkpoint, para evitar confundir feedback parcial com aprovação da feature inteira.
+Se houver ADRs em `tasks/prd-*/adrs/`, inventarie IDs e referências antes de mover. Preserve status,
+datas e racional, atribua IDs globais sem colisão e registre o mapeamento antigo → novo no índice
+ou registro de migração. Atualize links, incluindo documentos arquivados mantidos no repo.
+Não deixe cópias concorrentes parecerem fontes canônicas. Respeite o escopo autorizado de migração.

@@ -308,14 +308,13 @@ declarar suas dependências e a evidência de feedback que ficará disponível:]
 
 ## Architecture Decision Records
 
-[ADRs criadas durante o processo de design (incluindo herdadas do PRD):]
+[ADRs relevantes herdadas ou novas. Nenhuma ADR nova é necessária se o desenho aplica decisões existentes.]
 
-> Durante a revisão, os links apontam para `adrs/adr-NNN.draft.md`; após a aprovação, remova o
-> sufixo `.draft` junto com a promoção dos arquivos.
+> ADRs vivem em `docs/adr/`, com status Proposed durante revisão e Accepted após aprovação.
+> Os links abaixo partem de `tasks/prd-<slug>/`; ajuste se o diretório for diferente.
 
-- [ADR-001: Título](adrs/adr-001.md) — Resumo da decisão em 1 linha
-- [ADR-002: Título](adrs/adr-002.md) — Resumo da decisão em 1 linha
-- [ADR-NNN: Título](adrs/adr-NNN.md) — Resumo da decisão em 1 linha
+- [ADR-001: Título](../../docs/adr/adr-001.md) — Resumo da decisão em 1 linha
+- [ADR-NNN: Título](../../docs/adr/adr-NNN.md) — Resumo da decisão em 1 linha
 
 ---
 

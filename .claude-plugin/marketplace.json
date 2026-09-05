@@ -6,10 +6,12 @@
   "plugins": [
     {
       "name": "tsg-flow",
-      "description": "Pipeline TSG de produto e implementacao: Vision, Domain Map, Domain, PRD, Contract, TechSpec, Frontend TechSpec, Tasks, Gate e execucao (orchestrator/implementer/validator/integrator).",
+      "description": "Pipeline TSG: Vision, Domain Map, Architecture Baseline, Capability Backlog, Domain, PRD, Contract, TechSpecs, Tasks, Gate e execucao.",
       "skills": [
         "./skills/tsg-flow-vision-creator",
         "./skills/tsg-flow-domain-decomposer",
+        "./skills/tsg-flow-architecture-baseline",
+        "./skills/tsg-flow-capability-backlog",
         "./skills/tsg-flow-domain-creator",
         "./skills/tsg-flow-prd-creator",
         "./skills/tsg-flow-contract-creator",

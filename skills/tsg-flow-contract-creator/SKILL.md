@@ -1,15 +1,6 @@
 ---
 name: tsg-flow-contract-creator
-description: >
-  Cria API Contracts (OpenAPI 3.1) como ponto de sincronização entre frontend e backend,
-  a partir de um PRD existente. Use esta skill sempre que o usuário quiser definir o contrato
-  de API, gerar OpenAPI spec, criar API-first design, sincronizar front e back, ou quando
-  mencionar "contrato de API", "OpenAPI", "swagger", "API-first", "schema da API",
-  "endpoints da API". Também dispare quando o usuário disser "vamos definir a API antes de
-  implementar", "o front e o back não se encaixam", "quero mockar a API", "preciso do contrato
-  antes de começar o frontend". Esta skill é a etapa 1.5 do pipeline PRD → API Contract →
-  TechSpec (Backend) → TechSpec (Frontend) → Tasks. Requer que o PRD já exista em
-  `tasks/prd-[nome-funcionalidade]/prd.md`.
+description: Cria ou atualiza contrato OpenAPI a partir de PRD para sincronizar consumidores e backend. Use para API-first ou mudança de API; reutilize contrato existente e dispense esta etapa para UI sem API.
 metadata:
   group: tsg-flow
   pipeline_stage: contract
@@ -47,6 +38,11 @@ Tasks Backend         Tasks Frontend
 - **PRD requerido:** `tasks/prd-[nome-funcionalidade]/prd.md`
 - **Contrato de saída (YAML):** `tasks/prd-[nome-funcionalidade]/api-contract.yaml`
 - **Contrato de saída (Markdown legível):** `tasks/prd-[nome-funcionalidade]/api-contract.md`
+
+Se o projeto já possui contrato canônico versionado, use seu caminho e atualize apenas as operações
+do escopo. Herde padrões do baseline, ADRs e contrato existente antes de perguntar. Não duplique
+o contrato por PRD. Antes de arquivar o PRD, preserve contratos usados por geração, mocks ou testes
+no local durável do projeto (por exemplo, `docs/api/`) e atualize os consumidores.
 
 ## Fluxo de Trabalho
 
@@ -86,7 +82,8 @@ Antes de gerar qualquer endpoint, pergunte sobre pontos críticos não cobertos 
 - Há webhooks ou eventos de saída?
 - Há endpoints de saúde/métricas expostos?
 
-⚠️ Se o usuário não souber responder algum ponto, assuma um padrão razoável, documente a premissa e siga.
+Para convenções locais, use padrões existentes e registre a origem. Se faltar decisão que altera
+autorização, dados ou comportamento público, resolva-a com o usuário; não invente um contrato.
 
 ### 3. Mapear Endpoints a partir das User Stories
 
@@ -120,7 +117,7 @@ estas diretrizes:
 - `security` — referência ao scheme definido em `components/securitySchemes`
 - `parameters` — path params, query params com `description` e exemplos
 - `requestBody` — com `$ref` para schema em `components/schemas`
-- `responses` — ao menos `200/201`, `400`, `401`, `404`, `422`, `500`
+- `responses` — sucesso e erros aplicáveis à operação; não imponha códigos sem cenário correspondente
 - `x-frontend-notes` — (extensão customizada) hints para o frontend (ex: "use debounce de 300ms")
 - `x-backend-notes` — (extensão customizada) hints para o backend (ex: "requer índice em created_at")
 
@@ -167,14 +164,19 @@ Antes de salvar, verifique:
 
 ### 6.1. Lint obrigatório com Spectral
 
-Depois de gerar o YAML, execute o ruleset da skill conforme
-`references/spectral.md`. Corrija todos os erros antes de salvar e registre no protocolo de saída
+Depois de persistir o YAML de revisão, execute o ruleset da skill conforme
+`references/spectral.md`. Corrija todos os erros antes de promover e registre no protocolo de saída
 que a validação foi executada. O lint deve ser repetível pelo backend e pelo frontend usando o mesmo
 arquivo de regras.
 
-Se encontrar falhas, corrija antes de salvar.
+Se encontrar falhas, corrija o draft e repita o lint.
 
 ### 7. Salvar os Arquivos (Obrigatório)
+
+Para mudança de contrato, preserve a versão aprovada e grave `api-contract.draft.yaml` para revisão
+(ou o caminho de draft adotado pelo projeto). Resolva e aprove decisões materiais novas antes de
+promover; reutilize aprovação já explícita para o mesmo escopo. Gere o Markdown a partir da versão
+final do YAML e confira consistência, sem manter duas fontes independentes de schemas.
 
 - Salvar YAML: `tasks/prd-[nome-funcionalidade]/api-contract.yaml`
 - Salvar Markdown: `tasks/prd-[nome-funcionalidade]/api-contract.md`
@@ -186,7 +188,7 @@ A resposta final deve conter:
 
 1. **Resumo de decisões** — padrões adotados, premissas assumidas
 2. **Tabela de endpoints gerados** — visão rápida do que foi criado
-3. **Conteúdo completo do `api-contract.yaml`**
+3. **Link para o contrato salvo**, sem repetir seu conteúdo completo
 4. **Caminhos dos arquivos salvos**
 5. **Questões em aberto** — pontos que precisam de validação antes da implementação
 6. **Resultado do lint Spectral** — comando/ruleset usado e eventuais warnings restantes

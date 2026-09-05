@@ -8,6 +8,7 @@
 # Tarefas recem-criadas nascem sempre como `pending`.
 status: pending
 slice_type: vertical # vertical | enabling
+verification_type: behavioral # behavioral | static; static somente para enabling
 parallelizable: false # Se pode executar em paralelo
 blocked_by: [] # IDs de tarefas que devem ser completadas primeiro
 ---
@@ -16,17 +17,18 @@ blocked_by: [] # IDs de tarefas que devem ser completadas primeiro
 <domain>engine/infra/[subdominio]</domain>
 <type>implementation|integration|testing|documentation</type>
 <scope>core_feature|middleware|configuration|performance</scope>
-<!-- low: 1 arquivo, wiring/config, sem regra de negocio -> validacao so pelo gate
+<!-- low: configuracao simples -> gate e validator focused no perfil standard
      medium: fatia vertical dentro do orcamento -> fluxo padrao
-     high: acoplamento irredutivel -> EXIGE revisao humana do plano antes de implementar
+     high: acoplamento irredutivel -> revisao humana do plano; reutilizar aprovacao ja dada
      `high` e excecao. Se a maioria das tasks e high, a fragmentacao esta grosseira. -->
 <complexity>low|medium|high</complexity>
 <dependencies>external_apis|database|temporal|http_server</dependencies>
 <unblocks>"[IDs de tarefas desbloqueadas]"</unblocks>
 <feedback_checkpoint>[comando, cenario ou evidencia que valida esta task]</feedback_checkpoint>
-<gate_command>[comando executavel completo]</gate_command>
+<gate_command>[scripts/ai-flow/gate.sh --filter="selector" OU scripts/ai-flow/gate.sh --static]</gate_command>
 <gate_test_selector>[classe+metodo, tag, caminho/filtro; N/A somente para enabling justificada]</gate_test_selector>
 <gate_expected_result>[resultado deterministico esperado]</gate_expected_result>
+<static_evidence>[comando adicional e resultado esperado para enabling static, ou N/A]</static_evidence>
 <!-- Faixa orientativa budget: criar 4-8, modificar 1-4, subtarefas <=6. Gateabilidade e
      estado compilavel sao regras duras; nao fragmente apenas para cumprir contagem. -->
 <vertical_slice>[o comportamento unico e observavel que esta task entrega; N/A para enabling]</vertical_slice>
@@ -47,7 +49,7 @@ blocked_by: [] # IDs de tarefas que devem ser completadas primeiro
 - **Entrada ou gatilho:** [request, evento, comando ou acao]
 - **Resultado esperado:** [resposta, estado, evento, tela ou efeito observavel]
 - **Checkpoint de feedback:** [comando/cenario + saida esperada]
-- **Seletor focalizado:** [classe+metodo, tag ou caminho/filtro que seleciona somente esta task]
+- **Seletor focalizado:** [classe+metodo, tag ou caminho/filtro; N/A justificado em static]
 - **Fora deste checkpoint:** [o que ainda nao sera comprovado nesta task]
 
 ## Requisitos
@@ -106,6 +108,9 @@ precise reconstruir a intencao consultando camadas sem relacao com esta fatia.]
 - **Ambiguidades bloqueantes:** Nenhuma
 
 ## Criterios de Sucesso (Verificaveis)
+
+[Em static, substitua os dois itens de testes abaixo pela evidencia estatica declarada.
+Nao mantenha placeholders ou exigencias de teste inaplicaveis no arquivo final.]
 
 - [ ] Teste focalizado passa: `[comando com classe+metodo, tag ou filtro especifico]`
 - [ ] O seletor encontra pelo menos um teste e nao executa casos sem relação com esta task

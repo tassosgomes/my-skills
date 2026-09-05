@@ -7,7 +7,7 @@ dependem. **A implementação varia por linguagem; este contrato não.**
 ## Invocação
 
 ```bash
-scripts/ai-flow/gate.sh [--filter=<expr>]... [--base=<ref>] [--all-tests] [--skip-tests] [--help]
+scripts/ai-flow/gate.sh [--filter=<expr>]... [--base=<ref>] [--all-tests | --static | --skip-tests] [--help]
 ```
 
 - `--filter=<expr>` — expressão de seleção de testes, extraída dos critérios de
@@ -19,6 +19,12 @@ scripts/ai-flow/gate.sh [--filter=<expr>]... [--base=<ref>] [--all-tests] [--ski
 - `--all-tests` — executa a suíte completa definida pelo repositório. Uso restrito
   ao `full` final do PRD; nunca é o padrão de uma task.
 - `--skip-tests` — roda apenas format e build. Uso restrito a diagnóstico.
+- `--static` — format/lint, build/typecheck e higiene do diff para task enabling com
+  `verification_type: static`. Não comprova comportamento; a evidência específica da task também
+  deve ser executada. No full, só é admissível para plano inteiramente estático justificado.
+
+Exija seleção explícita: um ou mais filtros não vazios OU all-tests OU static OU skip-tests.
+Ausência de seleção e combinações conflitantes retornam exit 2, nunca aprovação silenciosa.
 
 Flags opcionais adicionais específicas da stack são permitidas (ex.: `--sln=<path>`
 no .NET), desde que o gate funcione sem elas. Nenhum consumidor do contrato pode
@@ -56,8 +62,9 @@ comando: <comando exato que falhou>
 | `1` | REPROVADO — uma etapa falhou |
 | `2` | Erro de uso ou de ambiente (argumento inválido, fora de repo git, stack não detectada) |
 
-Exit `2` é distinto de `1` de propósito: o validator trata `1` como reprovação da
-task e `2` como falha de infraestrutura, caindo para execução manual dos comandos.
+Exit `2` é distinto de `1`: o validator trata `1` como reprovação da task e `2` como
+falha de infraestrutura/uso. Retorne o erro ao orquestrador sem consumir tentativa de convergência;
+não aprove usando fallback manual silencioso.
 
 ## Invariantes obrigatórios
 
@@ -79,6 +86,12 @@ detalhes — são a razão de o gate existir.
 4. **Zero interatividade.** Nenhum prompt, nenhum pager, nenhum watch mode. Testes
    que exigem serviços externos (Testcontainers, Docker) devem falhar com mensagem
    clara em vez de pendurar.
+
+Configure timeout por comando e ambiente não interativo. Valide a base Git antes de executar.
+Use caminhos delimitados por NUL e retire arquivos deletados somente da lista do formatador.
+Mudanças em manifests, lockfiles, contratos ou configs compartilhadas devem acionar as stacks
+dependentes, mesmo sem alteração de extensão de código. Na dúvida, amplie o escopo da verificação.
+Respeite compute para verificações pesadas e infra para serviços quando o projeto assim definir.
 
 ## Consumidores
 

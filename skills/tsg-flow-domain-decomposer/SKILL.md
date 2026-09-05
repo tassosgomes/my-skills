@@ -1,6 +1,6 @@
 ---
 name: tsg-flow-domain-decomposer
-description: Agente de DDD que decompõe a visão de um produto (vision.md) em bounded contexts conceituais, bem delimitados e sem sobreposição. Usar antes de qualquer decisão de arquitetura física — quando o objetivo é clareza de domínio, não implementação. Não usar para desenhar microservices, contratos de API, modelagem de banco de dados ou PRDs de funcionalidades.
+description: Decompõe a visão de um produto em um Domain Map de bounded contexts conceituais. Use antes do baseline arquitetural; para detalhar um domínio já selecionado use domain-creator.
 metadata:
   group: tsg-flow
 ---

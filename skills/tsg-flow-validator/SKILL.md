@@ -1,97 +1,64 @@
 ---
 name: tsg-flow-validator
-description: "Use para validar uma task TSG Flow com revisão focused ou revisar o PRD completo no encerramento: executar gate determinístico, verificar aderência sem editar código e, no modo full, auditar integração e design."
+description: Revisa uma task TSG Flow ou o diff completo do PRD sem corrigir código. Use focused na primeira revisão, revalidation após correções e full sobre a branch preparada para integração.
 metadata:
   group: tsg-flow
 ---
 
-# Validador do TSG Flow
+# Validator
 
-Valide sem corrigir código. Use `focused` depois de cada implementação e `full` somente depois que todas
-as tasks do PRD tiverem sido implementadas e commitadas.
+Valide sem editar código, status, tasks ou commits. Produza relatórios com bloqueantes e recomendações
+separados. Somente falhas essenciais e bloqueantes reprovam.
 
 ## Entradas
 
-- `--prd-dir=<path>` é obrigatório.
-- `--mode=focused|full|revalidation` é obrigatório e assume `focused` quando omitido.
-- `--task=<id>` é obrigatório em `focused` e `revalidation`; não use em `full`.
-- `--base-ref=<sha|ref>` é obrigatório em `full`.
+- `--prd-dir=<path>`, `--mode=focused|revalidation|full` (padrão focused).
+- `--task=<id>` em focused/revalidation; `--base-ref=<sha>` em full.
+- Revalidation recebe o relatório anterior. Full recebe a branch já atualizada com a base alvo.
 
-Use somente o perfil standard; o custo é controlado pelo modo e pelo momento do fluxo.
+## Gate antes da revisão
 
-## Contrato
+Leia apenas o contrato de verificação da task para obter tipo, comando, seletor e resultado esperado.
+Depois rode o gate antes de carregar material semântico:
 
-- Nunca edite código de aplicação.
-- Nunca altere status, tasks ou commits.
-- Nunca faça merge ou abra PR.
-- Rode o gate antes da revisão semântica.
-- Reprove qualquer comando ou critério essencial que falhar.
-- Somente bloqueantes reprovam; recomendações não bloqueantes não geram nova tentativa.
-- Use worker/sessão fresca quando chamado como validator independente.
+- behavioral: `scripts/ai-flow/gate.sh --filter="<selector>"`;
+- static: `scripts/ai-flow/gate.sh --static` e a evidência específica declarada;
+- full: `scripts/ai-flow/gate.sh --base=<base-ref> --all-tests`.
+
+Em repositório sem suíte, full pode usar `--static` somente se todas as tasks forem static e o
+plano justificar a ausência de comportamento executável; declare a limitação no relatório.
+Exit 1 reprova e encerra a revisão; exit 2 retorna `VALIDATION ERROR` por infraestrutura/uso.
+Não converta diagnóstico `--skip-tests` em aprovação. Use compute/infra conforme instruções locais.
+
+A revisão independente usa worker fresco. Não reutilize aprovação do implementer como revisão
+semântica. O padrão é executar o gate; reutilização futura exigiria igualdade demonstrada de código,
+comandos, dependências, ambiente e evidência, não apenas um mesmo SHA.
 
 ## Modos
 
-### `focused`
+- **focused:** revise task, diff desde o checkpoint, untracked do escopo e skills pertinentes.
+  Abra trechos das specs/contrato/ADRs somente quando uma verificação exigir.
+- **revalidation:** execute evidências, confira bloqueios anteriores e regressões no diff novo.
+  Acrescente uma seção de revalidação ao relatório; não rederive observações sem mudança relevante.
+- **full:** revise diff desde a base preparada, rastreabilidade de todas as specs selecionadas,
+  contratos entre tasks, integração, segurança, arquitetura e regressões. Rode a suíte agregada.
+  Consulte design-patterns Review se disponível e pertinente; recomendações de refatoração não
+  bloqueiam por preferência. Não crie abstrações nem aplique correções.
 
-Valide uma única task contra seu diff, critérios, referências, skills nomeadas e dependências visíveis.
-Use o gate focado e não faça uma revisão geral do PRD.
+## Evidência e resultados
 
-### `full`
+Task: `{PRD_DIR}/N_task_review.md`. PRD: `{PRD_DIR}/prd_review.md`.
+Registre comandos/resultados, escopo, bloqueantes com arquivo/linha e recomendações.
+No full, registre `base_ref`, `validated_commit` (HEAD revisado) e `validated_tree`.
+Confirme que HEAD e código não mudaram durante a revisão; mudanças exigem nova validação.
 
-Valide o PRD inteiro contra `--base-ref`. Execute gate agregado com todos os testes declarados e a suíte
-completa quando o gate do repositório oferecer esse caminho. Revise rastreabilidade, contratos entre tasks,
-integração, arquitetura, segurança, performance, regressões e cobertura.
+Resultados: `VALIDAÇÃO APROVADA|VALIDAÇÃO REPROVADA`,
+`FULL VALIDATION APROVADA|FULL VALIDATION REPROVADA` ou `VALIDATION ERROR`.
+Aprovação com recomendações continua sendo aprovação, com contagem explícita.
 
-Carregue `design-patterns` em modo Review. Não aplique padrões automaticamente; produza recomendações
-com evidências e trade-offs.
+Quando receber `--result-file` e `--run-id`, escreva JSON final no schema fornecido pelo transporte,
+outcome `approved|rejected|validation_error`; inclua `Run: <run-id>` no relatório da chamada.
+Full aprovado inclui commit, árvore e base revisados no resultado estruturado.
+Não crie telemetria paralela; duração/tentativa podem ficar no próprio relatório.
 
-### `revalidation`
-
-Use somente para revalidar bloqueios de uma task após correção. Não refaça uma revisão completa nem derive
-novamente observações antigas.
-
-## Saída
-
-Para task:
-
-```text
-VALIDAÇÃO APROVADA
-Escopo: focused
-Gate: APROVADO
-Bloqueantes: 0
-Relatório: {PRD_DIR}/N_task_review.md
-```
-
-ou:
-
-```text
-VALIDAÇÃO REPROVADA
-Escopo: focused
-Etapa: gate|revisão
-Bloqueios: ...
-Retorno para o implementer: ...
-Relatório: {PRD_DIR}/N_task_review.md
-```
-
-Para o PRD:
-
-```text
-FULL VALIDATION APROVADA
-Recomendações: N
-Relatório: {PRD_DIR}/prd_review.md
-```
-
-ou:
-
-```text
-FULL VALIDATION REPROVADA
-Bloqueios: ...
-Relatório: {PRD_DIR}/prd_review.md
-```
-
-Não gere telemetria paralela à revisão. Os relatórios focused e full são a evidência operacional.
-
-## Referência sob demanda
-
-Leia [references/full-guide.md](references/full-guide.md) para ordem de execução, revisão full, auditoria
-de design e formato dos relatórios.
+Leia [references/full-guide.md](references/full-guide.md) para evidência e casos de integração.

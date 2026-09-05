@@ -1,7 +1,8 @@
 # Template de Especificação Técnica — Frontend
 
 > **PRD de origem:** `tasks/prd-[nome-funcionalidade]/prd.md`
-> **API Contract (fonte de verdade):** `tasks/prd-[nome-funcionalidade]/api-contract.yaml`
+> **API Contract:** [caminho canônico ou N/A justificado para UI sem integração remota]
+> **Baseline e ADRs:** [referências pertinentes em context/architecture-baseline.md e docs/adr/]
 > **TechSpec backend relacionada:** `tasks/prd-[nome-funcionalidade]/techspec.md` *(se existir)*
 > **Data:** [YYYY-MM-DD]
 > **Status:** [Rascunho | Em Revisão | Aprovado]
@@ -339,20 +340,17 @@ VITE_API_URL=http://localhost:4010 npm run dev
 
 ### Build Order
 
-1. **Configurar geração de tipos** a partir do contrato — sem dependências
-2. **Tipos gerados** — depende de 1
-3. **Cliente HTTP / hooks de fetching base** (se não existirem) — depende de 2
-4. **Hooks específicos da feature** (`useListResource`, `useGetResource` etc.) — depende de 3
-5. **Componentes apresentacionais** (sem lógica de fetching) — sem dependências (paralelizável)
-6. **Páginas integrando hooks + componentes** — depende de 4 e 5
-7. **Configuração de mocks (MSW)** — depende de 2
-8. **Testes unitários e de integração** — depende de 4, 5 e 7
-9. **Roteamento** (registrar a página) — depende de 6
-10. **Testes E2E** — depende de 9 e mock server (Prism)
+| Fatia | Jornada e artefatos (incluindo testes) | Dependências | Checkpoint |
+|---|---|---|---|
+| V-01 | [menor jornada: rota, UI, estado/fetching, erros, mock e teste] | [nenhuma ou existentes] | [comando + resultado] |
+| V-02 | [próximo comportamento e seu teste] | [V-01 se necessário] | [comando + resultado] |
+
+Habilitadores inevitáveis devem indicar motivo, gate estático/comportamental e fatia desbloqueada.
+Não separar todas as camadas ou deixar testes para uma task final.
 
 ### Dependências Técnicas Bloqueantes
 
-- API Contract aprovado e versionado *(pré-requisito absoluto)*
+- API Contract aprovado e versionado quando houver integração remota
 - Design system / componentes base disponíveis
 - Sistema de roteamento configurado
 - Variáveis de ambiente para apontar para mock vs backend real
@@ -406,17 +404,15 @@ VITE_API_URL=http://localhost:4010 npm run dev
 
 ## Architecture Decision Records
 
-[ADRs criadas durante o processo de design (numeração compartilhada com backend):]
+[Somente ADRs pertinentes, com numeração global em docs/adr/. Novas decisões são opcionais.]
 
 ### Herdadas (criadas em fases anteriores)
 
-- [ADR-001: Título](adrs/adr-001.md) — Resumo (origem: PRD)
-- [ADR-002: Título](adrs/adr-002.md) — Resumo (origem: TechSpec backend)
+- [ADR-001: Título](../../docs/adr/adr-001.md) — Resumo e escopo
 
 ### Criadas nesta sessão (frontend)
 
-- [ADR-NNN: Título](adrs/adr-NNN.md) — Resumo da decisão de frontend
-- [ADR-NNN+1: Título](adrs/adr-NNN+1.md) — Resumo da decisão de frontend
+- [ADR-NNN: Título](../../docs/adr/adr-NNN.md) — Resumo da decisão, ou Nenhuma nova
 
 ---
 

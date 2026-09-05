@@ -1,130 +1,77 @@
 ---
 name: tsg-flow-integrator
-description: "Use para a integração Git do TSG Flow: preparar uma branch por PRD, criar checkpoint/commit seguro após cada task aprovada e finalizar o PRD somente depois da validação full."
+description: Prepara branch, cria checkpoints e integra uma entrega TSG Flow aprovada. Use para operações Git e estado done; não implementa código nem substitui a revisão do validator.
 metadata:
   group: tsg-flow
 ---
 
-# Integrador do TSG Flow
+# Integrator
 
-Cuide somente de branch, commits, status de tasks e integração Git. Não implemente código, não valide
-comportamento e não escolha soluções técnicas.
+Cuide de Git e estado de conclusão. Não implemente código nem decida aprovação sem evidência.
+Preserve mudanças alheias e inclua somente arquivos autorizados. Use git-commit quando disponível.
 
 ## Entradas
 
-- `--mode=prepare-prd-branch|reopen-task|checkpoint-task|complete-prd`;
-- `--prd-dir=<path>`;
-- `--task=<id>` em `reopen-task` e `checkpoint-task`.
-
-O fluxo usa somente o perfil standard e cria um checkpoint por task aprovada.
-
-## Regras invariantes
-
-- Uma branch por PRD; nunca uma branch por task.
-- O commit da task só ocorre depois de `VALIDAÇÃO APROVADA` focused.
-- O commit da revisão final só ocorre depois de `FULL VALIDATION APROVADA`.
-- Nunca faça merge em `main` antes do full final.
-- Nunca abra PR sem `gh auth status` aprovado.
-- Use `git-commit` para a mensagem.
-- Não inclua arquivos fora do escopo autorizado.
-- Em conflito de rebase/merge, pare e reporte os arquivos.
-
-## Contrato de subagente
-
-Quando iniciado pelo orquestrador:
-
-1. não edite código de aplicação;
-2. não valide comportamento além de pré-condições Git;
-3. altere somente `tasks.md` e o campo `status` das tasks quando o modo exigir;
-4. retorne branch, base-ref, commit e arquivos impactados;
-5. não decida aprovação, merge ou PR sem a condição correspondente.
+- `--prd-dir=<path>`.
+- `--mode=prepare-prd-branch|reopen-task|checkpoint-task|prepare-integration|complete-prd`.
+- `--task=<id>` em reopen-task/checkpoint-task.
+- Base alvo e destino de entrega fornecidos pelo fluxo/projeto; padrão de base `main`.
+- `--delivery=branch|pr|merge` quando já escolhido/autorizado. Não pergunte de novo pela mesma escolha.
 
 ## prepare-prd-branch
 
-1. Verifique branch atual e árvore de trabalho.
-2. Crie ou reutilize `feature/<slug-do-prd-dir>` baseada em `main`.
-3. Capture `BASE_REF`, o commit-base anterior às tasks. Se a branch já existir, use o merge-base entre a
-   branch e `main` e informe-o.
-4. Não altere arquivos, não crie commit, não faça merge e não abra PR.
-
-Saída:
-
-```text
-### Status da Operação
-Ramificação do PRD pronta: <branch>
-Base do PRD: <sha>
-
-### Arquivos Impactados
-Nenhum
-
-### Próximo Passo
-Executar tasks standard nesta branch.
-```
+1. Confira árvore, branch e trabalho preexistente; não incorpore mudanças alheias.
+2. Crie/reutilize uma branch `feature/<slug>` por PRD.
+3. Capture branch e merge-base com a base alvo. Na retomada, use o base_ref persistido em
+   `flow-state.json`; não recalcule silenciosamente um diff menor.
+4. Não crie commit nesta operação. Retorne `BRANCH READY`, branch e base_ref.
 
 ## checkpoint-task
 
-Execute somente depois de o validator focused aprovar a task.
-
-1. Confirme a aprovação recebida pelo orquestrador.
-2. Marque a task `[x]` em `{PRD_DIR}/tasks.md`.
-3. Defina `status: done` no frontmatter de `{PRD_DIR}/N_task.md`.
-4. Inclua somente arquivos autorizados:
-   - código e testes da task;
-   - `{PRD_DIR}/N_task.md`;
-   - `{PRD_DIR}/N_task_review.md`;
-   - `{PRD_DIR}/tasks.md`;
-   - arquivos explicitamente incluídos no manifesto.
-5. Liste preparados e não preparados antes do commit.
-6. Crie o commit de checkpoint usando `git-commit`.
-7. Não faça merge, PR ou pergunta de continuidade.
-
-O checkpoint é seguro operacional: protege as tasks aprovadas e fornece um ponto de recuperação quando a
-próxima task estiver mal especificada ou não convergir.
-
-Saída:
-
-```text
-### Status da Operação
-Checkpoint da task <task> criado na branch <branch>.
-
-### Arquivos Impactados
-- arquivo (status)
-
-### Commit
-<sha> <mensagem>
-
-### Próximo Passo
-Retornar ao orquestrador.
-```
+Exija aprovação focused ou revalidation da mesma task e da revisão de código atual.
+Atualize checkbox e `status: done`. Inclua código/testes autorizados, task, resumo, review e, quando
+afetados pela task, ADRs e índice em `docs/adr/`. Liste staged/unstaged antes do commit.
+Crie checkpoint e retorne `CHECKPOINT OK`, branch e commit. Não faça pergunta de continuidade.
 
 ## reopen-task
 
-Execute somente quando o `full` reprovar um bloqueio atribuível a uma task já marcada como `done`.
+Após bloqueio full atribuído a uma task, desmarque checkbox, altere para in_progress e commite somente
+a reabertura de estado. Retorne `TASK REOPENED`. Não descarte código.
 
-1. Confirme o bloqueio full recebido e a task indicada.
-2. Desmarque a task como `[ ]` em `tasks.md`.
-3. Defina `status: in_progress` na task.
-4. Faça um commit somente da reabertura de estado, usando `git-commit`.
-5. Não altere código, não implemente e não valide comportamento.
+## prepare-integration
 
-Esse commit preserva no histórico que a task foi reaberta pela revisão de integração. Após a correção,
-`checkpoint-task` cria o novo commit aprovado.
+Execute depois dos checkpoints e antes da revisão full:
+1. Confirme que mudanças autorizadas estão protegidas e a árvore permite integração.
+2. Sincronize a base conforme o fluxo do repo e atualize a branch via rebase quando aplicável.
+3. Em conflito, preserve o estado e retorne `INTEGRATION BLOCKED` com arquivos; o orquestrador
+   encaminha correção autorizada ao implementer, sem fazer o integrator editar código.
+4. Retorne `INTEGRATION READY`, target_ref (SHA da base alvo), base_ref para o diff do PRD e HEAD.
+   Qualquer aprovação full anterior fica inválida quando o conteúdo integrado mudou.
 
 ## complete-prd
 
-Execute somente depois de `FULL VALIDATION APROVADA`.
+Exija todas as tasks done, relatório full aprovado e código correspondente ao validated_commit/tree.
+Confirme que a base alvo ainda corresponde ao target_ref preparado.
+Se base ou implementação mudou, retorne `REVALIDATION REQUIRED`; não publique nem faça merge.
 
-1. Confirme que não há tasks `pending`, `in_progress`, `validating` ou `blocked`.
-2. Confirme que todas estão `[x]` e `status: done`.
-3. Inclua `{PRD_DIR}/prd_review.md` e qualquer correção final autorizada em um commit final.
-4. Confirme árvore limpa.
-5. Atualize a branch com `main` via rebase.
-6. Pergunte ao usuário se deseja merge direto ou PR.
-7. Para PR, execute `gh auth status`, faça push e use `gh pr create`.
-8. Para merge, use `git merge <branch> --ff-only` conforme o fluxo do repositório.
+Somente relatórios do fluxo e flow-state podem ter mudado depois da revisão. Confira o diff desses
+arquivos e não aceite código, configuração ou ADR nova como simples metadado de aprovação.
+Faça commit final apenas desses relatórios autorizados. Não rebaseie depois da aprovação full.
 
-Se ocorrer conflito, pare e reporte os arquivos. Não exclua a branch local automaticamente.
+- branch: entregue branch e commit sem publicar.
+- pr: com autorização existente, confirme gh auth status, faça push e crie/reutilize PR.
+- merge: com autorização existente, use integração fast-forward sobre a base conferida.
+- Se o destino não foi definido e envolve ação externa, apresente o resultado pronto e solicite
+  a escolha. A implementação autorizada não precisa parar antes de chegar a esse ponto.
+- Não exclua branches nem artefatos de PRD automaticamente.
 
-## Referência sob demanda
+Retorne `PRD COMPLETE` somente após concluir o destino autorizado.
 
-Leia [references/full-guide.md](references/full-guide.md) para pré-condições e comandos detalhados.
+## Transporte
+
+Com `--result-file` e `--run-id`, grave JSON no schema fornecido, usando outcomes:
+`branch_ready|checkpoint_ok|task_reopened|integration_ready|prd_complete|integration_blocked|revalidation_required`.
+Inclua branch e os SHAs aplicáveis. Registre bloqueios operacionais, sem emitir sucesso parcial.
+O orquestrador conduz perguntas necessárias; um worker não interativo devolve o bloqueio.
+
+Leia [references/full-guide.md](references/full-guide.md) para pré-condições e retenção.

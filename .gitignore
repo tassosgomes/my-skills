@@ -1,5 +1,11 @@
 _repos/*
 .claude
 .agents
-docs
+/docs/*
+!/docs/tsg-flow-guide.md
+!/docs/tsg-flow-execution-order.md
+!/docs/tsg-flow-evaluations.md
+!/docs/diagrams/
+/docs/diagrams/*
+!/docs/diagrams/tsg-flow-pipeline.md
 opencode.json

@@ -53,6 +53,10 @@ FASE 2 — GERAÇÃO DE CAPACIDADES
 
 Para cada domínio, gerar:
 
+Use um ID estável por capacidade (`CAP-001`, `CAP-002`, ...). Preserve IDs ao atualizar.
+Domain Documents e PRDs devem referenciar a capacidade selecionada e suas dependências.
+Herde decisões existentes e pergunte apenas por prioridades ou fronteiras ainda indefinidas.
+
 ## Domínio: <Nome>
 
 ### Capacidade: <Nome da Capacidade>

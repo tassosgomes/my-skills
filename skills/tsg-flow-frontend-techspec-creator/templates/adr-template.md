@@ -2,7 +2,14 @@
 
 ## Status
 
-[Proposed | Accepted | Deprecated | Superseded by ADR-NNN]
+[Proposed | Accepted | Withdrawn | Deprecated | Superseded by ADR-NNN]
+
+## Identidade e escopo
+
+- Caminho: `docs/adr/adr-NNN.md` (numeração global do repositório)
+- Domínios/componentes afetados: [escopo]
+- Origem histórica: [slug da feature e commit, se disponíveis]
+- Substitui: [ADR anterior ou Nenhuma]
 
 ## Data
 
@@ -11,7 +18,7 @@ YYYY-MM-DD
 ## Contexto
 
 [Descreva o problema ou questão que motiva esta decisão. Inclua contexto técnico relevante,
-restrições e forças em jogo.]
+restrições e forças em jogo. Este contexto deve ser compreensível mesmo após a remoção do PRD.]
 
 ## Decisão
 
@@ -27,6 +34,8 @@ restrições e forças em jogo.]
 - **Por que rejeitada:** [motivo]
 
 ### Alternativa 2: [Nome]
+
+[Remova esta alternativa se não houve uma segunda opção relevante.]
 
 - **Descrição:** [breve descrição]
 - **Prós:** [vantagens]
@@ -56,4 +65,5 @@ restrições e forças em jogo.]
 
 ## Referências
 
-- [Link para PRD, TechSpec, documentação externa ou outros ADRs relacionados]
+- [Links duráveis para ADRs locais, documentação do sistema e fontes externas]
+- [PRD/TechSpec como origem histórica opcional; não depender deles para explicar a decisão]

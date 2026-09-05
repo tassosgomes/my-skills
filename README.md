@@ -2,8 +2,9 @@
 
 Repositório de skills que utilizo no meu dia a dia. `skills/` é a fonte canônica: cada skill ativa vive em `skills/<nome>/SKILL.md` e segue o formato com frontmatter (`name`, `description`) seguido do corpo normativo. `novas/` é apenas staging para comparação e não deve ser usado como fonte de instalação.
 
-O [guia de uso do TSG Flow](docs/tsg-flow-guide.md) explica os handoffs entre Vision, Domain Map,
-Domain, PRD, Contract, TechSpec, Frontend TechSpec, Tasks e as skills de execução. O
+Comece pela [ordem de execução do TSG Flow](docs/tsg-flow-execution-order.md), com rotas para produto
+novo, feature isolada e frontend. O [guia de uso](docs/tsg-flow-guide.md) detalha contratos,
+retomada e ADRs permanentes em `docs/adr/`. O
 [diagrama do fluxo](docs/diagrams/tsg-flow-pipeline.md) mostra a cadeia e o ciclo por task.
 
 ---
@@ -63,6 +64,8 @@ continua instalando skills avulsas normalmente.
 |-------|-------|-----------|
 | :star: [tsg-flow-vision-creator](skills/tsg-flow-vision-creator/) | Vision | Define a visão macro e os limites do sistema |
 | :star: [tsg-flow-domain-decomposer](skills/tsg-flow-domain-decomposer/) | Domain Map | Decompõe a visão em bounded contexts conceituais |
+| :star: [tsg-flow-architecture-baseline](skills/tsg-flow-architecture-baseline/) | Baseline | Define restrições arquiteturais reutilizáveis |
+| :star: [tsg-flow-capability-backlog](skills/tsg-flow-capability-backlog/) | Capacidades | Prioriza MVP e evolução por capacidades de negócio |
 | :star: [tsg-flow-domain-creator](skills/tsg-flow-domain-creator/) | Domain | Detalha um domínio, suas features e regras de negócio |
 | :star: [tsg-flow-prd-creator](skills/tsg-flow-prd-creator/) | PRD | Conduz discovery e cria requisitos de produto rastreáveis |
 | :star: [tsg-flow-contract-creator](skills/tsg-flow-contract-creator/) | API Contract | Define o contrato OpenAPI como fonte de verdade |

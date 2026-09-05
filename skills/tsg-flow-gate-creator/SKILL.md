@@ -7,7 +7,7 @@ description: >
   "criar o gate", "preparar o repo para o TSG Flow", "o gate nao funciona nessa linguagem",
   "adaptar o gate para Java/Node/Python", "setup do fluxo autonomo", ou quando
   `tsg-flow-validator` reportar que `scripts/ai-flow/gate.sh` nao existe ou saiu com
-  codigo 2. Esta skill e de PREPARACAO: nao implementa tasks nem valida codigo.
+  codigo 2 por configuracao do gate. Esta skill e de PREPARACAO: nao implementa tasks.
 metadata:
   group: tsg-flow
 ---
@@ -54,6 +54,9 @@ Procure, na raiz e até 2 níveis de profundidade:
 um `gate.sh` que **escopa por stack a partir do diff**: se os arquivos alterados só
 tocam `.tsx`, não rode o build do backend. Cada stack vira um bloco condicional
 disparado pela presença de arquivos daquela extensão em `CHANGED`.
+
+Considere também manifests, lockfiles, configs e contratos compartilhados, que podem afetar várias
+stacks sem mudar arquivos de código. Na dúvida, valide os consumidores envolvidos.
 
 ### 2. Descobrir os comandos reais do repositório
 
@@ -131,6 +134,11 @@ O gate gerado deve aceitar:
 - `--base=<ref>` para delimitar o diff completo desde a base do PRD;
 - `--all-tests` para executar a suíte completa somente no `full` final;
 - `--filter=<expr>` para o focused de uma task.
+- `--static` para habilitadores com evidência estática;
+- seleção explícita e exclusiva de modo; ausência de filtros/modo é erro de uso, exit 2.
+
+Configure timeout por comando, locale estável quando houver parse e ferramentas não interativas.
+Respeite compute/infra definidos no projeto; não inicie build pesado local por conveniência.
 
 Não execute `--all-tests` durante o ciclo normal de tasks e não o torne o padrão do script.
 
@@ -153,11 +161,15 @@ Execute os três caminhos e mostre a saída real ao usuário:
 
 Verifique também o caminho de format quando for barato fazê-lo sem sujar o repo:
 introduza uma violação de formatação em um arquivo, rode o gate, e **restaure o
-arquivo** (`git checkout -- <file>`). Confirme que a reprovação cita apenas o arquivo
+arquivo** a partir de uma cópia temporária exata, preservando alterações preexistentes; prefira
+fixture ou worktree temporário. Confirme que a reprovação cita apenas o arquivo
 alterado, não débito pré-existente.
 
 Se qualquer verificação falhar, corrija o script e repita. Só termine com os três
 caminhos comprovados.
+
+Confira também: enabling com `--static`, modo ausente, flags conflitantes, base inválida,
+timeout e arquivo deletado. Os casos inválidos devem falhar antes de executar build/testes.
 
 ### 6. Reportar
 

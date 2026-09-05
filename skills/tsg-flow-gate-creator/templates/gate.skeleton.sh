@@ -7,7 +7,7 @@
 # depende do formato de saida e dos codigos de retorno.
 #
 # Uso:
-#   scripts/ai-flow/gate.sh [--filter=<expr>]... [--base=<ref>] [--all-tests] [--skip-tests]
+#   scripts/ai-flow/gate.sh [--filter=<expr>]... [--base=<ref>] [--all-tests] [--static] [--skip-tests]
 #
 # Saida: bloco compacto (<= ~60 linhas). Exit 0 = APROVADO, 1 = REPROVADO, 2 = erro.
 
@@ -15,6 +15,7 @@ set -uo pipefail
 
 MAX_OUTPUT_LINES=40
 SKIP_TESTS=0
+STATIC=0
 ALL_TESTS=0
 BASE_REF="HEAD"
 FILTERS=()
@@ -25,15 +26,37 @@ for arg in "$@"; do
     --base=*)      BASE_REF="${arg#*=}" ;;
     --all-tests)   ALL_TESTS=1 ;;
     --skip-tests)  SKIP_TESTS=1 ;;
+    --static)      STATIC=1 ;;
     -h|--help)     sed -n '2,14p' "$0"; exit 0 ;;
     *) echo "GATE: ERRO"; echo "argumento desconhecido: $arg"; exit 2 ;;
   esac
 done
 
+# Selecao explicita: ausencia de filtro nunca significa aprovacao comportamental.
+MODES=$((ALL_TESTS + STATIC + SKIP_TESTS))
+if ((MODES > 1)) || ((MODES > 0 && ${#FILTERS[@]} > 0)) ||
+   ((MODES == 0 && ${#FILTERS[@]} == 0)); then
+  echo "GATE: ERRO"; echo "use filtros OU --all-tests OU --static OU --skip-tests"; exit 2
+fi
+for f in "${FILTERS[@]}"; do
+  if [[ -z "${f//[[:space:]]/}" ]]; then
+    echo "GATE: ERRO"; echo "filtro vazio"; exit 2
+  fi
+done
+if [[ ! "${GATE_TIMEOUT_SECONDS:-600}" =~ ^[1-9][0-9]*$ ]]; then
+  echo "GATE: ERRO"; echo "GATE_TIMEOUT_SECONDS deve ser inteiro positivo"; exit 2
+fi
+command -v timeout >/dev/null 2>&1 || {
+  echo "GATE: ERRO"; echo "timeout indisponivel; configure equivalente no gate"; exit 2
+}
+export CI=true TERM=dumb NO_COLOR=1
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || {
   echo "GATE: ERRO"; echo "nao esta em um repositorio git"; exit 2
 }
 cd "$REPO_ROOT" || exit 2
+BASE_REF="$(git rev-parse --verify "$BASE_REF^{commit}" 2>/dev/null)" || {
+  echo "GATE: ERRO"; echo "base Git invalida"; exit 2
+}
 
 # ---------------------------------------------------------------------------
 # Escopo: arquivos alterados desde BASE_REF (= checkpoint focused ou base do PRD)
@@ -42,12 +65,18 @@ cd "$REPO_ROOT" || exit 2
 # [[STACK: extensoes de codigo-fonte da linguagem, ex: \.cs$ | \.java$ | \.(ts|tsx|js|jsx)$ ]]
 SOURCE_EXT_REGEX='\.EXT$'
 
-mapfile -t CHANGED < <(
-  { git diff --name-only "$BASE_REF" -- 2>/dev/null
-    git ls-files --others --exclude-standard 2>/dev/null
-  } | sort -u | grep -v '^$'
+mapfile -d '' -t CHANGED < <(
+  { git diff --name-only -z "$BASE_REF" --
+    git ls-files --others --exclude-standard -z
+  } | sort -zu
 )
-mapfile -t CHANGED_SRC < <(printf '%s\n' "${CHANGED[@]:-}" | grep -E "$SOURCE_EXT_REGEX" || true)
+CHANGED_SRC=()
+for file in "${CHANGED[@]}"; do
+  # Deletados contam no diff, mas nao sao passados a formatadores.
+  if [[ -f "$file" && "$file" =~ $SOURCE_EXT_REGEX ]]; then
+    CHANGED_SRC+=("$file")
+  fi
+done
 
 fail() { # fail <etapa> <comando> <output>
   echo "GATE: REPROVADO"
@@ -58,7 +87,17 @@ fail() { # fail <etapa> <comando> <output>
   exit 1
 }
 
-run() { OUT="$("$@" 2>&1)"; return $?; }
+run() {
+  local rc=0
+  OUT="$(timeout "${GATE_TIMEOUT_SECONDS:-600}" "$@" 2>&1)" || rc=$?
+  if ((rc == 124 || rc == 137 || rc == 126 || rc == 127)); then
+    echo "GATE: ERRO"
+    echo "ambiente/timeout ao executar: $1"
+    printf '%s\n' "$OUT" | tail -n "$MAX_OUTPUT_LINES"
+    exit 2
+  fi
+  return "$rc"
+}
 
 # ---------------------------------------------------------------------------
 # 1. Formatacao / lint — ESCOPADO nos arquivos alterados (INVARIANTE 1)
@@ -87,15 +126,16 @@ BUILD_STATUS="ok"
 # ---------------------------------------------------------------------------
 # 3. Testes — com DETECCAO DE FILTRO VAZIO (INVARIANTE 2)
 # ---------------------------------------------------------------------------
-TEST_STATUS="pulado"
-if ((SKIP_TESTS == 0)) && ((ALL_TESTS == 1)); then
+TEST_STATUS="nao aplicavel (static)"
+((SKIP_TESTS == 1)) && TEST_STATUS="pulado (diagnostico; nao aprova task)"
+if ((SKIP_TESTS == 0 && STATIC == 0)) && ((ALL_TESTS == 1)); then
   # [[STACK: comando da suite completa do repositorio; reservado ao full do PRD ]]
   CMD=(ALL_TESTS_TOOL)
   if ! run "${CMD[@]}"; then
     fail "testes" "ALL_TESTS_TOOL" "$OUT"
   fi
   TEST_STATUS="ok (suite completa)"
-elif ((SKIP_TESTS == 0)) && ((${#FILTERS[@]} > 0)); then
+elif ((SKIP_TESTS == 0 && STATIC == 0)) && ((${#FILTERS[@]} > 0)); then
   RESULTS=()
   for f in "${FILTERS[@]}"; do
     # [[STACK: comando de teste com filtro; DESABILITE flags do tipo
@@ -119,8 +159,7 @@ $OUT"
     RESULTS+=("$f=${COUNT}")
   done
   TEST_STATUS="ok (${RESULTS[*]})"
-elif ((SKIP_TESTS == 0)); then
-  TEST_STATUS="pulado (nenhum --filter informado)"
+
 fi
 
 # ---------------------------------------------------------------------------

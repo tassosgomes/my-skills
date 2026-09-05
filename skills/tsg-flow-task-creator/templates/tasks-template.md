@@ -1,6 +1,7 @@
 # Resumo de Tarefas de Implementacao de [Funcionalidade]
 
-> **TechSpec de origem:** `tasks/prd-[nome-funcionalidade]/techspec.md`
+> **TechSpecs de origem:** [links para techspec.md e/ou frontend-techspec.md, com revisao aprovada]
+> **ADRs pertinentes:** [links relativos para docs/adr/adr-NNN.md; nao copiar o catalogo]
 > **Status do plano:** [Em revisao | Confirmado para implementacao]
 > **Regra de entrega:** cada task de comportamento e uma fatia vertical validavel isoladamente
 
@@ -74,7 +75,7 @@ As fases agrupam uma sequencia de comportamento e feedback, nao uma camada arqui
 | 1 | Setup / Configuracao | X.0 | [stack]-dependency-config | ✅ |
 | 2 | Modelos de Dados | Y.0 | [stack]-architecture | ✅ |
 | 3 | Logica de Negocio | X.0, Z.0 | [stack]-architecture | ✅ |
-| 4 | Endpoints / Interfaces | W.0 | common/restful-api | ✅ |
+| 4 | Endpoints / Interfaces | W.0 | restful-api | ✅ |
 | 5 | Integracoes Externas | N/A — sem integracoes | [stack]-dependency-config | ✅ |
 | 6 | Validacoes e Erros | X.0 (subtarefa X.3) | [stack]-code-quality | ✅ |
 | 7 | Testes | subtarefas em cada task | [stack]-testing | ✅ |
@@ -104,10 +105,13 @@ faixa exige justificativa de coesao; nao exige quebra quando isso destruir o gat
 |----------|-------------------------|--------------------|---------------------------|--------|
 | `[teste/fixture/arquivo]` | X.0 | Y.0, Z.0 | Sim | ✅ |
 
-Nenhuma task pode validar com teste/fixture futuro, depender de arquivo produzido depois ou usar
-suite compartilhada sem seletor de caso proprio.
+Nenhuma task pode validar com teste/fixture futuro ou depender de arquivo produzido depois.
+Tasks behavioral precisam de seletor proprio. Em static, registre N/A para filtro com justificativa.
 
 ## Analise de Paralelizacao
+
+Preencha somente quando houver oportunidade concreta. O executor standard continua sequencial;
+lanes sao informacao de planejamento, nao autorizacao para workers escreverem simultaneamente.
 
 ### Lanes de Execucao Paralela
 
