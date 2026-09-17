@@ -1,45 +1,43 @@
-# Camada Api — Controllers, Envelope e Autorização
+# Camada Api — Endpoints Minimal API, Envelope e Autorização
 
-A Api só traduz HTTP para casos de uso. O contrato segue a skill `restful-api`: versão no path,
-recursos no plural em kebab-case, paginação com `_page`/`_size`, erros em RFC 9457 e JSON em
-camelCase (padrão do `System.Text.Json`; não configure outra naming policy).
+A Api só traduz HTTP para caso de uso. O contrato segue a skill `restful-api`: versão no path,
+recursos no plural em kebab-case, paginação `_page`/`_size`, erros RFC 9457 e JSON camelCase
+(padrão do `System.Text.Json`; não configure outra naming policy).
 
 ## Estrutura
 
 ```text
 ProjectName.Api/
 ├── Program.cs
-├── Extensions/                     # dotnet-program-setup
-├── Controllers/
-│   └── CategoriesController.cs
-├── ApiModels/
-│   ├── Responses/
-│   │   ├── ApiResponse.cs
-│   │   ├── ApiResponseList.cs
-│   │   └── PaginationMeta.cs
+├── Extensions/                         # dotnet-program-setup
+├── Endpoints/
+│   ├── EndpointsExtensions.cs          # MapApiEndpoints: chama cada Map{Agregado}Endpoints
 │   └── Categories/
+│       ├── CategoryEndpoints.cs
 │       └── UpdateCategoryApiInput.cs
+├── ApiModels/
+│   └── Responses/
+│       ├── ApiResponse.cs
+│       ├── ApiResponseList.cs
+│       └── PaginationMeta.cs
 ├── Authorization/
 │   ├── Policies.cs
 │   └── Roles.cs
 ├── ExceptionHandlers/
-│   └── GlobalExceptionHandler.cs   # error-handling.md
-└── MessageHandlers/                # consumidores RabbitMQ que chamam casos de uso
+│   └── GlobalExceptionHandler.cs
+└── MessageHandlers/
 ```
 
 ## Envelope de resposta
 
 ```csharp
-// ApiModels/Responses/ApiResponse.cs
-public record ApiResponse<TData>(TData Data);
+public sealed record ApiResponse<TData>(TData Data);
 
-// ApiModels/Responses/PaginationMeta.cs
 public sealed record PaginationMeta(int Page, int Size, int Total)
 {
     public int TotalPages => Size == 0 ? 0 : (int)Math.Ceiling(Total / (double)Size);
 }
 
-// ApiModels/Responses/ApiResponseList.cs
 public sealed record ApiResponseList<TItem>(IReadOnlyList<TItem> Data, PaginationMeta Pagination)
 {
     public static ApiResponseList<TItem> From(PaginatedListOutput<TItem> output)
@@ -47,112 +45,111 @@ public sealed record ApiResponseList<TItem>(IReadOnlyList<TItem> Data, Paginatio
 }
 ```
 
-Resultado:
-
 ```json
-{ "data": { "id": "…", "name": "Action" } }
+{ "data": { "id": "0199a3c2-…", "name": "Action" } }
 { "data": [ … ], "pagination": { "page": 1, "size": 10, "total": 42, "totalPages": 5 } }
 ```
 
-## Input da Api quando a rota carrega parte dos dados
-
-Quando o Id vem da rota e o resto do body, a Api tem seu próprio input e monta o do caso de uso:
+## Endpoints de um agregado
 
 ```csharp
-// ApiModels/Categories/UpdateCategoryApiInput.cs
-public sealed record UpdateCategoryApiInput(string Name, string? Description = null, bool? IsActive = null);
-```
-
-## Controller
-
-Actions **sem** sufixo `Async`: o ASP.NET Core remove esse sufixo do nome da action por padrão
-(`SuppressAsyncSuffixInActionNames`), e `CreatedAtAction(nameof(GetByIdAsync), ...)` falha com
-"No route matches the supplied values".
-
-```csharp
-[ApiController]
-[Route("v1/categories")]
-[Authorize(Policy = Policies.Classifiers)]
-public sealed class CategoriesController : ControllerBase
+// Endpoints/Categories/CategoryEndpoints.cs
+public static class CategoryEndpoints
 {
-    private readonly ICreateCategory _createCategory;
-    private readonly IGetCategory _getCategory;
-    private readonly IListCategories _listCategories;
-    private readonly IUpdateCategory _updateCategory;
-    private readonly IDeleteCategory _deleteCategory;
-
-    public CategoriesController(
-        ICreateCategory createCategory,
-        IGetCategory getCategory,
-        IListCategories listCategories,
-        IUpdateCategory updateCategory,
-        IDeleteCategory deleteCategory)
+    public static IEndpointRouteBuilder MapCategoryEndpoints(this IEndpointRouteBuilder endpoints)
     {
-        _createCategory = createCategory;
-        _getCategory = getCategory;
-        _listCategories = listCategories;
-        _updateCategory = updateCategory;
-        _deleteCategory = deleteCategory;
+        var group = endpoints.MapGroup("v1/categories")
+            .WithTags("Categories")
+            .RequireAuthorization(Policies.Classifiers);
+
+        group.MapPost("/", CreateAsync)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
+
+        group.MapGet("/{id:guid}", GetByIdAsync)
+            .ProducesProblem(StatusCodes.Status404NotFound);
+
+        group.MapGet("/", ListAsync);
+
+        group.MapPut("/{id:guid}", UpdateAsync)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
+
+        group.MapDelete("/{id:guid}", DeleteAsync)
+            .ProducesProblem(StatusCodes.Status404NotFound);
+
+        return endpoints;
     }
 
-    [HttpPost]
-    [ProducesResponseType(typeof(ApiResponse<CategoryModelOutput>), StatusCodes.Status201Created)]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status422UnprocessableEntity)]
-    public async Task<IActionResult> Create([FromBody] CreateCategoryInput input, CancellationToken cancellationToken)
+    private static async Task<Created<ApiResponse<CategoryModelOutput>>> CreateAsync(
+        CreateCategoryInput input, ICreateCategory useCase, CancellationToken cancellationToken)
     {
-        var output = await _createCategory.ExecuteAsync(input, cancellationToken);
-        return CreatedAtAction(nameof(GetById), new { id = output.Id }, new ApiResponse<CategoryModelOutput>(output));
+        var output = await useCase.ExecuteAsync(input, cancellationToken);
+        return TypedResults.Created($"/v1/categories/{output.Id}", new ApiResponse<CategoryModelOutput>(output));
     }
 
-    [HttpGet("{id:guid}")]
-    [ProducesResponseType(typeof(ApiResponse<CategoryModelOutput>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetById(Guid id, CancellationToken cancellationToken)
-    {
-        var output = await _getCategory.ExecuteAsync(new GetCategoryInput(id), cancellationToken);
-        return Ok(new ApiResponse<CategoryModelOutput>(output));
-    }
+    private static async Task<Ok<ApiResponse<CategoryModelOutput>>> GetByIdAsync(
+        Guid id, IGetCategory useCase, CancellationToken cancellationToken)
+        => TypedResults.Ok(new ApiResponse<CategoryModelOutput>(
+            await useCase.ExecuteAsync(new GetCategoryInput(id), cancellationToken)));
 
-    [HttpGet]
-    [ProducesResponseType(typeof(ApiResponseList<CategoryModelOutput>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> List(
+    private static async Task<Ok<ApiResponseList<CategoryModelOutput>>> ListAsync(
+        IListCategories useCase,
         CancellationToken cancellationToken,
         [FromQuery(Name = "_page")] int page = 1,
         [FromQuery(Name = "_size")] int size = 10,
-        [FromQuery] string? search = null,
-        [FromQuery] string? sort = null,
-        [FromQuery] SearchOrder dir = SearchOrder.Asc)
+        string? search = null,
+        string? sort = null,
+        SearchOrder dir = SearchOrder.Asc)
     {
         var input = new ListCategoriesInput(page, size, search ?? string.Empty, sort ?? string.Empty, dir);
-        var output = await _listCategories.ExecuteAsync(input, cancellationToken);
-        return Ok(ApiResponseList<CategoryModelOutput>.From(output));
+        return TypedResults.Ok(ApiResponseList<CategoryModelOutput>.From(await useCase.ExecuteAsync(input, cancellationToken)));
     }
 
-    [HttpPut("{id:guid}")]
-    [ProducesResponseType(typeof(ApiResponse<CategoryModelOutput>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status422UnprocessableEntity)]
-    public async Task<IActionResult> Update(
-        Guid id,
-        [FromBody] UpdateCategoryApiInput apiInput,
-        CancellationToken cancellationToken)
+    private static async Task<Ok<ApiResponse<CategoryModelOutput>>> UpdateAsync(
+        Guid id, UpdateCategoryApiInput apiInput, IUpdateCategory useCase, CancellationToken cancellationToken)
     {
         var input = new UpdateCategoryInput(id, apiInput.Name, apiInput.Description, apiInput.IsActive);
-        var output = await _updateCategory.ExecuteAsync(input, cancellationToken);
-        return Ok(new ApiResponse<CategoryModelOutput>(output));
+        return TypedResults.Ok(new ApiResponse<CategoryModelOutput>(await useCase.ExecuteAsync(input, cancellationToken)));
     }
 
-    [HttpDelete("{id:guid}")]
-    [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
+    private static async Task<NoContent> DeleteAsync(Guid id, IDeleteCategory useCase, CancellationToken cancellationToken)
     {
-        await _deleteCategory.ExecuteAsync(new DeleteCategoryInput(id), cancellationToken);
-        return NoContent();
+        await useCase.ExecuteAsync(new DeleteCategoryInput(id), cancellationToken);
+        return TypedResults.NoContent();
     }
 }
 ```
+
+```csharp
+// Endpoints/EndpointsExtensions.cs
+public static class EndpointsExtensions
+{
+    public static IEndpointRouteBuilder MapApiEndpoints(this IEndpointRouteBuilder endpoints)
+    {
+        endpoints.MapCategoryEndpoints();
+        endpoints.MapGenreEndpoints();
+        return endpoints;
+    }
+}
+```
+
+## Regras
+
+- Um `{Agregado}Endpoints` estático por agregado, com um `MapGroup("v1/{recurso}")`, `WithTags` e
+  `RequireAuthorization(Policies.X)` no grupo.
+- Handler é método `private static` nomeado (`CreateAsync`, `GetByIdAsync`...), nunca lambda inline:
+  fica legível, navegável e segue o sufixo `Async` normal.
+- Retorno sempre com `TypedResults` e tipo concreto (`Created<T>`, `Ok<T>`, `NoContent`): o OpenAPI
+  infere status e schema. Não use `Results.Ok`/`IResult` sem tipo.
+- Erros não entram no tipo de retorno: saem do `GlobalExceptionHandler` e são declarados com
+  `ProducesProblem`.
+- O caso de uso é recebido como parâmetro do handler (resolvido da DI); nada de `IServiceProvider`.
+- Inputs não têm DataAnnotations e `AddValidation()` não é registrado; o 400 vem do validator
+  chamado no caso de uso.
+- Quando a rota carrega parte dos dados (Id), a Api tem seu próprio `{CasoDeUso}ApiInput` em
+  `Endpoints/{Agregados}/` e monta o Input do caso de uso.
+- Endpoint filter só para concern transversal de borda (ex.: idempotency key), nunca regra de negócio.
 
 ## Autorização por constantes
 
@@ -172,5 +169,5 @@ public static class Policies
 }
 ```
 
-O registro das policies (`AddAuthorization`) fica em `Extensions/AuthenticationExtensions.cs`
-(`dotnet-program-setup`); controllers só referenciam `Policies.*`, nunca strings soltas.
+As policies são registradas em `Extensions/AuthenticationExtensions.cs` (`dotnet-program-setup`)
+usando `Roles.*`; endpoints só referenciam `Policies.*`, nunca strings soltas.

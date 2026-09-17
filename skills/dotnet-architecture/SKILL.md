@@ -1,103 +1,95 @@
 ---
 name: dotnet-architecture
-description: "Use para mudanças estruturais em .NET C# / ASP.NET Core: novo serviço, módulo, feature, endpoint, caso de uso, camadas, agregados, eventos de domínio, repositories, DTOs ou tratamento global de erros. Não use para tuning de performance, observabilidade isolada ou revisão geral de estilo."
+description: "Use para mudanças estruturais em .NET C# / ASP.NET Core: novo serviço, módulo, feature, endpoint, caso de uso, camadas, agregados, eventos de domínio, repositories, DTOs, tratamento global de erros ou regras de fronteira. Não use para tuning de performance, observabilidade isolada ou revisão geral de estilo."
 metadata:
   group: dotnet
 ---
 
 # Arquitetura .NET C# / ASP.NET Core
 
-Esta é a skill primária quando a mudança altera a estrutura do sistema. O core mantém as
-fronteiras e as regras que não podem ser esquecidas; exemplos completos ficam em `examples/` e
-só devem ser lidos quando a tarefa exigir aquele padrão.
+Decisões de estrutura que valem para todo serviço .NET. Os exemplos em `examples/` mostram a forma
+esperada de cada peça e só devem ser lidos quando a tarefa tocar aquela peça.
 
-## Modelo obrigatório
+## Decisões
 
-Use Clean Architecture com estas dependências entre projetos:
+| Tema | Decisão | Motivo |
+|---|---|---|
+| Camadas | Clean Architecture: `Domain`, `Application`, `Api` e um `Infra.*` por tecnologia | Domínio isolado de framework e persistência |
+| API HTTP | Minimal API, um `{Agregado}Endpoints` com `MapGroup` por agregado; controllers não são usados | Recomendação oficial do ASP.NET Core para projetos novos; menos cerimônia |
+| Identificadores | UUIDv7 (`Guid.CreateVersion7()`) gerado no domínio; `Guid.NewGuid()` banido | Índice ordenado por tempo e Id conhecido antes do insert |
+| Casos de uso | Uma classe por caso de uso, com interface própria; sem MediatR ou dispatcher | Fluxo navegável sem reflection; MediatR tem licença comercial |
+| Mapeamento | Manual, com `static From{Entidade}` no Output | AutoMapper tem licença comercial |
+| Validação de input | FluentValidation chamada explicitamente pelo caso de uso; `AddValidation()` nativo não é ligado | Uma única fonte de 400 |
+| Eventos | Levantados pelo agregado e gravados no outbox pelo `IUnitOfWork` | Estado e evento na mesma transação |
+| Fronteiras | Verificadas por `ProjectName.ArchitectureTests` (ArchUnitNET) | Violação falha a pipeline em vez de depender de review |
+
+## Dependências entre projetos
 
 ```text
 Api ---------------> Application ---> Domain
 Infra.Data --------------------------> Domain
 Infra.Messaging ---> Infra.Data -----> Domain
-Infra.* - - - - - -> Application      (somente para implementar portas técnicas de Application/Interfaces)
-Tests -------------> projetos que exercitam
+Infra.* - - - - - -> Application      (somente Application/Interfaces)
+Api - - - - - - - -> Infra.*          (somente em Api/Extensions, composition root)
 ```
 
-- **Domain:** agregados, entidades, value objects, eventos de domínio, invariantes e as portas de
-  persistência (`IXxxRepository`, `IUnitOfWork`). Não depende de ASP.NET Core, EF Core ou outra
-  infraestrutura.
-- **Application:** um caso de uso por classe, com Input, Output, interface e validator na mesma
-  pasta; portas técnicas que não são conceito de domínio (`IStorageService`, `IEmailSender`) em
-  `Application/Interfaces`.
-- **Api:** controllers finos, contratos HTTP, envelope de resposta, autorização, exception handler e
+- **Domain:** SeedWork, agregados, value objects, eventos, exceções de domínio e portas de
+  persistência (`IXxxRepository`, `IUnitOfWork`). Sem ASP.NET Core nem EF Core.
+- **Application:** casos de uso, exceções de aplicação e portas técnicas em `Interfaces/`
+  (`IStorageService`, `IXxxQueries`).
+- **Api:** endpoints, contratos HTTP, envelope, autorização, exception handler, message handlers e
   composition root.
-- **Infra.\*:** um projeto por tecnologia (`Infra.Data` para EF Core, `Infra.Messaging` para
-  RabbitMQ, `Infra.Storage`...). A Infra nunca usa casos de uso, DTOs ou exceções da Application.
-- **Tests:** `UnitTests`, `IntegrationTests` e `EndToEndTests`, espelhando a árvore de `src/`.
-
-Layout da solution: `src/` e `tests/` na raiz, projetos nomeados `ProjectName.{Camada}` — ver
-`examples/project-setup.md`.
+- **Infra.\*:** implementações. Nunca usa casos de uso, Inputs/Outputs ou exceções da Application.
 
 ## Regras não negociáveis
 
-1. Regras de negócio e invariantes ficam no Domain; o caso de uso só orquestra.
-2. Cada caso de uso é uma classe com interface própria (`ICreateCategory : IUseCase<CreateCategoryInput, CategoryModelOutput>`)
-   e o controller injeta essa interface diretamente. Não use MediatR nem dispatcher.
-3. Casos de uso ficam em `Application/UseCases/{AgregadoNoPlural}/{CasoDeUso}/`; DTOs compartilhados
-   do agregado ficam em `{AgregadoNoPlural}/Common/`.
-4. Repositórios existem por agregado (`IGenericRepository<TAggregate>`), com interface no Domain e
-   implementação em `Infra.Data`. O repositório retorna `null` quando não encontra; quem decide
-   lançar `NotFoundException` é o caso de uso.
-5. Eventos de domínio são levantados pelo agregado e gravados no outbox pelo `IUnitOfWork` na mesma
-   transação dos dados; nunca publique no broker de dentro do caso de uso ou antes de salvar.
-6. Invariantes de domínio produzem `EntityValidationException` (422); formato de input inválido
-   produz `ValidationException` do FluentValidation (400); tudo sai como `ProblemDetails` via
-   `IExceptionHandler`.
-7. O validator do FluentValidation é chamado explicitamente pelo caso de uso antes de qualquer
-   efeito colateral.
-8. Mapeamento é manual: o Output expõe `static From{Entidade}(...)`; entidade nunca atravessa para
-   o contrato HTTP.
-9. Propague `CancellationToken` em toda a cadeia assíncrona.
+1. Invariantes ficam no agregado; o caso de uso só orquestra.
+2. Caso de uso em `Application/UseCases/{Agregados}/{CasoDeUso}/` com `I{CasoDeUso}`, `{CasoDeUso}`,
+   `{CasoDeUso}Input` e, só se houver regra de formato, `{CasoDeUso}InputValidator`. Output usado por
+   mais de um caso de uso fica em `{Agregados}/Common/`.
+3. O repositório retorna `null` quando não encontra; quem lança `NotFoundException` é o caso de uso.
+4. O repositório não chama `SaveChangesAsync`; quem confirma é `IUnitOfWork.CommitAsync`.
+5. Caso de uso nunca publica no broker.
+6. `ValidationException` (FluentValidation) → 400, `NotFoundException` → 404,
+   `EntityValidationException` e `RelatedAggregateException` → 422, qualquer outra → 500. Tudo sai
+   como `ProblemDetails` por um único `IExceptionHandler`.
+7. Endpoint só traduz HTTP para caso de uso: sem `try/catch`, repositório, `DbContext` ou regra.
+8. Agregado referencia outro agregado somente pelo Id.
+9. Toda solution tem `tests/ProjectName.ArchitectureTests` com as regras do formato escolhido
+   (`dotnet-testing/examples/architecture-tests.md`).
 
-## Escolha de formato de solução
+## Formato da solução
 
-Os três formatos compartilham o mesmo modelo de camadas; o que muda é a fronteira entre unidades
-de deploy. Escolha pelo estágio real do projeto, não pelo tamanho esperado no futuro:
-
-| Formato | Quando usar | Exemplo |
+| Formato | Quando | Exemplo |
 |---|---|---|
-| **API simples** (um serviço) | Ponto de partida padrão; domínio ainda não tem fronteiras internas claras | `examples/project-setup.md` |
-| **Monolito Modular** | Fronteiras de domínio já claras, mas deploy/escala ainda não precisam ser independentes | `examples/modular-monolith.md` |
-| **Microsserviços** | Módulos já precisam escalar, implantar ou versionar de forma independente | `examples/microservices.md` |
+| API simples | Padrão; domínio ainda sem fronteiras internas claras | `examples/project-setup.md` |
+| Monolito Modular | Fronteiras claras, deploy único | `examples/modular-monolith.md` |
+| Microsserviços | Módulos precisam de deploy, escala ou versão independentes | `examples/microservices.md` |
 
-Não comece por Monolito Modular ou Microsserviços "para o caso de precisar depois" — evolua a
-partir da API simples quando a dor de acoplamento ou de deploy for real.
+Comece pela API simples e evolua quando a dor de acoplamento ou de deploy for real.
 
 ## Carregamento sob demanda
 
-| Necessidade | Recurso a ler |
+| Necessidade | Recurso |
 |---|---|
-| árvore de solution, projetos e referências | `examples/project-setup.md` |
-| SeedWork, agregado, value object, eventos e validação de domínio | `examples/domain-model.md` |
-| caso de uso, Input/Output, validator e registro na DI | `examples/use-cases.md` |
-| controller, envelope de resposta, paginação e autorização | `examples/api-layer.md` |
-| repositório por agregado, busca paginada e Unit of Work | `examples/repository-pattern.md` |
-| exceções, ProblemDetails e `IExceptionHandler` | `examples/error-handling.md` |
-| estrutura de módulos, fronteira in-process, host único | `examples/modular-monolith.md` |
-| estrutura multi-serviço, contrato compartilhado, comunicação entre serviços | `examples/microservices.md` |
+| árvore da solution, arquivos da raiz, `BannedSymbols.txt`, referências | `examples/project-setup.md` |
+| SeedWork, UUIDv7, agregado, validação de domínio | `examples/domain-model.md` |
+| caso de uso, Input/Output, validator, exceções, registro na DI | `examples/use-cases.md` |
+| endpoints Minimal API, envelope, paginação, autorização | `examples/api-layer.md` |
+| repositório por agregado e busca paginada | `examples/repository-pattern.md` |
+| `IExceptionHandler` e formato do ProblemDetails | `examples/error-handling.md` |
+| módulos e fronteira in-process | `examples/modular-monolith.md` |
+| serviços e contrato compartilhado | `examples/microservices.md` |
 
-Não leia todos os exemplos por padrão. Para criar um endpoint novo, `use-cases.md` e
-`api-layer.md` bastam; leia `domain-model.md` só se o agregado mudar. A implementação do outbox
-e do inbox fica em `dotnet-dependency-config/examples/outbox-inbox.md`.
+Para um endpoint novo, `use-cases.md` e `api-layer.md` bastam. Outbox e inbox ficam em
+`dotnet-dependency-config/examples/outbox-inbox.md`.
 
 ## Checklist do diff
 
-- [ ] As referências entre projetos seguem o grafo acima; Infra não usa casos de uso nem DTOs.
-- [ ] O Domain continua independente de framework e persistência.
-- [ ] O caso de uso tem pasta própria com Input, Output (ou Output comum), interface e implementação.
-- [ ] O controller é fino e injeta a interface do caso de uso, sem MediatR ou dispatcher.
-- [ ] O repositório retorna `null` e o caso de uso decide sobre `NotFoundException`.
-- [ ] Eventos de domínio vão para o outbox na mesma transação dos dados.
-- [ ] Entidade não vaza para a API; o Output é montado por `From{Entidade}`.
-- [ ] Erros produzem ProblemDetails sem stack trace exposto.
+- [ ] Referências entre projetos seguem o grafo e `ArchitectureTests` passa.
+- [ ] Todo Id novo usa `Guid.CreateVersion7()`.
+- [ ] O caso de uso tem pasta própria e é injetado pela interface no handler do endpoint.
+- [ ] O endpoint está no `{Agregado}Endpoints` do agregado, sem lógica nem `try/catch`.
+- [ ] O repositório retorna `null`; eventos passam pelo outbox.
+- [ ] Entidade não aparece no contrato HTTP.
 - [ ] Há teste focado para o comportamento novo ou alterado.

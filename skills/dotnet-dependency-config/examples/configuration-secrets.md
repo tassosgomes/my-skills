@@ -1,131 +1,42 @@
-# Configuração e Segredos — Padrão Oficial
+# Configuração e Segredos
 
-Três camadas, cada uma com uma responsabilidade fixa. Não misture: segredo nunca vai para
-`appsettings.json`, e configuração não sensível não precisa virar variável de ambiente só por
-"padronização".
+| Camada | Contém | Versionado |
+|---|---|---|
+| `appsettings.json` / `appsettings.{Environment}.json` | Config não sensível: timeouts, feature flags, URLs públicas, nomes de fila, CORS | Sim |
+| Variáveis de ambiente (`__`) | Overrides de staging/produção e segredos injetados pelo orquestrador a partir de cofre | Não |
+| `dotnet user-secrets` | Segredos de desenvolvimento local (no projeto `Api`) | Não |
 
-| Camada | Onde vive | Contém | Versionado? |
-|---|---|---|---|
-| `appsettings.json` / `appsettings.{Environment}.json` | repositório | config não sensível (timeouts, feature flags, URLs públicas, nomes de fila) | sim |
-| Variáveis de ambiente (`__` como separador hierárquico) | orquestrador/container/pipeline | overrides de produção/staging, incluindo segredos em runtime | não (definidas na infra) |
-| `dotnet user-secrets` | perfil do usuário no SO (fora do repo) | segredos usados em desenvolvimento local | não |
+Regras:
 
-## Por que essa combinação e não `.env`
-
-O `IConfiguration` do ASP.NET Core já lê variáveis de ambiente nativamente, com precedência sobre
-`appsettings.json`, sem exigir pacote adicional. Um arquivo `.env` exigiria um pacote de terceiros
-(`DotNetEnv` ou similar) para fazer o que o provider nativo já faz, e ainda corre o risco de ser
-commitado por engano. Fique no provider nativo — é o que a documentação oficial e a maioria dos
-times .NET usam.
-
-## appsettings — hierarquia por ambiente
+- Connection string, senha, chave de API, client secret e token não têm entrada em nenhum
+  `appsettings*.json`, nem com valor vazio. Connection string pode aparecer sem senha.
+- Não use `.env` nem pacote para lê-lo.
+- Seção tipada com `IOptions<T>`, `const string SectionName`, `ValidateDataAnnotations()` e
+  `ValidateOnStart()`.
+- Arrays extensos ficam em `appsettings.json`; env vars para valores escalares.
+- `appsettings.Local.json` ou similar pessoal está no `.gitignore`.
+- Em Kubernetes, segredo entra por `secretKeyRef`, nunca literal no manifesto.
+- OTLP usa as variáveis padrão (`OTEL_EXPORTER_OTLP_ENDPOINT`).
 
 ```json
-// appsettings.json — non-sensitive defaults, valid in every environment
+// appsettings.json — no secrets, no empty secret keys
 {
-  "Cors": {
-    "AllowedOrigins": ["https://app.example.com"]
-  },
-  "RabbitMQ": {
-    "HostName": "localhost",
-    "Exchange": "orders.events"
-  },
-  "Logging": {
-    "LogLevel": { "Default": "Information" }
-  }
+  "ConnectionStrings": { "DefaultConnection": "Host=localhost;Port=5432;Database=projectname;Username=projectname" },
+  "RabbitMQ": { "HostName": "localhost", "UserName": "projectname", "Exchange": "projectname.events" },
+  "Cors": { "AllowedOrigins": ["https://app.example.com"] },
+  "OpenTelemetry": { "ServiceName": "projectname-api" }
 }
 ```
 
-```json
-// appsettings.Development.json — local overrides only; never a secret here either
-{
-  "Cors": {
-    "AllowedOrigins": ["http://localhost:5173"]
-  },
-  "Logging": {
-    "LogLevel": { "Default": "Debug" }
-  }
-}
-```
-
-`ConnectionStrings`, chaves de API, client secrets de OAuth, tokens de terceiros: nenhum desses
-tem entrada em `appsettings.json` ou `appsettings.{Environment}.json` — nem com valor vazio. Se a
-chave existe no arquivo versionado, alguém eventualmente preenche o valor e comita.
-
-## Variáveis de ambiente — convenção `__`
-
-`IConfiguration` usa `:` para navegar hierarquia (`ConnectionStrings:DefaultConnection`). Como `:`
-não é válido em nome de variável de ambiente em todos os SOs, o duplo underscore é o separador
-oficial e é convertido automaticamente:
-
 ```bash
-# Production/staging — set by the orchestrator (Kubernetes Secret, App Service, etc.), never in a repository file
-export ConnectionStrings__DefaultConnection="Host=prod-db;Port=5432;Database=orders;Username=orders_svc;Password=${DB_PASSWORD}"
-export Auth__Authority="https://auth.example.com"
-export Cors__AllowedOrigins__0="https://app.example.com"
-export OTEL_EXPORTER_OTLP_ENDPOINT="http://otel-collector:4317"
+# Local development
+dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Host=localhost;...;Password=projectname" --project src/ProjectName.Api
+dotnet user-secrets set "RabbitMQ:Password" "projectname" --project src/ProjectName.Api
 ```
-
-```yaml
-# Kubernetes — the real secret comes from a Secret, not a literal value in the manifest
-env:
-  - name: ConnectionStrings__DefaultConnection
-    valueFrom:
-      secretKeyRef:
-        name: orders-db-credentials
-        key: connection-string
-  - name: Auth__Authority
-    value: "https://auth.example.com"
-```
-
-Arrays em `IConfiguration` usam índice numérico no nome da variável
-(`Cors__AllowedOrigins__0`, `Cors__AllowedOrigins__1`), o que funciona mas fica difícil de manter
-para listas longas — prefira `appsettings.json` para arrays extensos e reserve env vars para
-valores escalares (connection strings, chaves, URLs de dependência).
-
-## `dotnet user-secrets` — segredos em desenvolvimento local
-
-Nunca peça para um desenvolvedor colar uma senha real em `appsettings.Development.json`. O Secret
-Manager guarda o valor fora do repositório, em `~/.microsoft/usersecrets/<UserSecretsId>/secrets.json`
-no SO do desenvolvedor.
-
-```bash
-# Once per project — writes a UserSecretsId to the .csproj
-dotnet user-secrets init --project src/ProjectName.Api
-
-# Set a local secret
-dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Host=localhost;Port=5432;Database=orders_dev;Username=dev;Password=dev123" \
-  --project src/ProjectName.Api
-
-# List what is configured locally
-dotnet user-secrets list --project src/ProjectName.Api
-```
-
-```xml
-<!-- ProjectName.Api.csproj — generated by init; keep it versioned (it is only a GUID, not the secret) -->
-<PropertyGroup>
-  <UserSecretsId>a1b2c3d4-e5f6-7890-abcd-ef1234567890</UserSecretsId>
-</PropertyGroup>
-```
-
-O Secret Manager só é carregado quando `IHostEnvironment.EnvironmentName` é `Development`
-(comportamento padrão do `WebApplication.CreateBuilder`) — não precisa de código extra para ligá-lo
-nem risco de vazar para produção. Ele não criptografa o conteúdo: é proteção contra "vazar para o
-repositório", não contra acesso à máquina local.
-
-## Segredos fora do desenvolvimento local
-
-Para staging/produção, variável de ambiente injetada pelo orquestrador a partir de um cofre
-(Kubernetes Secret sincronizado de um vault, Azure Key Vault, AWS Secrets Manager) é o padrão —
-detalhes de integração com um provedor específico de vault ficam fora do escopo desta skill;
-o que é normativo aqui é que o segredo **nunca** chega até o `appsettings.json` versionado, entra
-sempre via `IConfiguration` (env var ou provider de configuração registrado explicitamente).
 
 ## Checklist
 
-- [ ] Nenhum `appsettings*.json` versionado contém connection string, chave de API ou token.
-- [ ] `dotnet user-secrets` está inicializado no projeto de entrada para segredos de desenvolvimento.
-- [ ] Variáveis de ambiente de produção usam `__` para hierarquia, não `:`.
-- [ ] Config não sensível (timeouts, nomes de fila, feature flags) fica em `appsettings.json`, não
-      vira variável de ambiente por padronização artificial.
-- [ ] `.gitignore` cobre qualquer `appsettings.Local.json` ou similar usado como atalho pessoal.
+- [ ] Nenhum segredo nem chave de segredo em `appsettings*.json`.
+- [ ] `UserSecretsId` no `ProjectName.Api.csproj`.
+- [ ] Options novas com `ValidateOnStart`.
+- [ ] Variáveis de ambiente de deploy documentadas.

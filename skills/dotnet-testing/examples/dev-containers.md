@@ -1,16 +1,13 @@
-# Dev Containers — Ambiente de Desenvolvimento e Testes
+# Dev Containers
 
-O Dev Container dá a todo desenvolvedor (e ao Codespaces) o mesmo SDK, as mesmas ferramentas e os
-mesmos serviços de apoio. Os testes continuam os mesmos de `integration-tests.md` e
-`e2e-tests.md`; o que muda é de onde vem o PostgreSQL:
+O Dev Container dá a todos o mesmo SDK, ferramentas e serviços. Os testes não mudam; muda só a
+origem do PostgreSQL.
 
 | Ambiente | PostgreSQL dos testes |
 |---|---|
-| Máquina com Docker | Testcontainers sobe um container por execução |
-| Dev Container | Serviço `postgres` do compose do Dev Container, indicado por variável de ambiente |
-| CI | Testcontainers (padrão) |
-
-As tags de imagem seguem `dotnet-dependency-config/examples/local-infrastructure.md`.
+| Máquina com Docker | Testcontainers |
+| Dev Container | Serviço `postgres` do compose, via `TEST_POSTGRES_CONNECTION` |
+| CI | Testcontainers |
 
 ## Estrutura
 
@@ -18,14 +15,9 @@ As tags de imagem seguem `dotnet-dependency-config/examples/local-infrastructure
 .devcontainer/
 ├── devcontainer.json
 └── docker-compose.yml
-tests/
-└── ProjectName.IntegrationTests/
-    └── Base/
-        └── DatabaseFixture.cs          # usa o serviço do compose se a variável existir
 ```
 
-O Dev Container fica na raiz do repositório, não dentro de um projeto de teste: ele é o ambiente
-de trabalho da solution inteira.
+Fica na raiz do repositório, nunca dentro de um projeto de teste.
 
 ## devcontainer.json
 
@@ -35,20 +27,11 @@ de trabalho da solution inteira.
   "dockerComposeFile": "docker-compose.yml",
   "service": "workspace",
   "workspaceFolder": "/workspaces/projectname",
-  "features": {
-    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {}
-  },
-  "customizations": {
-    "vscode": {
-      "extensions": ["ms-dotnettools.csdevkit"]
-    }
-  },
+  "features": { "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {} },
+  "customizations": { "vscode": { "extensions": ["ms-dotnettools.csdevkit"] } },
   "postCreateCommand": "dotnet tool restore && dotnet restore"
 }
 ```
-
-`docker-outside-of-docker` permite rodar Testcontainers de dentro do Dev Container quando alguém
-quiser o mesmo comportamento da CI.
 
 ## docker-compose.yml
 
@@ -58,8 +41,7 @@ name: projectname-devcontainer
 services:
   workspace:
     image: mcr.microsoft.com/devcontainers/dotnet:10.0
-    volumes:
-      - ..:/workspaces/projectname:cached
+    volumes: ["..:/workspaces/projectname:cached"]
     command: sleep infinity
     environment:
       ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=projectname;Username=projectname;Password=projectname
@@ -68,10 +50,8 @@ services:
       RabbitMQ__UserName: projectname
       RabbitMQ__Password: projectname
     depends_on:
-      postgres:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
+      postgres: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
 
   postgres:
     image: postgres:18
@@ -79,13 +59,11 @@ services:
       POSTGRES_USER: projectname
       POSTGRES_PASSWORD: projectname
       POSTGRES_DB: projectname
+    tmpfs: [/var/lib/postgresql]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U projectname"]
       interval: 5s
-      timeout: 5s
       retries: 10
-    tmpfs:
-      - /var/lib/postgresql/data
 
   rabbitmq:
     image: rabbitmq:4.3-management-alpine
@@ -95,83 +73,19 @@ services:
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 10s
-      timeout: 5s
       retries: 10
 ```
 
-Credenciais aqui são só do ambiente descartável de desenvolvimento; nunca as reutilize em outro
-ambiente.
+## Fixture nos dois ambientes
 
-## Fixture que funciona nos dois ambientes
-
-A `DatabaseFixture` de `integration-tests.md` ganha um desvio: se `TEST_POSTGRES_CONNECTION`
-existir, usa o serviço do compose; senão, sobe o Testcontainer. Nos dois casos o schema vem das
-migrations e a limpeza é por `TRUNCATE`.
-
-```csharp
-// tests/ProjectName.IntegrationTests/Base/DatabaseFixture.cs
-public sealed class DatabaseFixture : IAsyncLifetime
-{
-    private const string ExternalConnectionVariable = "TEST_POSTGRES_CONNECTION";
-
-    private readonly PostgreSqlContainer? _container;
-
-    public DatabaseFixture()
-    {
-        var externalConnection = Environment.GetEnvironmentVariable(ExternalConnectionVariable);
-
-        if (string.IsNullOrWhiteSpace(externalConnection))
-            _container = new PostgreSqlBuilder().WithImage("postgres:18").Build();
-        else
-            ConnectionString = externalConnection;
-    }
-
-    public string ConnectionString { get; private set; } = string.Empty;
-
-    public async Task InitializeAsync()
-    {
-        if (_container is not null)
-        {
-            await _container.StartAsync();
-            ConnectionString = _container.GetConnectionString();
-        }
-
-        await using var context = CreateDbContext();
-        await context.Database.MigrateAsync(); // creates the test database if it does not exist
-    }
-
-    public async Task DisposeAsync()
-    {
-        if (_container is not null)
-            await _container.DisposeAsync();
-    }
-
-    public ProjectNameDbContext CreateDbContext()
-        => new(new DbContextOptionsBuilder<ProjectNameDbContext>().UseNpgsql(ConnectionString).Options);
-
-    public async Task ResetDatabaseAsync()
-    {
-        await using var context = CreateDbContext();
-        var tables = context.Model.GetEntityTypes()
-            .Select(entityType => entityType.GetTableName())
-            .Where(tableName => tableName is not null)
-            .Distinct()
-            .Select(tableName => $"\"{tableName}\"");
-
-        await context.Database.ExecuteSqlRawAsync($"TRUNCATE TABLE {string.Join(", ", tables)} CASCADE");
-    }
-}
-```
-
-Os testes não mudam: continuam na `DatabaseCollection`, chamam `ResetDatabaseAsync` no
-`InitializeAsync` e seguem `DisplayName` + `Trait` (`integration-tests.md`).
+`DatabaseFixture` (`integration-tests.md`) lê `TEST_POSTGRES_CONNECTION`: se existir, usa a
+connection string e não cria container; senão, sobe o Testcontainer. Nos dois casos aplica as
+migrations e limpa por `TRUNCATE`.
 
 ## Regras
 
-- Banco de testes separado do banco de desenvolvimento (`projectname_tests`): `TRUNCATE` nunca
-  pode apagar dados com que o desenvolvedor está trabalhando.
-- Schema sempre por migrations; nada de scripts SQL em `docker-entrypoint-initdb.d` que divergem do
-  modelo EF.
-- Dados de teste criados pelo próprio teste (geradores de `Tests.Common`), nunca seed fixo
-  compartilhado.
-- Tags de imagem iguais às de `dotnet-dependency-config/examples/local-infrastructure.md`.
+- Banco de testes separado do de desenvolvimento (`projectname_tests`).
+- Schema só por migrations; nada de script em `docker-entrypoint-initdb.d`.
+- Dados criados pelo próprio teste (geradores de `Tests.Common`), nunca seed compartilhado.
+- Tags iguais às de `dotnet-dependency-config/examples/local-infrastructure.md`.
+- Credenciais só do ambiente descartável.

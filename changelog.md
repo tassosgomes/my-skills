@@ -1,5 +1,48 @@
 # Changelog das skills TSG Flow
 
+## 2026-09-17 — Skills .NET como guia de decisões, Minimal API, UUIDv7 e ArchUnitNET
+
+### Objetivo
+
+As skills .NET passam a registrar só as decisões e convenções do time. Conteúdo que ensinava C# ou
+.NET (pares certo/errado de boas práticas universais, comandos básicos de CLI, explicação de
+padrões e implementações completas de API de biblioteca) foi removido. Total de 6.574 para ~3.160
+linhas.
+
+### Novas decisões
+
+- **Minimal API** substitui controllers: `{Agregado}Endpoints` com `MapGroup`, `TypedResults`,
+  handlers estáticos nomeados e `ProducesProblem`; `AddValidation()` nativo não é usado.
+- **UUIDv7** (`Guid.CreateVersion7()`) para Ids de entidade e de evento; `Guid.NewGuid()` e
+  `DateTime.Now` banidos com `Microsoft.CodeAnalysis.BannedApiAnalyzers` + `BannedSymbols.txt`.
+  O outbox passa a ser ordenado pelo Id.
+- **ArchUnitNET** (`TngTech.ArchUnitNET.xUnitV3`) em `ProjectName.ArchitectureTests`, com regras
+  para API simples, Monolito Modular e Microsserviços (`dotnet-testing/examples/architecture-tests.md`).
+- **xUnit v3** no Microsoft.Testing.Platform (`global.json` com `test.runner`), `IAsyncLifetime`
+  com `ValueTask` e `TestContext.Current.CancellationToken`.
+
+### Correções de inconsistência
+
+- Policies registradas com `Policies.*`/`Roles.*` também em `dotnet-program-setup`.
+- Monolito Modular alinhado ao resto: Ids `Guid`, rotas `v1/...`, endpoints Minimal API.
+- Resiliência HTTP unificada em `Microsoft.Extensions.Http.Resilience`.
+- Volume do PostgreSQL 18 em `/var/lib/postgresql`.
+- Testcontainers com imagem no construtor (`new PostgreSqlBuilder("postgres:18")`).
+
+### Removidos
+
+- `dotnet-code-quality/examples/best-practices.md`, `dotnet-dependency-config/examples/nuget-library.md`
+  e `di-patterns.md` (lifetimes foram para o `SKILL.md`).
+- `references/full-guide.md` de observability, performance e production-readiness; o que era
+  decisão foi para o `SKILL.md`, e ficaram `observability/references/health-checks.md` e
+  `production-readiness/references/deploy-gate.md`.
+
+### Validação
+
+Solution de rascunho em .NET 10.0.400 compilando o endpoint Minimal API, o `BannedSymbols.txt`
+(erro RS0030 em `Guid.NewGuid()`), as fixtures xUnit v3 com Testcontainers e as regras ArchUnitNET do
+exemplo; as regras detectaram as violações introduzidas de propósito.
+
 ## 2026-09-16 — Skills .NET alinhadas à organização do fc-api-catalog
 
 ### Objetivo
