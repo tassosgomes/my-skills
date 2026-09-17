@@ -283,7 +283,7 @@ public sealed class CreateCategory : ICreateCategory
         catch (Exception ex)
         {
             activity?.SetStatus(ActivityStatusCode.Error, ex.GetType().Name);
-            activity?.AddException(ex); // .NET 9+; on .NET 8 use RecordException from OpenTelemetry.Api
+            activity?.AddException(ex);
             throw;
         }
     }

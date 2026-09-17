@@ -1,14 +1,19 @@
 # Estrutura da Solution — API simples
 
 Layout `src/` + `tests/`, um projeto por camada e um projeto de infraestrutura por tecnologia.
-Os testes espelham a árvore de `src/`.
+Os testes espelham a árvore de `src/`. Plataforma: .NET 10 (LTS), com SDK, target framework e
+versões de pacotes fixados na raiz do repositório (ver `Versões fixadas`).
 
 ## Árvore
 
 ```text
-ProjectName.sln
+ProjectName.slnx
+global.json                             # SDK .NET 10 fixado
+Directory.Build.props                   # net10.0, nullable, warnings como erro — vale para todos os projetos
+Directory.Packages.props                # versão de cada pacote NuGet em um só lugar
+.editorconfig
 docker-compose.yml                      # infraestrutura local (dotnet-dependency-config)
-.config/dotnet-tools.json               # dotnet-ef fixado
+.config/dotnet-tools.json               # dotnet-ef fixado na mesma versão do EF Core
 src/
 ├── ProjectName.Domain/
 │   ├── SeedWork/                       # Entity, AggregateRoot, ValueObject, DomainEvent, IUnitOfWork, repositórios genéricos
@@ -72,10 +77,72 @@ Regras de nomes das pastas:
   namespace `...UseCases.Category` colida com a classe `Category` e obrigue alias como
   `using DomainEntity = ...`.
 
+## Versões fixadas
+
+Projetos `.csproj` não declaram `TargetFramework` nem versão de pacote: os dois vêm dos arquivos da
+raiz. Assim nenhum projeto da solution fica em outra versão por esquecimento.
+
+```json
+// global.json — every developer and the CI build with the same SDK band
+{
+  "sdk": {
+    "version": "10.0.100",
+    "rollForward": "latestFeature"
+  }
+}
+```
+
+```xml
+<!-- Directory.Build.props -->
+<Project>
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+  </PropertyGroup>
+</Project>
+```
+
+```xml
+<!-- Directory.Packages.props — Central Package Management -->
+<Project>
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Microsoft and EF Core packages stay on major 10, aligned with the target framework -->
+    <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.0" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.0" />
+    <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.0" />
+    <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.0" />
+    <!-- Third-party packages are pinned here as well, never in a .csproj -->
+  </ItemGroup>
+</Project>
+```
+
+```xml
+<!-- Any .csproj: no version attribute -->
+<ItemGroup>
+  <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+</ItemGroup>
+```
+
+As versões acima marcam a major; use o patch mais recente da linha 10 ao criar o projeto e
+atualize todos juntos no `Directory.Packages.props`. `EnforceCodeStyleInBuild` faz o build aplicar
+as regras do `.editorconfig`, incluindo `IDE0130` (namespace igual à pasta,
+`dotnet-code-quality`).
+
 ## Comandos
 
 ```bash
-dotnet new sln -n ProjectName
+dotnet new globaljson --sdk-version 10.0.100 --roll-forward latestFeature
+dotnet new buildprops
+dotnet new packagesprops
+dotnet new editorconfig
+
+dotnet new sln -n ProjectName          # .NET 10 SDK creates ProjectName.slnx
 
 dotnet new classlib -n ProjectName.Domain -o src/ProjectName.Domain
 dotnet new classlib -n ProjectName.Application -o src/ProjectName.Application

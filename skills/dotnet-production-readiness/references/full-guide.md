@@ -283,11 +283,13 @@ indispensável ao diagnóstico.
 - [ ] HTTPS obrigatório na borda.
 - [ ] Segredos no orquestrador ou cofre (Kubernetes Secret, Vault); nenhum em `appsettings*.json` versionado.
 - [ ] Rate limiting nos endpoints expostos.
+- [ ] Documento OpenAPI e Scalar expostos só em Development.
 - [ ] Input validado (FluentValidation e invariantes de domínio) e erros em `ProblemDetails` sem stack trace.
 
 ### Entrega
 - [ ] Build, testes unitários, de integração e end-to-end passaram.
-- [ ] Dockerfile multi-stage, imagem sem SDK e usuário não root.
+- [ ] .NET 10: `net10.0`, SDK do `global.json` e pacotes na major 10 (`Directory.Packages.props`).
+- [ ] Dockerfile multi-stage com `mcr.microsoft.com/dotnet/sdk:10.0` no build e `mcr.microsoft.com/dotnet/aspnet:10.0` no runtime, usuário não root (`app`).
 - [ ] Variáveis de ambiente documentadas.
 - [ ] Estratégia de rollback definida, incluindo compatibilidade das migrations.
 - [ ] Smoke test pós-deploy.

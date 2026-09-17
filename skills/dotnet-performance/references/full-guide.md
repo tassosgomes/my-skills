@@ -299,7 +299,7 @@ Regras:
 - Todo item tem TTL absoluto; sliding expiration só junto de um absoluto.
 - Invalidação acontece depois do commit. Se outro serviço altera o mesmo dado, invalide pelo evento
   (consumidor do outbox), não por TTL longo.
-- Cache miss sob carga pode gerar *stampede*; em .NET 9+ avalie `HybridCache`, que serializa a
+- Cache miss sob carga pode gerar *stampede*; avalie `HybridCache` (`Microsoft.Extensions.Caching.Hybrid`), que serializa a
   recomputação por chave.
 - Não cacheie respostas com dado por usuário sem incluir o usuário na chave.
 

@@ -68,6 +68,17 @@ depender de bibliotecas com licença comercial ou de biblioteca própria.
 - Identificadores, comentários de código, mensagens de log e de exceção passam a ser em inglês em
   todos os exemplos .NET, conforme a regra da `dotnet-code-quality`.
 
+### Plataforma .NET 10
+
+- .NET 10 (LTS) como versão oficial: `net10.0`, SDK em `global.json`, target framework em
+  `Directory.Build.props` e versões de pacote centralizadas em `Directory.Packages.props`.
+  .NET 8 e .NET 9 perdem suporte em 10/11/2026.
+- Solution em `.slnx`, `dotnet-ef` e pacotes Microsoft/EF Core na major 10, Dev Container
+  `dotnet:10.0`; removidas as ressalvas para .NET 8/9.
+- `dotnet-program-setup`: Swashbuckle substituído por OpenAPI nativo (`AddOpenApi`/`MapOpenApi`) com
+  Scalar como interface, só em Development.
+- `restful-api`: geração de OpenAPI em .NET aponta para `Microsoft.AspNetCore.OpenApi`.
+
 ## 2026-08-12 — Lint Spectral para contratos OpenAPI
 
 ### Objetivo

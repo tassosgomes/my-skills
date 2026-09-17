@@ -12,6 +12,11 @@ componente alterado; os exemplos completos estão em `examples/`.
 
 ## Baseline oficial
 
+- **Plataforma:** .NET 10 (LTS, suporte até novembro de 2028) com `net10.0` e C# 14. SDK fixado em
+  `global.json`, target framework em `Directory.Build.props` e versões de pacote em
+  `Directory.Packages.props` (`dotnet-architecture/examples/project-setup.md`). Pacotes
+  `Microsoft.*`, EF Core, provider do banco e `dotnet-ef` na major 10. .NET 8 e .NET 9 perdem
+  suporte em 10/11/2026: serviços nessas versões migram para o .NET 10, não para o 9.
 - **Banco:** PostgreSQL para novos serviços; Oracle somente para legado, integração existente ou
   aprovação explícita.
 - **ORM:** Entity Framework Core; configure entidades com Fluent API e registre o contexto via DI.
@@ -90,6 +95,8 @@ pacotes; não introduza upgrade amplo como efeito colateral de uma mudança loca
 ## Checklist do diff
 
 - [ ] Pacote e versão são necessários para o requisito.
+- [ ] Versão declarada só em `Directory.Packages.props`; nenhum `.csproj` com `Version` ou `TargetFramework` próprio.
+- [ ] Pacotes `Microsoft.*`, EF Core e `dotnet-ef` estão na major 10.
 - [ ] PostgreSQL/Oracle foi escolhido conforme a política.
 - [ ] Connection strings e secrets não estão no código nem em `appsettings*.json` versionado.
 - [ ] Segredo de desenvolvimento local usa `dotnet user-secrets`, não arquivo versionado.

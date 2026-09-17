@@ -133,7 +133,7 @@ e permanecem com esse namespace nesta etapa.
 | :star: [dotnet-observability](#dotnet-observability) | Normativo | Health Checks, Kubernetes probes, OpenTelemetry logging integrado a tracing |
 | :star: [dotnet-performance](#dotnet-performance) | Code review | EF Core otimizado, paginação offset/keyset, cache de Output (Memory/Valkey), HttpClient com resilience handler, IAsyncEnumerable |
 | :star: [dotnet-production-readiness](#dotnet-production-readiness) | Checklist | OpenTelemetry OTLP, logs JSON estruturados, sanitização de dados sensíveis, deploy checklist |
-| :star: [dotnet-program-setup](#dotnet-program-setup) | Normativo | Organização do `Program.cs` em extensions por concern (CORS, auth, Swagger, health checks, pipeline) |
+| :star: [dotnet-program-setup](#dotnet-program-setup) | Normativo | Organização do `Program.cs` em extensions por concern (CORS, auth, OpenAPI/Scalar, health checks, pipeline) |
 | :star: [dotnet-testing](#dotnet-testing) | Normativo | xUnit + AwesomeAssertions + Moq + Bogus, fixtures em camadas, integração e E2E da API com Testcontainers |
 
 ### React / Vite / TypeScript
@@ -411,7 +411,7 @@ security-audit-workflow/
 | `dotnet-observability` | Health checks, Kubernetes probes, OpenTelemetry logging |
 | `dotnet-performance` | EF Core queries, caching, HttpClient, paginação |
 | `dotnet-production-readiness` | OTLP, logs JSON, sanitização, deploy checklist |
-| `dotnet-program-setup` | Organização do `Program.cs`, extensions por concern (CORS, auth, Swagger, health checks) |
+| `dotnet-program-setup` | Organização do `Program.cs`, extensions por concern (CORS, auth, OpenAPI/Scalar, health checks) |
 | `dotnet-testing` | xUnit, fixtures, Testcontainers, E2E da API |
 
 **Quando acionar:** ao iniciar qualquer tarefa .NET e querer direcionar para o módulo certo sem abrir todos.
@@ -456,7 +456,7 @@ security-audit-workflow/
 
 **Papel:** Define o baseline de dependências e configuração de infraestrutura para projetos .NET C# / ASP.NET Core.
 
-**Stack baseline:** EF Core + Npgsql (PostgreSQL padrão; Oracle como alternativa suportada), mapeamento manual, FluentValidation, Polly (retry + circuit breaker), `RabbitMQ.Client` com outbox e inbox, `IOptions<T>` para configuração tipada.
+**Stack baseline:** .NET 10 (LTS) com SDK, target framework e pacotes fixados na raiz (`global.json`, `Directory.Build.props`, `Directory.Packages.props`), EF Core + Npgsql (PostgreSQL padrão; Oracle como alternativa suportada), mapeamento manual, FluentValidation, Polly (retry + circuit breaker), `RabbitMQ.Client` com outbox e inbox, `IOptions<T>` para configuração tipada.
 
 **Configurações padronizadas:**
 - **EF Core:** `AsNoTracking` em listagens; migrations versionadas; Unit of Work explícito que grava dados e outbox na mesma transação; interceptors para auditoria; troubleshooting normativo para migration com sintaxe incompatível ou que não aplica (versão do `dotnet-ef`, `IDesignTimeDbContextFactory`, `has-pending-model-changes`).
@@ -515,12 +515,12 @@ security-audit-workflow/
 **Papel:** Mantém `Program.cs` pequeno e legível — cada concern de bootstrap vira um método de extensão em arquivo próprio, `Program.cs` só orquestra as chamadas.
 
 **Pilares normativos:**
-- Um método de extensão por concern (`AddUseCasesConfiguration`, `AddErrorHandlingConfiguration`, `AddCorsConfiguration`, `AddAuthenticationConfiguration`, `AddSwaggerConfiguration`, `AddPersistenceConfiguration`, `AddObservabilityConfiguration`, `AddHealthCheckConfiguration`), agrupados em `Extensions/`.
+- Um método de extensão por concern (`AddUseCasesConfiguration`, `AddErrorHandlingConfiguration`, `AddCorsConfiguration`, `AddAuthenticationConfiguration`, `AddOpenApiConfiguration`, `AddPersistenceConfiguration`, `AddObservabilityConfiguration`, `AddHealthCheckConfiguration`), agrupados em `Extensions/`.
 - Convenção de nomes fixa: `AddXxxConfiguration` para registro em `IServiceCollection`, `UseXxx`/`MapXxx` para o pipeline.
 - Pipeline de middlewares centralizado em um único `UseApplicationPipeline`, documentando a ordem real de execução.
 - Nenhum segredo, connection string ou lógica condicional de ambiente solta direto em `Program.cs`.
 
-**Quando acionar:** criar um novo serviço, adicionar um concern novo ao bootstrap (CORS, auth, Swagger, health checks), ou revisar um `Program.cs` que cresceu demais.
+**Quando acionar:** criar um novo serviço, adicionar um concern novo ao bootstrap (CORS, auth, OpenAPI, health checks), ou revisar um `Program.cs` que cresceu demais.
 
 ---
 

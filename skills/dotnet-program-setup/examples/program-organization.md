@@ -38,15 +38,9 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("AdminOnly", policy => policy.RequireRole("admin"));
 });
 
-builder.Services.AddSwaggerGen(options =>
+builder.Services.AddOpenApi(options =>
 {
-    options.SwaggerDoc("v1", new OpenApiInfo { Title = "ProjectName API", Version = "v1" });
-    options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
-    {
-        Type = SecuritySchemeType.Http,
-        Scheme = "bearer",
-        BearerFormat = "JWT"
-    });
+    options.AddDocumentTransformer<BearerSecuritySchemeTransformer>();
 });
 
 builder.Services.AddDbContext<ProjectNameDbContext>(options =>
@@ -77,8 +71,8 @@ var app = builder.Build();
 
 if (app.Environment.IsDevelopment())
 {
-    app.UseSwagger();
-    app.UseSwaggerUI();
+    app.MapOpenApi();
+    app.MapScalarApiReference();
 }
 
 app.UseHttpsRedirection();
@@ -107,7 +101,7 @@ builder.Services
     .AddUseCasesConfiguration()
     .AddCorsConfiguration(builder.Configuration)
     .AddAuthenticationConfiguration(builder.Configuration)
-    .AddSwaggerConfiguration()
+    .AddOpenApiConfiguration()
     .AddPersistenceConfiguration(builder.Configuration)
     .AddMessagingConfiguration(builder.Configuration)
     .AddObservabilityConfiguration(builder.Configuration, builder.Environment)
@@ -199,37 +193,67 @@ public static class AuthenticationExtensions
 ```
 
 ```csharp
-// Extensions/SwaggerExtensions.cs
-public static class SwaggerExtensions
+// Extensions/OpenApiExtensions.cs
+// Native OpenAPI (Microsoft.AspNetCore.OpenApi) + Scalar UI (Scalar.AspNetCore); no Swashbuckle.
+public static class OpenApiExtensions
 {
-    public static IServiceCollection AddSwaggerConfiguration(this IServiceCollection services)
+    public static IServiceCollection AddOpenApiConfiguration(this IServiceCollection services)
     {
-        services.AddEndpointsApiExplorer();
-        services.AddSwaggerGen(options =>
+        services.AddOpenApi("v1", options =>
         {
-            options.SwaggerDoc("v1", new OpenApiInfo { Title = "ProjectName API", Version = "v1" });
-            options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
-            {
-                Type = SecuritySchemeType.Http,
-                Scheme = "bearer",
-                BearerFormat = "JWT"
-            });
+            options.AddDocumentTransformer<BearerSecuritySchemeTransformer>();
         });
 
         return services;
     }
 
-    public static IApplicationBuilder UseSwaggerConfiguration(this IApplicationBuilder app, IWebHostEnvironment environment)
+    public static IEndpointRouteBuilder MapOpenApiConfiguration(this IEndpointRouteBuilder endpoints, IWebHostEnvironment environment)
     {
         if (!environment.IsDevelopment())
-            return app;
+            return endpoints;
 
-        app.UseSwagger();
-        app.UseSwaggerUI();
-        return app;
+        endpoints.MapOpenApi();                                  // /openapi/v1.json
+        endpoints.MapOpenApi("/openapi/{documentName}.yaml");    // same document as YAML
+        endpoints.MapScalarApiReference();                       // /scalar
+
+        return endpoints;
     }
 }
 ```
+
+```csharp
+// OpenApi/BearerSecuritySchemeTransformer.cs
+// Declares the JWT scheme so the document and Scalar offer authentication.
+internal sealed class BearerSecuritySchemeTransformer : IOpenApiDocumentTransformer
+{
+    private readonly IAuthenticationSchemeProvider _authenticationSchemeProvider;
+
+    public BearerSecuritySchemeTransformer(IAuthenticationSchemeProvider authenticationSchemeProvider)
+        => _authenticationSchemeProvider = authenticationSchemeProvider;
+
+    public async Task TransformAsync(OpenApiDocument document, OpenApiDocumentTransformerContext context, CancellationToken cancellationToken)
+    {
+        var schemes = await _authenticationSchemeProvider.GetAllSchemesAsync();
+        if (schemes.All(scheme => scheme.Name != JwtBearerDefaults.AuthenticationScheme))
+            return;
+
+        document.Components ??= new OpenApiComponents();
+        document.Components.SecuritySchemes ??= new Dictionary<string, IOpenApiSecurityScheme>();
+        document.Components.SecuritySchemes[JwtBearerDefaults.AuthenticationScheme] = new OpenApiSecurityScheme
+        {
+            Type = SecuritySchemeType.Http,
+            Scheme = "bearer",
+            BearerFormat = "JWT",
+            In = ParameterLocation.Header
+        };
+    }
+}
+```
+
+O .NET 10 gera OpenAPI 3.1 com `Microsoft.OpenApi` 2.x; exemplos antigos baseados em
+`Microsoft.OpenApi.Models` e Swashbuckle não se aplicam. Para versionar o contrato gerado (fluxo
+code-first da `restful-api`), adicione `Microsoft.Extensions.ApiDescription.Server` ao projeto da
+Api: o documento é gravado no build e pode ser validado com Spectral no CI.
 
 ```csharp
 // Extensions/PersistenceExtensions.cs
@@ -327,7 +351,6 @@ public static class MiddlewarePipelineExtensions
     public static WebApplication UseApplicationPipeline(this WebApplication app, IWebHostEnvironment environment)
     {
         app.UseExceptionHandler();
-        app.UseSwaggerConfiguration(environment);
         app.UseHttpsRedirection();
         app.UseCorsConfiguration();
         app.UseAuthentication();
@@ -335,6 +358,7 @@ public static class MiddlewarePipelineExtensions
 
         app.MapControllers();
         app.MapHealthCheckConfiguration();
+        app.MapOpenApiConfiguration(environment);
 
         return app;
     }

@@ -30,12 +30,12 @@ configuram a infraestrutura, testes validam o comportamento e production-readine
 |---|-------|--------|
 | 1 | **dotnet-architecture** | Clean Architecture, layout `src/`+`tests/`, SeedWork e agregados, um caso de uso por classe (sem MediatR), Repository por agregado, eventos de domínio, API e envelope de resposta, error handling |
 | 2 | **dotnet-code-quality** | Naming conventions (pastas = namespace, sufixo `Async`), coding standards, async/await, CancellationToken, DI, SOLID, estilo de codigo |
-| 3 | **dotnet-dependency-config** | Pacotes recomendados, EF Core (PostgreSQL padrao / Oracle alternativo), Unit of Work, registro na DI, RabbitMQ (`RabbitMQ.Client`), outbox e inbox, connection strings, library authoring (NuGet) |
+| 3 | **dotnet-dependency-config** | Plataforma .NET 10 e versões centralizadas, pacotes recomendados, EF Core (PostgreSQL padrao / Oracle alternativo), Unit of Work, registro na DI, RabbitMQ (`RabbitMQ.Client`), outbox e inbox, connection strings, library authoring (NuGet) |
 | 4 | **dotnet-observability** | Health checks (liveness/readiness), Kubernetes probes, metricas, logging integrado com tracing (scopes, ActivitySource) |
 | 5 | **dotnet-performance** | EF Core otimizado (AsNoTracking, projections, pagination, bulk), caching (Memory/Valkey), HttpClient (IHttpClientFactory, Polly) |
 | 6 | **dotnet-testing** | Unitarios (xUnit + AwesomeAssertions + Moq + Bogus, fixtures em camadas), integracao de casos de uso e repositorios (Testcontainers PostgreSQL), E2E da API (WebApplicationFactory + Testcontainers), Dev Containers |
 | 7 | **dotnet-production-readiness** | OpenTelemetry (OTLP), logging estruturado, sanitizacao de dados, niveis de log, checklist consolidado de deploy |
-| 8 | **dotnet-program-setup** | Organizacao do `Program.cs`: metodos de extensao por concern (CORS, autenticacao, Swagger, health checks, pipeline de middlewares) |
+| 8 | **dotnet-program-setup** | Organizacao do `Program.cs`: metodos de extensao por concern (CORS, autenticacao, OpenAPI/Scalar, health checks, pipeline de middlewares) |
 
 ## Decisão rápida
 
@@ -59,6 +59,7 @@ configuram a infraestrutura, testes validam o comportamento e production-readine
 | Registrar casos de uso e repositórios na DI | dotnet-dependency-config |
 | Publicar/consumir RabbitMQ, outbox, inbox, DLQ | dotnet-dependency-config |
 | Gerenciar pacotes NuGet | dotnet-dependency-config |
+| Fixar versão do .NET, SDK e pacotes (global.json, Directory.*.props) | dotnet-dependency-config |
 | Criar biblioteca NuGet | dotnet-dependency-config |
 | Configurar connection strings, appsettings ou segredos | dotnet-dependency-config |
 | Configurar dotnet user-secrets | dotnet-dependency-config |
@@ -81,7 +82,7 @@ configuram a infraestrutura, testes validam o comportamento e production-readine
 | Sanitizar dados em logs durante implementação | dotnet-observability |
 | Preparar deploy para producao | dotnet-production-readiness |
 | Validar checklist pre-deploy | dotnet-production-readiness |
-| Organizar Program.cs em extensions (CORS, auth, Swagger, etc.) | dotnet-program-setup |
+| Organizar Program.cs em extensions (CORS, auth, OpenAPI, etc.) | dotnet-program-setup |
 | Program.cs grande demais / dificil de ler | dotnet-program-setup |
 
 ---
@@ -95,6 +96,6 @@ configuram a infraestrutura, testes validam o comportamento e production-readine
 | Evento de domínio publicado ou consumido | `dotnet-architecture` | Agregado levanta o evento; outbox/inbox ficam na dependency-config |
 | Bug de performance | `dotnet-dependency-config` | Só quando a causa estiver na infraestrutura |
 | Preparação para deploy | `dotnet-observability` ou `dotnet-testing` | Apenas pelo item concreto do gate |
-| Novo serviço/projeto (bootstrap) | `dotnet-program-setup` | Registrar CORS/auth/Swagger/health checks já organizados desde o início |
+| Novo serviço/projeto (bootstrap) | `dotnet-program-setup` | Registrar CORS/auth/OpenAPI/health checks já organizados desde o início |
 
 Se nenhuma combinação se encaixar, selecione somente a skill mais próxima e declare a lacuna.

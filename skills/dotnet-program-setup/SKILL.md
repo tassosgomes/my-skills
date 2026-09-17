@@ -1,6 +1,6 @@
 ---
 name: dotnet-program-setup
-description: "Use quando uma tarefa .NET adiciona, altera ou revisa configuração de bootstrap em Program.cs: CORS, autenticação/autorização, Swagger/OpenAPI, health checks, middlewares, registro de DI por concern. Não use para regra de negócio, endpoint ou arquitetura de camadas — isso é dotnet-architecture."
+description: "Use quando uma tarefa .NET adiciona, altera ou revisa configuração de bootstrap em Program.cs: CORS, autenticação/autorização, OpenAPI/Scalar, health checks, middlewares, registro de DI por concern. Não use para regra de negócio, endpoint ou arquitetura de camadas — isso é dotnet-architecture."
 metadata:
   group: dotnet
 ---
@@ -14,7 +14,7 @@ chamadas de extensão; nunca contém a configuração em si.**
 
 ## Regra central
 
-Cada concern de bootstrap (controllers, tratamento de erros, casos de uso, CORS, autenticação, Swagger, health checks, persistência, mensageria,
+Cada concern de bootstrap (controllers, tratamento de erros, casos de uso, CORS, autenticação, OpenAPI, health checks, persistência, mensageria,
 observabilidade, rate limiting, versionamento de API) vira **um método de extensão em um arquivo
 próprio**, agrupado em uma pasta `Extensions/` (ou `HostConfiguration/`) na raiz do projeto de
 entrada (API/Host). `Program.cs` chama esses métodos em sequência e nada mais.
@@ -28,7 +28,7 @@ ProjectName.API/
 │   ├── UseCasesExtensions.cs           # AddUseCasesConfiguration (casos de uso + validators)
 │   ├── CorsExtensions.cs               # AddCorsConfiguration
 │   ├── AuthenticationExtensions.cs     # AddAuthenticationConfiguration
-│   ├── SwaggerExtensions.cs            # AddSwaggerConfiguration
+│   ├── OpenApiExtensions.cs            # AddOpenApiConfiguration (OpenAPI nativo + Scalar)
 │   ├── HealthCheckExtensions.cs        # AddHealthCheckConfiguration
 │   ├── PersistenceExtensions.cs        # AddPersistenceConfiguration (DbContext, repositórios, UnitOfWork)
 │   ├── MessagingExtensions.cs          # AddMessagingConfiguration (RabbitMQ, outbox worker, consumidores)
@@ -60,7 +60,7 @@ builder.Services
     .AddUseCasesConfiguration()
     .AddCorsConfiguration(builder.Configuration)
     .AddAuthenticationConfiguration(builder.Configuration)
-    .AddSwaggerConfiguration()
+    .AddOpenApiConfiguration()
     .AddPersistenceConfiguration(builder.Configuration)
     .AddMessagingConfiguration(builder.Configuration)
     .AddObservabilityConfiguration(builder.Configuration, builder.Environment)
@@ -75,7 +75,7 @@ app.Run();
 
 ## Regras não negociáveis
 
-1. Nenhuma configuração de CORS, autenticação, Swagger, DbContext, mensageria ou observabilidade
+1. Nenhuma configuração de CORS, autenticação, OpenAPI, DbContext, mensageria ou observabilidade
    fica inline em `Program.cs` — sempre em um método de extensão nomeado pelo concern.
 2. Um arquivo de extensão cobre um concern só; não crie um `ServiceExtensions.cs` genérico que
    acumula tudo — isso apenas move o problema de arquivo, sem resolvê-lo.
@@ -86,8 +86,14 @@ app.Run();
    `UseXxx` e são citados explicitamente na ordem do pipeline — nunca adicionados via lambda anônima
    solta em `Program.cs`.
 5. `Program.cs` não contém `if`/`switch` de ambiente espalhados; a extensão recebe
-   `IWebHostEnvironment` e decide internamente (ex.: `AddSwaggerConfiguration` só mapeia UI se
+   `IWebHostEnvironment` e decide internamente (ex.: `MapOpenApiConfiguration` só mapeia o documento e o Scalar se
    `environment.IsDevelopment()`).
+
+## Documentação da API
+
+Use o OpenAPI nativo (`Microsoft.AspNetCore.OpenApi`, `AddOpenApi`/`MapOpenApi`) com Scalar
+(`Scalar.AspNetCore`) como interface, exposto só em Development. Não adicione Swashbuckle nem NSwag
+em projetos novos.
 
 ## Referências sob demanda
 
@@ -98,7 +104,7 @@ app.Run();
 ## Checklist do diff
 
 - [ ] `Program.cs` não ultrapassa ~40 linhas e só encadeia chamadas de extensão.
-- [ ] Cada concern novo (CORS, auth, Swagger, health checks, etc.) tem seu próprio arquivo em `Extensions/`.
+- [ ] Cada concern novo (CORS, auth, OpenAPI, health checks, etc.) tem seu próprio arquivo em `Extensions/`.
 - [ ] Nomes seguem `AddXxxConfiguration` / `UseXxx`.
 - [ ] Nenhum segredo ou connection string é lido/hardcoded direto em `Program.cs`.
 - [ ] A ordem de `Use*`/`Map*` no pipeline reflete a ordem real de execução.

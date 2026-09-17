@@ -57,7 +57,7 @@ name: projectname-devcontainer
 
 services:
   workspace:
-    image: mcr.microsoft.com/devcontainers/dotnet:9.0
+    image: mcr.microsoft.com/devcontainers/dotnet:10.0
     volumes:
       - ..:/workspaces/projectname:cached
     command: sleep infinity

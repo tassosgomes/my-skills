@@ -236,7 +236,7 @@ projeto, ele gera migrations com a sintaxe da versão instalada — não da vers
 ```bash
 # Once per repository
 dotnet new tool-manifest
-dotnet tool install dotnet-ef --version 9.0.0   # same major as Microsoft.EntityFrameworkCore.Design
+dotnet tool install dotnet-ef --version 10.0.0  # same version as Microsoft.EntityFrameworkCore.Design in Directory.Packages.props
 
 # On every fresh clone or CI pipeline
 dotnet tool restore
@@ -256,7 +256,7 @@ dotnet tool list
 
 As duas versões devem ter a mesma major (idealmente a mesma minor). Um `dotnet-ef` mais novo que o
 pacote `Design` do projeto é a causa mais frequente de migration com API que não existe na versão
-do projeto (ex.: método novo do EF 9 gerado em um projeto ainda no EF 8).
+do projeto (ex.: API nova do EF Core 10 gerada em um projeto que ainda referencia o EF Core 9).
 
 ### 3. Migration vazia ou que ignora uma alteração real do modelo
 
@@ -270,7 +270,7 @@ dotnet build
 dotnet ef migrations add MigrationName
 ```
 
-### 4. Detectar model desatualizado antes de aplicar (EF Core 8+)
+### 4. Detectar model desatualizado antes de aplicar
 
 ```bash
 dotnet ef migrations has-pending-model-changes
