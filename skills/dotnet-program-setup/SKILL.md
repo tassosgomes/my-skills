@@ -1,60 +1,45 @@
 ---
 name: dotnet-program-setup
-description: "Use quando uma tarefa .NET adiciona, altera ou revisa configuração de bootstrap em Program.cs: CORS, autenticação/autorização, Swagger/OpenAPI, health checks, middlewares, registro de DI por concern. Não use para regra de negócio, endpoint ou arquitetura de camadas — isso é dotnet-architecture."
+description: "Use quando uma tarefa .NET adiciona, altera ou revisa o bootstrap em Program.cs: CORS, autenticação/autorização, OpenAPI/Scalar, health checks, mapeamento de endpoints, middlewares, registro de DI por concern. Não use para regra de negócio, endpoint ou arquitetura de camadas — isso é dotnet-architecture."
 metadata:
   group: dotnet
 ---
 
-# Organização do Program.cs — .NET / ASP.NET Core
+# Organização do Program.cs
 
-Esta skill existe porque `Program.cs` cresce por acréscimo: cada feature nova adiciona mais um
-bloco de `builder.Services.AddX()` ou `app.UseX()` até o arquivo virar ilegível e ninguém mais
-enxergar a ordem real do pipeline. A regra é simples e não negociável: **`Program.cs` só orquestra
-chamadas de extensão; nunca contém a configuração em si.**
+**`Program.cs` só encadeia métodos de extensão; nunca contém configuração.**
 
-## Regra central
-
-Cada concern de bootstrap (CORS, autenticação, Swagger, health checks, persistência, mensageria,
-observabilidade, rate limiting, versionamento de API) vira **um método de extensão em um arquivo
-próprio**, agrupado em uma pasta `Extensions/` (ou `HostConfiguration/`) na raiz do projeto de
-entrada (API/Host). `Program.cs` chama esses métodos em sequência e nada mais.
+## Estrutura
 
 ```text
-ProjectName.API/
-├── Program.cs                          # ~20-40 linhas: só chamadas de extensão, nunca configuração
-├── Extensions/
-│   ├── CorsExtensions.cs               # AddCorsConfiguration
-│   ├── AuthenticationExtensions.cs     # AddAuthenticationConfiguration
-│   ├── SwaggerExtensions.cs            # AddSwaggerConfiguration
-│   ├── HealthCheckExtensions.cs        # AddHealthCheckConfiguration
-│   ├── PersistenceExtensions.cs        # AddPersistenceConfiguration (DbContext, repositórios)
-│   ├── MessagingExtensions.cs          # AddMessagingConfiguration (RabbitMQ)
-│   ├── ObservabilityExtensions.cs      # AddObservabilityConfiguration (OpenTelemetry)
-│   └── MiddlewarePipelineExtensions.cs # UseApplicationPipeline (ordem do app.UseX())
+ProjectName.Api/
+├── Program.cs                          # ~15-30 linhas
+└── Extensions/
+    ├── ErrorHandlingExtensions.cs      # AddErrorHandlingConfiguration
+    ├── UseCasesExtensions.cs           # AddUseCasesConfiguration
+    ├── CorsExtensions.cs               # AddCorsConfiguration / UseCorsConfiguration
+    ├── AuthenticationExtensions.cs     # AddAuthenticationConfiguration (policies com Policies/Roles)
+    ├── OpenApiExtensions.cs            # AddOpenApiConfiguration / MapOpenApiConfiguration
+    ├── HealthCheckExtensions.cs        # AddHealthCheckConfiguration / MapHealthCheckConfiguration
+    ├── PersistenceExtensions.cs        # AddPersistenceConfiguration
+    ├── MessagingExtensions.cs          # AddMessagingConfiguration
+    ├── ObservabilityExtensions.cs      # AddObservabilityConfiguration
+    └── MiddlewarePipelineExtensions.cs # UseApplicationPipeline
 ```
 
-## Convenção de nomes
-
-- Métodos que registram serviços no container: `AddXxxConfiguration(this IServiceCollection services, IConfiguration configuration)`, retornando `IServiceCollection` para permitir chaining.
-- Métodos que configuram o pipeline de middlewares: `UseXxx(this IApplicationBuilder app)` ou `UseApplicationPipeline(this WebApplication app)` quando precisam compor vários em ordem.
-- Um método por concern. Se um método passa de ~30 linhas ou mistura dois concerns (ex.: CORS +
-  autenticação no mesmo método), separe.
-- A ordem de chamada em `Program.cs` é a documentação viva do pipeline — mantenha `Add*` antes de
-  `builder.Build()` e `Use*`/`Map*` depois, na ordem real de execução do middleware.
-
-## Antes / Depois
-
-Ver `examples/program-organization.md` para o exemplo completo lado a lado (Program.cs monolítico
-de ~150 linhas vs. a versão organizada). O núcleo da transformação:
+Os endpoints ficam em `Endpoints/` (`dotnet-architecture/examples/api-layer.md`) e entram no
+pipeline por `MapApiEndpoints()`.
 
 ```csharp
-// Program.cs — depois
+// Program.cs
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services
+    .AddErrorHandlingConfiguration()
+    .AddUseCasesConfiguration()
     .AddCorsConfiguration(builder.Configuration)
     .AddAuthenticationConfiguration(builder.Configuration)
-    .AddSwaggerConfiguration()
+    .AddOpenApiConfiguration()
     .AddPersistenceConfiguration(builder.Configuration)
     .AddMessagingConfiguration(builder.Configuration)
     .AddObservabilityConfiguration(builder.Configuration, builder.Environment)
@@ -62,38 +47,62 @@ builder.Services
 
 var app = builder.Build();
 
-app.UseApplicationPipeline(builder.Environment);
+app.UseApplicationPipeline();
 
 app.Run();
+
+public partial class Program;   // exposed to WebApplicationFactory
 ```
 
-## Regras não negociáveis
+## Regras
 
-1. Nenhuma configuração de CORS, autenticação, Swagger, DbContext, mensageria ou observabilidade
-   fica inline em `Program.cs` — sempre em um método de extensão nomeado pelo concern.
-2. Um arquivo de extensão cobre um concern só; não crie um `ServiceExtensions.cs` genérico que
-   acumula tudo — isso apenas move o problema de arquivo, sem resolvê-lo.
-3. Segredos e valores de ambiente não são lidos direto em `Program.cs`; a extensão do concern lê
-   da `IConfiguration` recebida como parâmetro (ver `dotnet-dependency-config` para o padrão de
-   configuração e segredos).
-4. Middlewares custom (exception handler global, correlation id, etc.) recebem seu próprio método
-   `UseXxx` e são citados explicitamente na ordem do pipeline — nunca adicionados via lambda anônima
-   solta em `Program.cs`.
-5. `Program.cs` não contém `if`/`switch` de ambiente espalhados; a extensão recebe
-   `IWebHostEnvironment` e decide internamente (ex.: `AddSwaggerConfiguration` só mapeia UI se
-   `environment.IsDevelopment()`).
+1. Um arquivo e um método por concern; sem `ServiceExtensions.cs` genérico.
+2. Registro: `AddXxxConfiguration(this IServiceCollection services, ...)` retornando
+   `IServiceCollection`. Pipeline: `UseXxx`/`MapXxx`.
+3. Método acima de ~30 linhas ou misturando concerns é dividido.
+4. A extensão lê a `IConfiguration` recebida; `Program.cs` não lê configuração nem segredo.
+5. `Program.cs` não tem `if` de ambiente; a extensão recebe `IHostEnvironment` e decide.
+6. A ordem do pipeline vive só em `UseApplicationPipeline`.
+7. Middleware custom tem seu `UseXxx` e aparece explicitamente nessa ordem.
+8. `AddControllers`/`MapControllers` não são usados.
 
-## Referências sob demanda
+## Pipeline
 
-| Necessidade | Recurso |
-|---|---|
-| Program.cs completo antes/depois, cada extensão implementada | `examples/program-organization.md` |
+```csharp
+// Extensions/MiddlewarePipelineExtensions.cs
+public static WebApplication UseApplicationPipeline(this WebApplication app)
+{
+    app.UseExceptionHandler();
+    app.UseHttpsRedirection();
+    app.UseCorsConfiguration();
+    app.UseAuthentication();
+    app.UseAuthorization();
+
+    app.MapApiEndpoints();
+    app.MapHealthCheckConfiguration();
+    app.MapOpenApiConfiguration(app.Environment);
+
+    return app;
+}
+```
+
+## Documentação da API
+
+- OpenAPI nativo (`Microsoft.AspNetCore.OpenApi`, OpenAPI 3.1) com Scalar (`Scalar.AspNetCore`).
+- Documento e Scalar mapeados só em Development: `/openapi/v1.json`, `/openapi/v1.yaml`, `/scalar`.
+- Esquema JWT declarado por `IOpenApiDocumentTransformer` (`BearerSecuritySchemeTransformer`).
+- Swashbuckle e NSwag não são usados.
+- Para versionar o contrato gerado, `Microsoft.Extensions.ApiDescription.Server` grava o documento
+  no build; Spectral valida na CI (`restful-api`).
+
+## Referência
+
+`examples/program-organization.md`: implementação de cada extensão.
 
 ## Checklist do diff
 
-- [ ] `Program.cs` não ultrapassa ~40 linhas e só encadeia chamadas de extensão.
-- [ ] Cada concern novo (CORS, auth, Swagger, health checks, etc.) tem seu próprio arquivo em `Extensions/`.
-- [ ] Nomes seguem `AddXxxConfiguration` / `UseXxx`.
-- [ ] Nenhum segredo ou connection string é lido/hardcoded direto em `Program.cs`.
-- [ ] A ordem de `Use*`/`Map*` no pipeline reflete a ordem real de execução.
-- [ ] Nenhum arquivo de extensão mistura mais de um concern.
+- [ ] `Program.cs` só encadeia extensões.
+- [ ] Concern novo tem arquivo próprio em `Extensions/` com nome `AddXxxConfiguration`/`UseXxx`/`MapXxx`.
+- [ ] Nenhuma configuração ou segredo lido em `Program.cs`.
+- [ ] Ordem do pipeline só em `UseApplicationPipeline`.
+- [ ] Policies registradas com `Policies.*`/`Roles.*`, sem strings soltas.

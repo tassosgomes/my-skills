@@ -1,161 +1,135 @@
-# Mensageria — RabbitMQ com Rmq.CloudEvents
+# Mensageria — RabbitMQ com `RabbitMQ.Client` 7
 
-> **Rmq.CloudEvents** e a biblioteca padrao para mensageria com RabbitMQ.
-> - NuGet: https://www.nuget.org/packages/Rmq.CloudEvents
-> - GitHub: https://github.com/tassosgomes/dotnet-rabbimq-lib
+Client oficial com API assíncrona, sem wrapper. Garantia: at-least-once; todo consumidor é
+idempotente por natureza ou usa inbox (`outbox-inbox.md`).
 
-### Por que usar Rmq.CloudEvents?
-- **Quorum Queues**: Declaracao automatica de filas quorum com DLQ (`<queue>.dlq`) e DLX
-- **CloudEvents**: Wrapping/unwrapping transparente no formato CloudEvents JSON (`application/cloudevents+json`)
-- **Retry com Polly**: Retry exponencial integrado para publish e consumer handler
-- **DI-first**: Registro nativo para ASP.NET Core e Worker Services
-- **Consumer Pipeline**: ACK automatico em sucesso, NACK (`requeue: false`) em falha final com roteamento para DLQ
+## Estrutura
 
-### Requisitos
-- .NET SDK 8.0+
-- RabbitMQ 3.8+ (quorum queues)
-
-### Instalacao
-```bash
-dotnet add package Rmq.CloudEvents
+```text
+ProjectName.Infra.Messaging/
+├── RabbitMqTelemetry.cs             # ActivitySource "ProjectName.Messaging" + header traceparent
+├── Configuration/
+│   ├── RabbitMqOptions.cs           # SectionName "RabbitMQ", ValidateOnStart
+│   └── EventRoutes.cs               # tipo do evento → routing key
+├── Connection/
+│   └── RabbitMqConnectionProvider.cs  # singleton, uma conexão por processo, criada async sob SemaphoreSlim
+├── Topology/
+│   ├── QueueBinding.cs
+│   └── RabbitMqTopologyInitializer.cs # IHostedService
+├── Publishing/
+│   ├── RabbitMqPublisher.cs         # singleton, um canal com publisher confirms
+│   └── OutboxPublisherWorker.cs
+└── Consuming/
+    ├── IMessageHandler.cs
+    ├── MessageContext.cs
+    ├── RabbitMqConsumerWorker.cs    # BackgroundService genérico por fila
+    └── InboxMessageHandler.cs
 ```
 
-### Configuracao de Servicos
+A regra de negócio do consumo fica em `Api/MessageHandlers/{Evento}MessageHandler.cs`, que só
+chama um caso de uso.
+
+## Decisões
+
+| Tema | Decisão |
+|---|---|
+| Conexão | Uma por processo; `AutomaticRecoveryEnabled` e `TopologyRecoveryEnabled`; `ClientProvidedName` = nome do serviço; nunca `.GetAwaiter().GetResult()` |
+| Canais | Um por consumidor e um para o publisher; canal não é compartilhado entre threads |
+| Exchange de eventos | `{servico}.events`, tipo `topic`, durável |
+| Dead letter | Exchange `{servico}.events.dlx` (`direct`) e fila `{fila}.dlq` por fila |
+| Filas | Quorum, duráveis, nome `{servico}.{evento-em-kebab}` (`catalog.video-encoded`) |
+| Poison message | `x-delivery-limit` = `RabbitMqOptions.DeliveryLimit` (padrão 5) |
+| Routing key | `{servico}.{agregado}.{evento}.v{n}`, mapeada em `EventRoutes`, nunca derivada do nome da classe |
+| Ordem de start | `RabbitMqTopologyInitializer` registrado antes do `OutboxPublisherWorker` e dos consumidores |
+| Publicação | Só pelo `OutboxPublisherWorker`; `publisherConfirmationsEnabled` e `publisherConfirmationTrackingEnabled`; `mandatory: true`; `DeliveryMode.Persistent` |
+| Propriedades | `MessageId` = Id do outbox (= `EventId`, UUIDv7), `Type` = nome do evento, `ContentType` `application/json`, header `traceparent` |
+| Serialização | `System.Text.Json` com `JsonSerializerDefaults.Web` |
+| Prefetch | `RabbitMqOptions.PrefetchCount` (padrão 10) |
+| Consumo | `autoAck: false`; um escopo de DI por mensagem |
+| Retry | Polly `ResiliencePipeline` no consumidor: 3 tentativas, backoff exponencial com jitter a partir de 1 s |
+| Erro permanente | `JsonException`, `EntityValidationException` e `MessageId` inválido não entram no retry |
+| Falha final | Log `Error` e `BasicNackAsync(requeue: false)` → DLQ; nunca `requeue: true` em loop |
+| DLQ | Tem alerta; mensagem em DLQ é incidente |
+
+## Topologia
+
 ```csharp
-using Rmq.CloudEvents.Configuration;
-using Rmq.CloudEvents.Extensions;
+// per binding, inside RabbitMqTopologyInitializer.StartAsync
+await channel.QueueDeclareAsync($"{binding.Queue}.dlq", durable: true, exclusive: false, autoDelete: false,
+    arguments: new Dictionary<string, object?> { ["x-queue-type"] = "quorum" }, cancellationToken: cancellationToken);
+await channel.QueueBindAsync($"{binding.Queue}.dlq", deadLetterExchange, binding.Queue, cancellationToken: cancellationToken);
 
-builder.Services.AddRmqCloudEvents(options =>
-{
-    options.Connection = new RmqConnectionOptions
+await channel.QueueDeclareAsync(binding.Queue, durable: true, exclusive: false, autoDelete: false,
+    arguments: new Dictionary<string, object?>
     {
-        HostName = "localhost",
-        Port = 5672,
-        UserName = "guest",
-        Password = "guest",
-        VirtualHost = "/"
-    };
-
-    options.DefaultCloudEvents = new CloudEventsOptions
-    {
-        Source = new Uri("/my-service", UriKind.Relative),
-        DefaultType = "com.mycompany.events"
-    };
-});
+        ["x-queue-type"] = "quorum",
+        ["x-dead-letter-exchange"] = deadLetterExchange,
+        ["x-dead-letter-routing-key"] = binding.Queue,
+        ["x-delivery-limit"] = options.DeliveryLimit
+    },
+    cancellationToken: cancellationToken);
+await channel.QueueBindAsync(binding.Queue, options.Exchange, binding.RoutingKey, cancellationToken: cancellationToken);
 ```
 
-### Configuracao via appsettings.json
-```json
+## Fluxo de uma entrega
+
+```csharp
+// RabbitMqConsumerWorker<TMessage>.HandleDeliveryAsync (core)
+try
 {
-  "RabbitMQ": {
-    "Connection": {
-      "HostName": "localhost",
-      "Port": 5672,
-      "UserName": "guest",
-      "Password": "guest",
-      "VirtualHost": "/"
-    },
-    "DefaultCloudEvents": {
-      "Source": "/my-service",
-      "DefaultType": "com.mycompany.events"
-    },
-    "DefaultRetry": {
-      "MaxAttempts": 5,
-      "InitialDelay": "00:00:01",
-      "BackoffType": "Exponential",
-      "UseJitter": true
-    }
-  }
+    // The body is only valid during the callback: deserialize before any long await.
+    var message = JsonSerializer.Deserialize<TMessage>(delivery.Body.Span, SerializerOptions)
+        ?? throw new JsonException("Empty message body");
+
+    using var activity = RabbitMqTelemetry.StartProcessActivity(_queue, delivery.BasicProperties);
+    using var logScope = _logger.BeginScope(new Dictionary<string, object?>
+    {
+        ["messaging.system"] = "rabbitmq",
+        ["messaging.destination.name"] = _queue,
+        ["messaging.message.id"] = context.MessageId
+    });
+
+    await _retry.ExecuteAsync(async token =>
+    {
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        await scope.ServiceProvider.GetRequiredService<IMessageHandler<TMessage>>().HandleAsync(message, context, token);
+    }, stoppingToken);
+
+    await _channel!.BasicAckAsync(delivery.DeliveryTag, multiple: false, CancellationToken.None);
+}
+catch (Exception ex) when (ex is not OperationCanceledException)
+{
+    _logger.LogError(ex, "Message {MessageId} from {Queue} sent to DLQ", context.MessageId, _queue);
+    await _channel!.BasicNackAsync(delivery.DeliveryTag, multiple: false, requeue: false, CancellationToken.None);
 }
 ```
 
-### Modelo de Configuracao (`RmqOptions`)
+## Registro
 
-| Propriedade | Tipo | Descricao |
-|---|---|---|
-| `Connection` | `RmqConnectionOptions` | `HostName`, `Port`, `UserName`, `Password`, `VirtualHost`, `Ssl`, `NetworkRecoveryInterval` |
-| `DefaultCloudEvents` | `CloudEventsOptions` | `Source`, `DefaultType`, `SpecVersion` |
-| `DefaultRetry` | `RetryOptions` | `MaxAttempts` (default 5), `InitialDelay` (default 1s), `BackoffType` (Exponential/Linear/Constant), `UseJitter` (default true) |
-| `Queues` | `Dictionary<string, QueueOptions>` | Overrides por fila: tamanho quorum, delivery limit, retry, sufixo DLQ |
-
-### Registrar um Consumer
 ```csharp
-using Rmq.CloudEvents.Consuming;
+// Api/Extensions/MessagingExtensions.cs
+services.AddOptions<RabbitMqOptions>()
+    .Bind(configuration.GetSection(RabbitMqOptions.SectionName))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
 
-// Registra o consumer associado a fila "orders"
-builder.Services.AddRmqConsumer<OrderCreated, OrderCreatedHandler>("orders");
+services.AddSingleton<RabbitMqConnectionProvider>();
+services.AddSingleton<RabbitMqPublisher>();
+services.AddHostedService<RabbitMqTopologyInitializer>();     // first
+services.AddHostedService<OutboxPublisherWorker>();
 
-// Handler implementa IRmqMessageHandler<T>
-public sealed class OrderCreatedHandler : IRmqMessageHandler<OrderCreated>
-{
-    public Task HandleAsync(
-        OrderCreated message,
-        MessageContext context,
-        CancellationToken cancellationToken)
-    {
-        Console.WriteLine(
-            $"Order {message.OrderId} received from {context.QueueName}, eventId={context.EventId}");
-        return Task.CompletedTask;
-    }
-}
-
-// Mensagem como record imutavel
-public sealed record OrderCreated(int OrderId, string CustomerId, decimal Total);
+services.AddRabbitMqConsumer<VideoEncodedMessage, VideoEncodedMessageHandler>(
+    queue: "catalog.video-encoded",
+    routingKey: "encoder.video.encoded.v1");
 ```
 
-### Publicar Mensagens
-```csharp
-using Rmq.CloudEvents.Publishing;
+`AddRabbitMqConsumer<TMessage, THandler>` registra o `QueueBinding` (singleton), o handler (scoped)
+e um `RabbitMqConsumerWorker<TMessage>` para a fila. Consumidor com inbox recebe também
+`services.Decorate<IMessageHandler<T>, InboxMessageHandler<T>>()`.
 
-var publisher = serviceProvider.GetRequiredService<IRmqPublisher>();
+## Telemetria
 
-// Publicacao basica
-await publisher.PublishAsync(
-    queueName: "orders",
-    payload: new OrderCreated(1, "cust-001", 99.90m),
-    cloudEventType: "com.mycompany.order.created.v1",
-    cancellationToken: cancellationToken);
-
-// Publicacao com headers customizados
-await publisher.PublishAsync(
-    queueName: "orders",
-    payload: new OrderCreated(2, "cust-002", 149.50m),
-    headers: new Dictionary<string, object>
-    {
-        ["x-correlation-id"] = "corr-123",
-        ["x-tenant"] = "tenant-a"
-    },
-    cancellationToken: cancellationToken);
-```
-
-### Comportamento em Runtime
-
-**Publish:**
-- Payload e envelopado como CloudEvent JSON
-- Topologia da fila e declarada (idempotente) antes do primeiro publish
-- Politica de retry trata erros transientes de RabbitMQ/rede
-
-**Consume:**
-- Mensagem e desenvelopada do CloudEvent; handler recebe apenas o payload
-- Sucesso: ACK
-- Falha final (apos retries): NACK com `requeue: false`, mensagem roteada para DLQ
-
-### Fluxo de Retry e DLX
-```
-Publish request
-    |---> Publish OK? --yes--> Main queue ---> Consume message
-    |         |                                      |
-    |        no                               Handler OK?
-    |         |                              /          \
-    |   Publish error                      yes          no
-    |                                       |            |
-    |                                      ACK     Retry left?
-    |                                              /        \
-    |                                            yes        no
-    |                                             |          |
-    |                                        Retry handler   NACK (no requeue)
-    |                                                            |
-    |                                                       DLX exchange
-    |                                                            |
-    |                                                       Queue.dlq
-```
+- Publisher cria span `publish {routingKey}` (`ActivityKind.Producer`) filho do `traceparent`
+  gravado no outbox; consumidor cria `process {queue}` (`ActivityKind.Consumer`) filho do header.
+- Atributos `messaging.system`, `messaging.destination.name`, `messaging.message.id`.
+- `.AddSource(RabbitMqTelemetry.SourceName)` no OpenTelemetry (`dotnet-production-readiness`).

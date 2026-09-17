@@ -1,5 +1,127 @@
 # Changelog das skills TSG Flow
 
+## 2026-09-17 — Skills .NET como guia de decisões, Minimal API, UUIDv7 e ArchUnitNET
+
+### Objetivo
+
+As skills .NET passam a registrar só as decisões e convenções do time. Conteúdo que ensinava C# ou
+.NET (pares certo/errado de boas práticas universais, comandos básicos de CLI, explicação de
+padrões e implementações completas de API de biblioteca) foi removido. Total de 6.574 para ~3.160
+linhas.
+
+### Novas decisões
+
+- **Minimal API** substitui controllers: `{Agregado}Endpoints` com `MapGroup`, `TypedResults`,
+  handlers estáticos nomeados e `ProducesProblem`; `AddValidation()` nativo não é usado.
+- **UUIDv7** (`Guid.CreateVersion7()`) para Ids de entidade e de evento; `Guid.NewGuid()` e
+  `DateTime.Now` banidos com `Microsoft.CodeAnalysis.BannedApiAnalyzers` + `BannedSymbols.txt`.
+  O outbox passa a ser ordenado pelo Id.
+- **ArchUnitNET** (`TngTech.ArchUnitNET.xUnitV3`) em `ProjectName.ArchitectureTests`, com regras
+  para API simples, Monolito Modular e Microsserviços (`dotnet-testing/examples/architecture-tests.md`).
+- **xUnit v3** no Microsoft.Testing.Platform (`global.json` com `test.runner`), `IAsyncLifetime`
+  com `ValueTask` e `TestContext.Current.CancellationToken`.
+
+### Correções de inconsistência
+
+- Policies registradas com `Policies.*`/`Roles.*` também em `dotnet-program-setup`.
+- Monolito Modular alinhado ao resto: Ids `Guid`, rotas `v1/...`, endpoints Minimal API.
+- Resiliência HTTP unificada em `Microsoft.Extensions.Http.Resilience`.
+- Volume do PostgreSQL 18 em `/var/lib/postgresql`.
+- Testcontainers com imagem no construtor (`new PostgreSqlBuilder("postgres:18")`).
+
+### Removidos
+
+- `dotnet-code-quality/examples/best-practices.md`, `dotnet-dependency-config/examples/nuget-library.md`
+  e `di-patterns.md` (lifetimes foram para o `SKILL.md`).
+- `references/full-guide.md` de observability, performance e production-readiness; o que era
+  decisão foi para o `SKILL.md`, e ficaram `observability/references/health-checks.md` e
+  `production-readiness/references/deploy-gate.md`.
+
+### Validação
+
+Solution de rascunho em .NET 10.0.400 compilando o endpoint Minimal API, o `BannedSymbols.txt`
+(erro RS0030 em `Guid.NewGuid()`), as fixtures xUnit v3 com Testcontainers e as regras ArchUnitNET do
+exemplo; as regras detectaram as violações introduzidas de propósito.
+
+## 2026-09-16 — Skills .NET alinhadas à organização do fc-api-catalog
+
+### Objetivo
+
+Adotar nas skills .NET a organização de projeto do `fc-api-catalog` (casos de uso por pasta,
+SeedWork, testes espelhados com fixtures em camadas), sem levar os defeitos do projeto e sem
+depender de bibliotecas com licença comercial ou de biblioteca própria.
+
+### Arquitetura (`dotnet-architecture`)
+
+- Layout `src/` + `tests/` com projetos `ProjectName.{Camada}` e um projeto de infraestrutura por
+  tecnologia (`Infra.Data`, `Infra.Messaging`); removidas as pastas numeradas.
+- Um caso de uso por classe em `Application/UseCases/{Agregado}/{CasoDeUso}/`, com interface
+  própria injetada direto no controller. Removidos o CQRS com dispatcher e o Service Pattern
+  simples (`cqrs.md`, `simple-service-pattern.md`); MediatR continua proibido.
+- Novo `domain-model.md`: SeedWork, agregados com fábrica estática, eventos de domínio, validação
+  por exceção e por notificação (substitui `clean-architecture.md`).
+- Novo `use-cases.md` e `api-layer.md`: Input/Output, mapeamento manual `From{Entidade}`,
+  envelope `data`/`pagination`, paginação `_page`/`_size`, JSON camelCase e actions sem sufixo
+  `Async`.
+- Repositório por agregado retorna `null`; `NotFoundException` é lançada pelo caso de uso.
+  Infra depende só do Domain, exceto para implementar portas técnicas da Application.
+- Tratamento de erros reescrito com `IExceptionHandler` + `IProblemDetailsService` e mapa de
+  400/404/422/500.
+
+### Dependências (`dotnet-dependency-config`)
+
+- Mensageria com `RabbitMQ.Client` 7.x direto, no lugar de `Rmq.CloudEvents`.
+- Novo `outbox-inbox.md`: outbox gravado pelo `UnitOfWork` na mesma transação, worker com
+  `FOR UPDATE SKIP LOCKED` e publisher confirms, inbox como decorator para consumidores não
+  idempotentes.
+- Mapeamento manual como padrão; Mapster só com justificativa.
+- `di-patterns.md` e o trecho de Unit of Work/repositório genérico do EF Core reescritos.
+
+### Testes (`dotnet-testing`)
+
+- Integração passa a ser caso de uso + repositório + `UnitOfWork` com PostgreSQL em
+  Testcontainers; E2E passa a ser a API via `WebApplicationFactory` + Testcontainers. Playwright
+  fica para projetos com front-end.
+- Estrutura espelhada de `src/`, fixtures em camadas, `TestDataGenerator`, `DisplayName` + `Trait`
+  e geradores de dados em `Tests.Common`.
+
+### Qualidade e bootstrap
+
+- `dotnet-code-quality`: pastas em PascalCase alinhadas ao namespace (antes `kebab-case`), pastas
+  de agrupamento no plural e sufixo `Async` com exceção para actions de controller.
+- `dotnet-program-setup`: extensões `AddUseCasesConfiguration`, `AddErrorHandlingConfiguration` e
+  `AddControllersConfiguration`; mensageria registrando topologia e worker de outbox.
+- `dotnet-index` e `README.md` atualizados.
+
+### Coerência entre as skills .NET (segunda rodada)
+
+- `dotnet-observability`: guia reescrito com `/health/live` e `/health/ready` separados por tag,
+  checks de RabbitMQ e outbox, probes corretas, `ActivitySource`/`Meter` no caso de uso e scopes com
+  convenções semânticas; removido controller com `try/catch` e stack trace em dados de health check.
+- `dotnet-performance`: guia reescrito com projeções em interfaces de consulta, keyset, limites de
+  `ExecuteUpdate`/`ExecuteDelete` frente a eventos de domínio, cache do Output com invalidação após
+  commit e `AddStandardResilienceHandler` no lugar de `HttpPolicyExtensions`.
+- `dotnet-production-readiness`: OpenTelemetry em `ObservabilityExtensions` com `UseOtlpExporter`,
+  checklist com outbox, DLQ, migrations fora do boot e resiliência.
+- `dotnet-dependency-config`: `RabbitMqTelemetry` com span de publish e process; `traceparent` salvo
+  no outbox; `OutboxOptions` movido para `Infra.Data`; EF Core com `ProjectNameDbContext`, Ids
+  gerados no domínio e auditoria por shadow properties.
+- `dotnet-code-quality/examples/best-practices.md` e `dotnet-testing/examples/dev-containers.md`
+  reescritos no padrão de casos de uso, Testcontainers e migrations.
+- Identificadores, comentários de código, mensagens de log e de exceção passam a ser em inglês em
+  todos os exemplos .NET, conforme a regra da `dotnet-code-quality`.
+
+### Plataforma .NET 10
+
+- .NET 10 (LTS) como versão oficial: `net10.0`, SDK em `global.json`, target framework em
+  `Directory.Build.props` e versões de pacote centralizadas em `Directory.Packages.props`.
+  .NET 8 e .NET 9 perdem suporte em 10/11/2026.
+- Solution em `.slnx`, `dotnet-ef` e pacotes Microsoft/EF Core na major 10, Dev Container
+  `dotnet:10.0`; removidas as ressalvas para .NET 8/9.
+- `dotnet-program-setup`: Swashbuckle substituído por OpenAPI nativo (`AddOpenApi`/`MapOpenApi`) com
+  Scalar como interface, só em Development.
+- `restful-api`: geração de OpenAPI em .NET aponta para `Microsoft.AspNetCore.OpenApi`.
+
 ## 2026-08-12 — Lint Spectral para contratos OpenAPI
 
 ### Objetivo

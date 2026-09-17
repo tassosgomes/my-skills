@@ -159,7 +159,7 @@ Quando o time optar por **code-first**, gere o `openapi.yaml` a partir do codigo
 
 | Stack | Ferramenta tipica |
 |-------|-------------------|
-| .NET / ASP.NET Core | Swashbuckle, Microsoft.AspNetCore.OpenApi, NSwag |
+| .NET / ASP.NET Core | `Microsoft.AspNetCore.OpenApi` (nativo, OpenAPI 3.1 no .NET 10) + `Microsoft.Extensions.ApiDescription.Server` para gerar no build |
 | Java / Spring Boot | springdoc-openapi |
 | Node.js | `@nestjs/swagger`, `fastify-swagger`, `swagger-jsdoc` |
 | Python | FastAPI (automatico), `drf-spectacular`, `apispec` |

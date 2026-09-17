@@ -1,87 +1,80 @@
-# Monolito Modular — Exemplo
+# Monolito Modular
 
-Um host único (`Host/`) compõe módulos independentes. Cada módulo é uma Clean Architecture
-completa em miniatura (Domain/Application/Infrastructure) e só expõe um contrato público restrito
-para os demais módulos. Use este modelo quando o domínio já tem fronteiras claras, mas o custo
-operacional de vários serviços ainda não se justifica.
+Um host único compõe módulos. Cada módulo é uma Clean Architecture completa em miniatura e só
+expõe `Contracts` para os demais.
 
-## Estrutura de Pastas
+## Estrutura
 
 ```text
-ProjectName.sln
+ProjectName.slnx
 src/
 ├── Modules/
 │   ├── Orders/
-│   │   ├── Orders.Domain/            # entidades, invariantes, portas do módulo
-│   │   ├── Orders.Application/       # commands, queries, handlers
-│   │   ├── Orders.Infrastructure/    # EF Core, repositórios, DbContext próprio
-│   │   ├── Orders.Contracts/         # ÚNICO ponto visível para outros módulos: DTOs + eventos
-│   │   └── Orders.Api/               # endpoints do módulo (Minimal API ou controllers)
-│   ├── Billing/
-│   │   ├── Billing.Domain/
-│   │   ├── Billing.Application/
-│   │   ├── Billing.Infrastructure/
-│   │   ├── Billing.Contracts/
-│   │   └── Billing.Api/
-│   └── SharedKernel/
-│       └── SharedKernel.csproj       # tipos base (Entity, ValueObject, IDomainEvent) — sem regra de negócio
-└── Host/
-    └── ProjectName.Host/             # único processo ASP.NET Core; referencia só os *.Api e *.Contracts
-Tests/
-├── Orders.UnitTests/
-├── Orders.IntegrationTests/
-└── ProjectName.End2EndTests/         # end-to-end contra o Host completo
+│   │   ├── ProjectName.Orders.Domain/
+│   │   ├── ProjectName.Orders.Application/
+│   │   ├── ProjectName.Orders.Infra.Data/      # DbContext, schema e outbox próprios
+│   │   ├── ProjectName.Orders.Contracts/       # ÚNICO ponto visível a outros módulos: interfaces de leitura, DTOs, eventos de integração
+│   │   └── ProjectName.Orders.Api/             # {Agregado}Endpoints + AddOrdersModule/MapOrdersModule
+│   └── Billing/
+│       └── ... (mesma estrutura)
+├── ProjectName.SharedKernel/                   # SeedWork e Result<T>; nenhuma regra de negócio
+└── ProjectName.Host/                           # único processo; referencia só *.Api
+tests/
+├── ProjectName.Tests.Common/
+├── ProjectName.ArchitectureTests/              # regras de fronteira entre módulos
+├── ProjectName.Orders.UnitTests/
+├── ProjectName.Orders.IntegrationTests/
+└── ProjectName.EndToEndTests/                  # HTTP contra o Host completo
 ```
 
-## Regra de fronteira entre módulos
+## Regras de fronteira
 
-1. Um módulo referencia livremente seu próprio `Domain`/`Application`/`Infrastructure`.
-2. Um módulo **nunca** referencia `Domain`, `Application` ou `Infrastructure` de outro módulo —
-   apenas o `Contracts` do outro módulo (DTOs e eventos, sem entidade EF, sem regra de negócio).
-3. `SharedKernel` contém só abstrações genéricas (`Entity<TId>`, `IDomainEvent`,
-   `Result<T>`). Se uma regra de negócio for parar lá, ela deveria estar em um módulo.
-4. Comunicação síncrona entre módulos usa a interface exposta em `Contracts`, resolvida via DI —
-   nunca chamada HTTP interna dentro do mesmo processo.
-5. Comunicação assíncrona (ex.: `Orders` avisa `Billing` que um pedido fechou) usa um dispatcher de
-   eventos in-process — o mesmo princípio do dispatcher nativo de CQRS (`examples/cqrs.md`), sem
-   MediatR.
+1. Um módulo nunca referencia `Domain`, `Application`, `Infra.Data` ou `Api` de outro módulo; só
+   `Contracts`.
+2. `Contracts` não contém entidade, `DbContext` nem regra de negócio.
+3. `SharedKernel` não depende de nenhum módulo.
+4. `Host` referencia apenas os `*.Api`; cada `*.Api` referencia o próprio `Contracts` e o próprio
+   `Infra.*` para compor a DI.
+5. Comunicação síncrona entre módulos: interface em `Contracts` resolvida pela DI, nunca HTTP
+   interno.
+6. Comunicação assíncrona: evento de integração gravado no outbox do módulo de origem; o worker
+   entrega aos handlers dos outros módulos (ou publica no RabbitMQ quando o módulo se prepara para
+   virar serviço). Nunca chame handler de outro módulo dentro da transação do caso de uso.
+7. Banco único com schema por módulo (`orders`, `billing`): cada `DbContext` usa `HasDefaultSchema`
+   e sua própria migrations history table no schema do módulo.
+
+Todas as regras acima são verificadas em `ProjectName.ArchitectureTests`
+(`dotnet-testing/examples/architecture-tests.md`).
+
+## Contrato e reação entre módulos
 
 ```csharp
-// Modules/Orders/Orders.Contracts/IOrderReadService.cs
-// Único ponto de acesso que Billing pode enxergar de Orders.
+// Modules/Orders/ProjectName.Orders.Contracts/IOrderReadService.cs
 public interface IOrderReadService
 {
-    Task<OrderSummaryDto> GetSummaryAsync(int orderId, CancellationToken cancellationToken);
+    Task<OrderSummaryDto?> GetSummaryAsync(Guid orderId, CancellationToken cancellationToken);
 }
 
-// Modules/Orders/Orders.Contracts/OrderClosedEvent.cs
-public sealed record OrderClosedEvent(int OrderId, string CustomerEmail, decimal Total) : IDomainEvent;
-```
+// Modules/Orders/ProjectName.Orders.Contracts/OrderClosedIntegrationEvent.cs
+public sealed record OrderClosedIntegrationEvent(Guid OrderId, string CustomerEmail, decimal Total);
 
-```csharp
-// Modules/Billing/Billing.Application/EventHandlers/OrderClosedHandler.cs
-// Billing reage ao evento sem conhecer Orders.Domain ou Orders.Infrastructure.
-public class OrderClosedHandler : IDomainEventHandler<OrderClosedEvent>
+// Modules/Billing/ProjectName.Billing.Api/IntegrationEventHandlers/OrderClosedHandler.cs
+public sealed class OrderClosedHandler(ICreateInvoice createInvoice) : IIntegrationEventHandler<OrderClosedIntegrationEvent>
 {
-    private readonly IInvoiceRepository _invoices;
-
-    public OrderClosedHandler(IInvoiceRepository invoices) => _invoices = invoices;
-
-    public async Task HandleAsync(OrderClosedEvent domainEvent, CancellationToken cancellationToken)
-    {
-        var invoice = new Invoice(domainEvent.OrderId, domainEvent.CustomerEmail, domainEvent.Total);
-        await _invoices.AddAsync(invoice, cancellationToken);
-    }
+    public Task HandleAsync(OrderClosedIntegrationEvent integrationEvent, CancellationToken cancellationToken)
+        => createInvoice.ExecuteAsync(
+            new CreateInvoiceInput(integrationEvent.OrderId, integrationEvent.CustomerEmail, integrationEvent.Total),
+            cancellationToken);
 }
 ```
 
-## Registro do módulo no Host
+## Registro do módulo
 
-Cada módulo expõe um método de extensão único para DI e outro para endpoints — o `Program.cs` do
-Host só orquestra chamadas (ver `dotnet-program-setup` para o padrão completo de organização).
+Cada módulo expõe um `Add{Modulo}Module` e um `Map{Modulo}Module`; o `Program.cs` do Host só os
+encadeia.
 
 ```csharp
-// Modules/Orders/Orders.Api/OrdersModuleExtensions.cs
+// Modules/Orders/ProjectName.Orders.Api/OrdersModuleExtensions.cs
 public static class OrdersModuleExtensions
 {
     public static IServiceCollection AddOrdersModule(this IServiceCollection services, IConfiguration configuration)
@@ -97,53 +90,13 @@ public static class OrdersModuleExtensions
 
     public static IEndpointRouteBuilder MapOrdersModule(this IEndpointRouteBuilder endpoints)
     {
-        endpoints.MapGroup("/api/orders").MapOrdersEndpoints();
+        endpoints.MapOrderEndpoints();          // MapGroup("v1/orders"), api-layer.md
         return endpoints;
     }
 }
 ```
 
-```csharp
-// Host/ProjectName.Host/Program.cs
-var builder = WebApplication.CreateBuilder(args);
+## Quando não usar
 
-builder.Services
-    .AddOrdersModule(builder.Configuration)
-    .AddBillingModule(builder.Configuration);
-
-var app = builder.Build();
-
-app.MapOrdersModule();
-app.MapBillingModule();
-
-app.Run();
-```
-
-## Persistência: schema por módulo, banco único
-
-Cada módulo tem seu próprio `DbContext` e sua própria migrations history table, isoladas por
-schema (`orders`, `billing`) dentro do mesmo banco físico. Isso mantém o custo operacional de um
-monolito (um único banco para operar) mas preserva o isolamento lógico necessário para, no futuro,
-extrair um módulo para um microsserviço sem reescrever o Domain — só a Infrastructure muda de
-schema para banco próprio.
-
-```csharp
-public class OrdersDbContext : DbContext
-{
-    public OrdersDbContext(DbContextOptions<OrdersDbContext> options) : base(options) { }
-
-    protected override void OnModelCreating(ModelBuilder modelBuilder)
-    {
-        modelBuilder.HasDefaultSchema("orders");
-        modelBuilder.ApplyConfigurationsFromAssembly(typeof(OrdersDbContext).Assembly);
-        base.OnModelCreating(modelBuilder);
-    }
-}
-```
-
-## Quando NÃO usar este modelo
-
-- Se os módulos já precisam escalar, fazer deploy ou versionar de forma independente, vá direto
-  para `examples/microservices.md`.
-- Se o sistema é pequeno o suficiente para não ter fronteiras de domínio claras ainda, use
-  `examples/project-setup.md` (API simples) e evolua para módulos quando a dor aparecer.
+Módulos que já precisam de deploy ou escala independentes vão para `microservices.md`. Domínio sem
+fronteiras claras fica na API simples.

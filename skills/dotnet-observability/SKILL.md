@@ -7,37 +7,69 @@ metadata:
 
 # Observabilidade .NET
 
-Esta skill trata da instrumentação e dos sinais operacionais do serviço. O gate de produção fica
-em `dotnet-production-readiness`; tuning de latência, queries ou cache fica em
-`dotnet-performance`.
+Instrumentação e sinais operacionais. Registro do OpenTelemetry e gate de produção ficam em
+`dotnet-production-readiness`.
 
-## Regras normativas
+## Health checks
 
-- Use OpenTelemetry como padrão de tracing/telemetria e propague `TraceId`/`SpanId` quando houver
-  contexto.
-- Use logging estruturado com scopes; inclua contexto operacional sem registrar secrets, tokens,
-  credenciais ou dados pessoais desnecessários.
-- Crie `ActivitySource`/spans para operações críticas, registre atributos e exceções e encerre
-  spans de forma garantida.
-- Exponha health checks separados por intenção: liveness não depende de serviços externos,
-  readiness verifica dependências necessárias para receber tráfego e startup cobre inicialização.
-- Use tags, timeouts e status `Healthy`/`Degraded`/`Unhealthy` coerentes com a dependência.
-- PostgreSQL é o exemplo padrão; Oracle só é alternativa para serviços que realmente o utilizam.
-- Ajuste níveis e exportadores por ambiente; não use configuração de desenvolvimento como padrão
-  de produção.
+| Endpoint | Tag | Contém | Falha significa |
+|---|---|---|---|
+| `/health/live` | `live` | só `self` (sem dependência externa) | reiniciar o pod |
+| `/health/ready` | `ready` | PostgreSQL e RabbitMQ (`Unhealthy`), Valkey e outbox (`Degraded`) | tirar do balanceador |
 
-## Roteamento sob demanda
+- Dependência opcional retorna `Degraded`, nunca `Unhealthy`.
+- Todo check tem `timeout` (banco e broker 5 s, cache 3 s).
+- Check customizado retorna `context.Registration.FailureStatus`, não um status fixo.
+- Checks próprios: `RabbitMqHealthCheck` (conexão aberta) e `OutboxHealthCheck` (mensagens com
+  tentativas esgotadas ou pendente mais antiga que 5 min; números em `data`).
+- Resposta pública só com o status; nada de descrição, exceção, host ou dado pessoal.
+- Checks não fazem log próprio.
+- Pacotes `AspNetCore.HealthChecks.NpgSql` e `AspNetCore.HealthChecks.Redis` (funciona com Valkey);
+  Oracle só em serviço que o usa.
 
-Para configurações completas, leia apenas [a referência de observabilidade](references/full-guide.md).
-Ela contém exemplos de health checks, Kubernetes, scopes, logging, tracing e checklist. Não a
-carregue para uma tarefa que apenas revisa uma query ou valida um deploy.
+## Kubernetes
+
+- `startupProbe` e `livenessProbe` em `/health/live`; `readinessProbe` em `/health/ready`.
+- Liveness nunca aponta para ready.
+- Startup não espera migration (migration não roda no boot).
+
+## Tracing e métricas
+
+- Uma `ActivitySource` e um `Meter` por serviço, com o mesmo nome, em
+  `Application/Common/{ProjectName}Telemetry.cs` (só `System.Diagnostics`, sem pacote OTel na Application).
+- Span manual só para operação de negócio que precisa ser observada à parte; bordas (HTTP, EF,
+  HttpClient) vêm da instrumentação.
+- Span com falha: `SetStatus(ActivityStatusCode.Error, ex.GetType().Name)` + `AddException(ex)`.
+- Nomes de métrica `{servico}.{agregado}.{evento}` (`catalog.categories.created`) com `unit`.
+- Atributos: convenções semânticas do OpenTelemetry quando existirem (`messaging.*`, `http.*`,
+  `db.*`); atributos de negócio com prefixo do serviço (`catalog.category.id`).
+- Tags e dimensões sem dado pessoal; dimensão de métrica nunca é Id.
+
+## Logging
+
+- Template estruturado sempre; interpolação e concatenação proibidas.
+- Scope com atributos semânticos em consumidores, workers e jobs.
+- Exceção como primeiro argumento do `LogError`/`LogWarning`.
+- Log agregado depois de loop, nunca um por item.
+
+| Situação | Nível |
+|---|---|
+| Caso de uso concluído (evento de negócio) | `Information` |
+| Rejeição esperada (400/404/422) | `Information` |
+| Retry, dependência opcional degradada, outbox atrasado | `Warning` |
+| 500, mensagem para DLQ | `Error` |
+| Configuração obrigatória ausente no boot | `Critical` |
+| Detalhe de fluxo | `Debug` |
+
+## Referência sob demanda
+
+`references/health-checks.md`: registro dos checks e implementação de `RabbitMqHealthCheck` e
+`OutboxHealthCheck`.
 
 ## Checklist do diff
 
-- [ ] O sinal implementado responde a uma pergunta operacional clara.
-- [ ] Liveness, readiness e startup não foram misturados.
-- [ ] Health checks têm tags, timeout e status apropriados.
-- [ ] Logs são estruturados e correlacionáveis sem dados sensíveis.
-- [ ] Spans são encerrados e exceções são registradas com contexto seguro.
-- [ ] Métricas e exportadores respeitam o ambiente.
-- [ ] O endpoint e o comportamento esperado estão cobertos por teste focado.
+- [ ] `/health/live` sem dependência externa; `/health/ready` com as obrigatórias.
+- [ ] Opcionais `Degraded`, todo check com timeout e `FailureStatus` do registro.
+- [ ] Spans e métricas novos usam a fonte única do serviço e estão registrados no OTel.
+- [ ] Nenhum dado pessoal em tag, dimensão, log ou `data` de health check.
+- [ ] Logs com template e nível conforme a tabela.

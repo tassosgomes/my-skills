@@ -1,116 +1,95 @@
 ---
 name: dotnet-architecture
-description: "Use para mudanças estruturais em .NET C# / ASP.NET Core: novo serviço, módulo, feature, endpoint, camadas, CQRS, repositories, DTOs ou tratamento global de erros. Não use para tuning de performance, observabilidade isolada ou revisão geral de estilo."
+description: "Use para mudanças estruturais em .NET C# / ASP.NET Core: novo serviço, módulo, feature, endpoint, caso de uso, camadas, agregados, eventos de domínio, repositories, DTOs, tratamento global de erros ou regras de fronteira. Não use para tuning de performance, observabilidade isolada ou revisão geral de estilo."
 metadata:
   group: dotnet
 ---
 
 # Arquitetura .NET C# / ASP.NET Core
 
-Esta é a skill primária quando a mudança altera a estrutura do sistema. O core mantém as
-fronteiras e as regras que não podem ser esquecidas; exemplos completos ficam em `examples/` e
-só devem ser lidos quando a tarefa exigir aquele padrão.
+Decisões de estrutura que valem para todo serviço .NET. Os exemplos em `examples/` mostram a forma
+esperada de cada peça e só devem ser lidos quando a tarefa tocar aquela peça.
 
-## Modelo obrigatório
+## Decisões
 
-Use Clean Architecture/Hexagonal com estas responsabilidades:
+| Tema | Decisão | Motivo |
+|---|---|---|
+| Camadas | Clean Architecture: `Domain`, `Application`, `Api` e um `Infra.*` por tecnologia | Domínio isolado de framework e persistência |
+| API HTTP | Minimal API, um `{Agregado}Endpoints` com `MapGroup` por agregado; controllers não são usados | Recomendação oficial do ASP.NET Core para projetos novos; menos cerimônia |
+| Identificadores | UUIDv7 (`Guid.CreateVersion7()`) gerado no domínio; `Guid.NewGuid()` banido | Índice ordenado por tempo e Id conhecido antes do insert |
+| Casos de uso | Uma classe por caso de uso, com interface própria; sem MediatR ou dispatcher | Fluxo navegável sem reflection; MediatR tem licença comercial |
+| Mapeamento | Manual, com `static From{Entidade}` no Output | AutoMapper tem licença comercial |
+| Validação de input | FluentValidation chamada explicitamente pelo caso de uso; `AddValidation()` nativo não é ligado | Uma única fonte de 400 |
+| Eventos | Levantados pelo agregado e gravados no outbox pelo `IUnitOfWork` | Estado e evento na mesma transação |
+| Fronteiras | Verificadas por `ProjectName.ArchitectureTests` (ArchUnitNET) | Violação falha a pipeline em vez de depender de review |
+
+## Dependências entre projetos
 
 ```text
-API/Services -> Application -> Domain
-Infrastructure ----------------> Domain
-Tests --------------------------> camadas que exercitam
+Api ---------------> Application ---> Domain
+Infra.Data --------------------------> Domain
+Infra.Messaging ---> Infra.Data -----> Domain
+Infra.* - - - - - -> Application      (somente Application/Interfaces)
+Api - - - - - - - -> Infra.*          (somente em Api/Extensions, composition root)
 ```
 
-- **Domain:** entidades, value objects, invariantes, regras de negócio e portas; não depende de
-  ASP.NET Core, EF Core ou outra infraestrutura.
-- **Application:** casos de uso, handlers, DTOs, validação e orquestração; depende de abstrações
-  do domínio.
-- **API/Services:** controllers finos, contratos HTTP, middleware e autenticação; não contém regra
-  de negócio.
-- **Infrastructure:** EF Core, repositórios, integrações externas e configurações concretas.
-- **Tests:** projetos separados para unitário, integração e E2E.
-
-As pastas numeradas (`1-Services` a `5-Tests`) são uma convenção de navegação, não devem aparecer
-em namespaces. As referências de projeto apontam para dentro: API → Application → Domain e
-Infrastructure → Domain.
+- **Domain:** SeedWork, agregados, value objects, eventos, exceções de domínio e portas de
+  persistência (`IXxxRepository`, `IUnitOfWork`). Sem ASP.NET Core nem EF Core.
+- **Application:** casos de uso, exceções de aplicação e portas técnicas em `Interfaces/`
+  (`IStorageService`, `IXxxQueries`).
+- **Api:** endpoints, contratos HTTP, envelope, autorização, exception handler, message handlers e
+  composition root.
+- **Infra.\*:** implementações. Nunca usa casos de uso, Inputs/Outputs ou exceções da Application.
 
 ## Regras não negociáveis
 
-1. Mantenha regras de negócio no Domain e contratos de infraestrutura atrás de interfaces.
-2. Escolha entre CQRS nativo e Service Pattern simples pela complexidade real do caso de uso (ver
-   `CQRS ou Service Pattern simples?` abaixo); qualquer uma das duas é válida, mas nenhuma usa
-   MediatR.
-3. Se optar por CQRS, resolva handlers por tipos e DI/assembly scan; nunca por nome de bean, string
-   ou `ApplicationContext.GetBean`.
-4. Coloque interfaces de repositório no Domain/Application e implementações EF Core na
-   Infrastructure; entidades EF não atravessam essa fronteira.
-5. Use `IExceptionHandler` global e `ProblemDetails` (RFC 9457) para erros HTTP.
-6. Use exceções específicas para falhas de domínio; reserve `Result<T>` para integrações que
-   precisam modelar falhas esperadas.
-7. Valide commands/queries com FluentValidation antes de executar efeitos colaterais.
-8. Propague `CancellationToken` em operações assíncronas e mantenha controllers sem lógica de
-   persistência.
+1. Invariantes ficam no agregado; o caso de uso só orquestra.
+2. Caso de uso em `Application/UseCases/{Agregados}/{CasoDeUso}/` com `I{CasoDeUso}`, `{CasoDeUso}`,
+   `{CasoDeUso}Input` e, só se houver regra de formato, `{CasoDeUso}InputValidator`. Output usado por
+   mais de um caso de uso fica em `{Agregados}/Common/`.
+3. O repositório retorna `null` quando não encontra; quem lança `NotFoundException` é o caso de uso.
+4. O repositório não chama `SaveChangesAsync`; quem confirma é `IUnitOfWork.CommitAsync`.
+5. Caso de uso nunca publica no broker.
+6. `ValidationException` (FluentValidation) → 400, `NotFoundException` → 404,
+   `EntityValidationException` e `RelatedAggregateException` → 422, qualquer outra → 500. Tudo sai
+   como `ProblemDetails` por um único `IExceptionHandler`.
+7. Endpoint só traduz HTTP para caso de uso: sem `try/catch`, repositório, `DbContext` ou regra.
+8. Agregado referencia outro agregado somente pelo Id.
+9. Toda solution tem `tests/ProjectName.ArchitectureTests` com as regras do formato escolhido
+   (`dotnet-testing/examples/architecture-tests.md`).
 
-## CQRS ou Service Pattern simples?
+## Formato da solução
 
-CQRS nativo não é o padrão obrigatório para todo caso de uso — é a resposta certa quando a
-complexidade do caso de uso justifica a indireção de command/query/handler/dispatcher. Para o
-resto, um serviço de aplicação simples (interface + implementação com métodos diretos, sem
-dispatcher) segue o mesmo modelo de camadas com menos peças móveis.
-
-| Sinal | Padrão |
-|---|---|
-| CRUD simples, poucos passos, sem regra de negócio elaborada | Service Pattern simples (`examples/simple-service-pattern.md`) |
-| Módulo/serviço com poucas operações (endpoint administrativo, ferramenta interna, protótipo) | Service Pattern simples |
-| Caso de uso com múltiplos passos, validação elaborada, efeitos colaterais coordenados ou que precisa de rastreabilidade por tipo de operação | CQRS nativo (`examples/cqrs.md`) |
-| Leitura precisa de um modelo de projeção diferente da escrita (DTOs otimizados, agregações, relatórios) | CQRS nativo |
-| Um serviço de aplicação já cresceu demais (muitos métodos, muitos `if`/`switch` por tipo de operação) | CQRS nativo — extrair para commands/queries reduz esse acoplamento |
-| O restante do sistema já usa CQRS nativo de forma consistente | CQRS nativo — priorize consistência com o que já existe sobre economizar uma classe |
-
-Dentro de um mesmo módulo os dois padrões podem conviver enquanto a migração for gradual, mas cada
-caso de uso individual segue um dos dois por completo — nunca uma mistura dos dois no mesmo método.
-Independente da escolha, as regras não negociáveis (Domain puro, FluentValidation,
-`CancellationToken`, repositório atrás de interface, `ProblemDetails` para erros) valem igual.
-
-## Escolha de formato de solução
-
-Os três formatos abaixo compartilham o mesmo modelo de camadas; o que muda é a fronteira entre
-unidades de deploy. Escolha pelo estágio real do projeto, não pelo tamanho esperado no futuro:
-
-| Formato | Quando usar | Exemplo |
+| Formato | Quando | Exemplo |
 |---|---|---|
-| **API simples** (um serviço) | Ponto de partida padrão; domínio ainda não tem fronteiras internas claras | `examples/project-setup.md` |
-| **Monolito Modular** | Fronteiras de domínio já claras, mas deploy/escala ainda não precisam ser independentes | `examples/modular-monolith.md` |
-| **Microsserviços** | Módulos já precisam escalar, implantar ou versionar de forma independente | `examples/microservices.md` |
+| API simples | Padrão; domínio ainda sem fronteiras internas claras | `examples/project-setup.md` |
+| Monolito Modular | Fronteiras claras, deploy único | `examples/modular-monolith.md` |
+| Microsserviços | Módulos precisam de deploy, escala ou versão independentes | `examples/microservices.md` |
 
-Não comece por Monolito Modular ou Microsserviços "para o caso de precisar depois" — evolua a
-partir da API simples quando a dor de acoplamento ou de deploy for real.
+Comece pela API simples e evolua quando a dor de acoplamento ou de deploy for real.
 
 ## Carregamento sob demanda
 
-| Necessidade | Recurso a ler |
+| Necessidade | Recurso |
 |---|---|
-| árvore de solução, projetos e referências (API simples) | `examples/project-setup.md` |
-| entidade, use case e fronteiras | `examples/clean-architecture.md` |
-| portas, repositório EF e mapeamento | `examples/repository-pattern.md` |
-| command/query, dispatcher, DI e controller | `examples/cqrs.md` |
-| serviço de aplicação sem dispatcher, para casos de uso simples | `examples/simple-service-pattern.md` |
-| exceções, ProblemDetails, middleware e validação | `examples/error-handling.md` |
-| estrutura de módulos, fronteira in-process, host único | `examples/modular-monolith.md` |
-| estrutura multi-serviço, contrato compartilhado, comunicação entre serviços | `examples/microservices.md` |
+| árvore da solution, arquivos da raiz, `BannedSymbols.txt`, referências | `examples/project-setup.md` |
+| SeedWork, UUIDv7, agregado, validação de domínio | `examples/domain-model.md` |
+| caso de uso, Input/Output, validator, exceções, registro na DI | `examples/use-cases.md` |
+| endpoints Minimal API, envelope, paginação, autorização | `examples/api-layer.md` |
+| repositório por agregado e busca paginada | `examples/repository-pattern.md` |
+| `IExceptionHandler` e formato do ProblemDetails | `examples/error-handling.md` |
+| módulos e fronteira in-process | `examples/modular-monolith.md` |
+| serviços e contrato compartilhado | `examples/microservices.md` |
 
-Não leia todos os exemplos por padrão. Se a tarefa é apenas criar um endpoint, comece pelo core,
-decida entre `cqrs.md` e `simple-service-pattern.md` pelo critério acima, e leia `error-handling.md`
-só se o tratamento de erro específico for o foco da tarefa.
+Para um endpoint novo, `use-cases.md` e `api-layer.md` bastam. Outbox e inbox ficam em
+`dotnet-dependency-config/examples/outbox-inbox.md`.
 
 ## Checklist do diff
 
-- [ ] A dependência entre camadas aponta para dentro.
-- [ ] O Domain continua independente de framework e persistência.
-- [ ] O controller é fino e o caso de uso está na Application.
-- [ ] A escolha entre CQRS e Service Pattern simples foi deliberada pela complexidade real, não copiada por hábito.
-- [ ] Se CQRS, o handler é resolvido por tipo/DI, sem lookup nominal.
-- [ ] Repositório e entidade EF não vazam para a API.
-- [ ] DTOs e validação pertencem ao contrato/caso de uso correto.
-- [ ] Erros produzem ProblemDetails sem stack trace exposto.
+- [ ] Referências entre projetos seguem o grafo e `ArchitectureTests` passa.
+- [ ] Todo Id novo usa `Guid.CreateVersion7()`.
+- [ ] O caso de uso tem pasta própria e é injetado pela interface no handler do endpoint.
+- [ ] O endpoint está no `{Agregado}Endpoints` do agregado, sem lógica nem `try/catch`.
+- [ ] O repositório retorna `null`; eventos passam pelo outbox.
+- [ ] Entidade não aparece no contrato HTTP.
 - [ ] Há teste focado para o comportamento novo ou alterado.

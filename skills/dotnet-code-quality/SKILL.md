@@ -1,58 +1,70 @@
 ---
 name: dotnet-code-quality
-description: "Use ao revisar ou refatorar um diff C#/.NET para naming, SOLID, métodos, async/await, CancellationToken, DI, exceções e estilo. Não acione apenas porque uma tarefa gera código; aplique ao diff quando a qualidade for parte do objetivo ou do gate."
+description: "Use ao revisar ou refatorar um diff C#/.NET contra as convenções do time: idioma, pastas e namespaces, sufixo Async, limites de tamanho, construtores, cancelamento e exceções. Não acione apenas porque uma tarefa gera código; aplique ao diff quando a qualidade for parte do objetivo ou do gate."
 metadata:
   group: dotnet
 ---
 
-# Qualidade de Código .NET C# / ASP.NET Core
+# Qualidade de Código .NET — Convenções do Time
 
-Use esta skill sobre o diff relevante. Ela reduz defeitos sem transformar toda implementação em
-uma auditoria global; os exemplos detalhados ficam em `examples/best-practices.md`.
+Só as convenções próprias deste time. Boas práticas universais de C# (naming padrão da Microsoft,
+async sem bloqueio, SOLID, constructor injection) são pressupostas e não repetidas aqui.
 
-## Regras normativas
+## Idioma
 
-### Naming e idioma
+- Código, nomes, comentários, mensagens de log e de exceção em inglês.
+- Exceção: termos da linguagem ubíqua do domínio registrados no glossário do projeto.
 
-- Código, classes, métodos, propriedades, variáveis e comentários ficam em inglês, exceto termos
-  da linguagem ubíqua do domínio documentados no glossário.
-- Tipos, métodos e propriedades usam `PascalCase`; variáveis e parâmetros usam `camelCase`.
-- Interfaces usam prefixo `I`; campos privados usam `_camelCase`; constantes usam `PascalCase`.
-- Diretórios usam `kebab-case` e arquivos/tipos usam `PascalCase`.
-- Nomes de métodos começam com verbo e não usam abreviações desnecessárias.
+## Pastas, namespaces e arquivos
 
-### Design de métodos e classes
+- Pastas em PascalCase; cada pasta é um segmento do namespace (`IDE0130` como erro via
+  `EnforceCodeStyleInBuild`). Nunca kebab-case em projeto .NET.
+- Pastas que agrupam tipos no plural (`Entities`, `UseCases/Categories`) para o namespace não
+  colidir com a classe.
+- Um tipo por arquivo, com o nome do tipo.
+- Namespace file-scoped.
 
-- Cada método executa uma ação clara; prefira guard clauses.
-- Evite mais de três parâmetros, métodos acima de 50 linhas e classes acima de 300 linhas.
-- Não use flag parameters para alternar comportamentos; extraia operações específicas ou use um
-  objeto de filtro.
-- Não misture mutação e consulta no mesmo método e não ultrapasse dois níveis de aninhamento.
-- Prefira composição, abstrações e responsabilidade única.
+## Tipos e membros
 
-### Async, DI e exceções
+- Classes concretas são `sealed` por padrão; abra só quando houver herança real.
+- Classe com um único construtor que só recebe dependências da DI (casos de uso, repositórios,
+  handlers, workers) usa primary constructor.
+- Construtor clássico com campos `readonly` quando: há mais de um construtor, o construtor tem
+  comportamento (validação, transformação, inicialização) ou a dependência não pode ser reatribuída.
+- Entidades e agregados mantêm construtor privado sem parâmetros e fábrica estática (`Create`).
+- Em `record` (Inputs, Outputs, eventos), o primary constructor define as propriedades do contrato.
+- Métodos assíncronos terminam em `Async`, inclusive handlers de Minimal API. Exceção: métodos de
+  teste.
+- `CancellationToken` é o último parâmetro, obrigatório (sem `= default`) em código interno; opcional
+  só na API pública de biblioteca.
+- Limites: até 3 parâmetros (acima disso, record de input), método até ~50 linhas, classe até ~300
+  linhas, no máximo 2 níveis de aninhamento.
+- Sem flag parameter que alterna comportamento: separe métodos ou use objeto de filtro.
+- Constantes nomeadas no lugar de números mágicos (`NameMaxLength`).
+- Datas sempre UTC; `DateTime.Now` e `Guid.NewGuid()` estão banidos (`BannedSymbols.txt`).
 
-- Nunca bloqueie com `.Result` ou `.Wait()`.
-- Propague `CancellationToken`; em bibliotecas, use `ConfigureAwait(false)` quando apropriado.
-- Use `ThrowIfCancellationRequested()` antes de efeitos colaterais e não cancele uma persistência
-  depois que ela começou.
-- Use constructor injection, campos `readonly` e validação de argumentos no construtor.
-- Capture exceções específicas, adicione contexto ao log e não faça `catch (Exception) { throw; }`
-  sem valor agregado.
-- Não introduza `any` equivalente, estado global mutável ou dependência concreta sem justificativa.
+## Cancelamento e exceções
 
-## Recurso sob demanda
+- Depois do `CommitAsync`, efeitos de limpeza (invalidar cache, marcar outbox) usam
+  `CancellationToken.None`: o request abortado não pode deixar estado pela metade.
+- Exceção de negócio usa os tipos do projeto (`EntityValidationException`, `NotFoundException`,
+  `RelatedAggregateException`); não lance `Exception`, `ArgumentException` ou
+  `InvalidOperationException` para regra de negócio.
+- Endpoints, casos de uso e repositórios não fazem `try/catch` para traduzir erro; o
+  `GlobalExceptionHandler` faz.
+- `catch` só com tipo específico e ação concreta (retry, contexto, conversão para exceção do
+  projeto com a original como inner).
 
-Leia `examples/best-practices.md` somente quando precisar de exemplos de async/await,
-CancellationToken, DI, SOLID ou tratamento de exceções. Para uma mudança pequena, valide apenas
-as regras que o diff toca.
+## Comentários
+
+- Comente o porquê não óbvio (restrição de framework, decisão de consistência); nunca o que o código
+  já diz.
 
 ## Checklist do diff
 
-- [ ] Naming e idioma seguem as convenções.
-- [ ] Métodos têm uma responsabilidade e parâmetros controlados.
-- [ ] Não há flag parameter, bloqueio síncrono ou aninhamento excessivo.
-- [ ] `CancellationToken` é propagado na cadeia assíncrona.
-- [ ] Dependências usam constructor injection e abstrações.
-- [ ] Exceções são específicas e logadas com contexto seguro.
-- [ ] O diff não contém comentários óbvios, magic numbers ou variáveis distantes do uso.
+- [ ] Inglês em código, logs e exceções (fora do glossário).
+- [ ] Pasta = namespace, pastas de agrupamento no plural, um tipo por arquivo.
+- [ ] Classes `sealed`; primary constructor só para construtor único de DI; sufixo `Async`; `CancellationToken` por último.
+- [ ] Limites de parâmetros, tamanho e aninhamento respeitados; sem flag parameter.
+- [ ] Sem `try/catch` de tradução fora do exception handler.
+- [ ] Limpeza pós-commit com `CancellationToken.None`.

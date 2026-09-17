@@ -1,116 +1,153 @@
-# Testes Unitarios — Exemplos
+# Testes Unitários — Fixtures, Geradores e Casos de Uso
 
-Padrao AAA (Arrange-Act-Assert) com xUnit + AwesomeAssertions + Moq.
+Sem banco, sem container de DI, sem rede.
 
-## Estrutura de Teste — AAA Pattern
+## Estrutura
+
+```text
+tests/
+├── ProjectName.Tests.Common/
+│   ├── BaseFixture.cs
+│   └── DataGenerators/
+│       └── CategoryDataGenerator.cs
+└── ProjectName.UnitTests/
+    ├── Domain/Entities/Categories/
+    │   ├── CategoryTest.cs
+    │   └── CategoryTestFixture.cs
+    └── Application/UseCases/Categories/
+        ├── Common/
+        │   └── CategoryUseCasesBaseFixture.cs
+        └── CreateCategory/
+            ├── CreateCategoryTest.cs
+            ├── CreateCategoryTestFixture.cs
+            └── CreateCategoryTestDataGenerator.cs
+```
+
+## Dados compartilhados
 
 ```csharp
-using AwesomeAssertions;
-
-public class TestesServicoPedido
+// Tests.Common/BaseFixture.cs
+public abstract class BaseFixture
 {
-    private readonly Mock<IRepositorioPedido> _repositorioMock;
-    private readonly Mock<ILogger<ServicoPedido>> _loggerMock;
-    private readonly ServicoPedido _sut; // System Under Test
+    protected BaseFixture() => Faker = new Faker("pt_BR");
 
-    public TestesServicoPedido()
-    {
-        _repositorioMock = new Mock<IRepositorioPedido>();
-        _loggerMock = new Mock<ILogger<ServicoPedido>>();
-        _sut = new ServicoPedido(_repositorioMock.Object, _loggerMock.Object);
-    }
+    public Faker Faker { get; }
 
-    [Fact]
-    public async Task CriarPedidoAsync_ComSolicitacaoValida_DeveRetornarPedidoCriado()
+    public bool GetRandomBoolean() => Faker.Random.Bool();
+}
+
+// Tests.Common/DataGenerators/CategoryDataGenerator.cs — respects the aggregate limits
+public sealed class CategoryDataGenerator(Faker faker)
+{
+    public string GetValidName() { /* 3..255 chars */ }
+    public string GetValidDescription() { /* ..10_000 chars */ }
+    public string GetTooLongName() => faker.Random.String2(256);
+    public Category GetValidCategory(bool? isActive = null)
+        => Category.Create(GetValidName(), GetValidDescription(), isActive ?? faker.Random.Bool());
+}
+```
+
+## Fixtures em camadas
+
+```csharp
+// Application/UseCases/Categories/Common/CategoryUseCasesBaseFixture.cs
+public abstract class CategoryUseCasesBaseFixture : BaseFixture
+{
+    protected CategoryUseCasesBaseFixture() => Categories = new CategoryDataGenerator(Faker);
+
+    public CategoryDataGenerator Categories { get; }
+
+    public Mock<ICategoryRepository> GetRepositoryMock() => new();
+
+    public Mock<IUnitOfWork> GetUnitOfWorkMock() => new();
+}
+
+// Application/UseCases/Categories/CreateCategory/CreateCategoryTestFixture.cs
+[CollectionDefinition(nameof(CreateCategoryTestFixture))]
+public sealed class CreateCategoryTestFixtureCollection : ICollectionFixture<CreateCategoryTestFixture>;
+
+public sealed class CreateCategoryTestFixture : CategoryUseCasesBaseFixture
+{
+    public CreateCategoryInput GetValidInput()
+        => new(Categories.GetValidName(), Categories.GetValidDescription(), GetRandomBoolean());
+
+    public CreateCategoryInput GetInputWithShortName() => GetValidInput() with { Name = "ab" };
+}
+
+// Application/UseCases/Categories/CreateCategory/CreateCategoryTestDataGenerator.cs
+public static class CreateCategoryTestDataGenerator
+{
+    public static TheoryData<CreateCategoryInput, string> GetInvalidInputs()
     {
-        // Arrange
-        var cancellationToken = CancellationToken.None;
-        var solicitacao = new SolicitacaoCriarPedido
+        var fixture = new CreateCategoryTestFixture();
+        return new()
         {
-            IdCliente = 1,
-            Itens = new[] { new ItemPedido { IdProduto = 1, Quantidade = 2 } }
+            { fixture.GetInputWithShortName(), "Name should be at least 3 characters long" }
         };
-        
-        var pedidoEsperado = new Pedido { Id = 123, IdCliente = 1 };
-        _repositorioMock
-            .Setup(r => r.CriarAsync(It.IsAny<Pedido>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(pedidoEsperado);
-
-        // Act
-        var resultado = await _sut.CriarPedidoAsync(solicitacao, cancellationToken);
-
-        // Assert
-        resultado.Should().NotBeNull();
-        resultado.Id.Should().Be(123);
-        resultado.IdCliente.Should().Be(1);
-        
-        _repositorioMock.Verify(
-            r => r.CriarAsync(It.IsAny<Pedido>(), It.IsAny<CancellationToken>()),
-            Times.Once);
-    }
-
-    [Theory]
-    [InlineData(null)]
-    [InlineData("")]
-    public async Task CriarPedidoAsync_ComNomeClienteInvalido_DeveLancarArgumentException(string nomeCliente)
-    {
-        // Arrange
-        var cancellationToken = CancellationToken.None;
-        var solicitacao = new SolicitacaoCriarPedido { NomeCliente = nomeCliente };
-
-        // Act & Assert
-        var acao = () => _sut.CriarPedidoAsync(solicitacao, cancellationToken);
-        await acao.Should().ThrowAsync<ArgumentException>()
-            .WithMessage("Nome do cliente nao pode ser nulo ou vazio");
-    }
-
-    [Fact]
-    public async Task CriarPedidoAsync_ComCancelamento_DeveLancarOperationCanceledException()
-    {
-        // Arrange
-        using var cts = new CancellationTokenSource();
-        var solicitacao = new SolicitacaoCriarPedido { IdCliente = 1 };
-        cts.Cancel();
-
-        // Act & Assert
-        var acao = () => _sut.CriarPedidoAsync(solicitacao, cts.Token);
-        await acao.Should().ThrowAsync<OperationCanceledException>();
     }
 }
 ```
 
-## Testes Parametrizados
+## Caso de uso
 
 ```csharp
-[Theory]
-[InlineData("admin@teste.com", true)]
-[InlineData("usuario@empresa.org", true)]
-[InlineData("email-invalido", false)]
-[InlineData("", false)]
-[InlineData(null, false)]
-public void EhEmailValido_ComVariasEntradas_DeveRetornarResultadoEsperado(string email, bool esperado)
-{
-    // Arrange & Act
-    var resultado = ValidadorEmail.EhValido(email);
+// Application/UseCases/Categories/CreateCategory/CreateCategoryTest.cs
+using UseCase = ProjectName.Application.UseCases.Categories.CreateCategory;
 
-    // Assert
-    resultado.Should().Be(esperado);
+[Collection(nameof(CreateCategoryTestFixture))]
+public sealed class CreateCategoryTest(CreateCategoryTestFixture fixture)
+{
+    [Fact(DisplayName = nameof(CreateCategory))]
+    [Trait("Application", "CreateCategory - Use Cases")]
+    public async Task CreateCategory()
+    {
+        // Arrange
+        var repositoryMock = fixture.GetRepositoryMock();
+        var unitOfWorkMock = fixture.GetUnitOfWorkMock();
+        var useCase = new UseCase.CreateCategory(repositoryMock.Object, unitOfWorkMock.Object);
+        var input = fixture.GetValidInput();
+
+        // Act
+        var output = await useCase.ExecuteAsync(input, TestContext.Current.CancellationToken);
+
+        // Assert
+        repositoryMock.Verify(r => r.InsertAsync(It.IsAny<Category>(), It.IsAny<CancellationToken>()), Times.Once);
+        unitOfWorkMock.Verify(u => u.CommitAsync(It.IsAny<CancellationToken>()), Times.Once);
+        output.Id.Should().NotBeEmpty();
+        output.Name.Should().Be(input.Name);
+        output.CreatedAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(1));
+    }
+
+    [Theory(DisplayName = nameof(ThrowWhenInputIsInvalid))]
+    [Trait("Application", "CreateCategory - Use Cases")]
+    [MemberData(nameof(CreateCategoryTestDataGenerator.GetInvalidInputs), MemberType = typeof(CreateCategoryTestDataGenerator))]
+    public async Task ThrowWhenInputIsInvalid(CreateCategoryInput input, string expectedMessage)
+    {
+        var unitOfWorkMock = fixture.GetUnitOfWorkMock();
+        var useCase = new UseCase.CreateCategory(fixture.GetRepositoryMock().Object, unitOfWorkMock.Object);
+
+        var action = () => useCase.ExecuteAsync(input, TestContext.Current.CancellationToken);
+
+        await action.Should().ThrowAsync<EntityValidationException>().WithMessage(expectedMessage);
+        unitOfWorkMock.Verify(u => u.CommitAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
 }
+```
 
-[Theory]
-[MemberData(nameof(ObterDadosTestePedido))]
-public async Task CalcularTotal_ComDiferentesPedidos_DeveRetornarTotalCorreto(Pedido pedido, decimal totalEsperado, CancellationToken cancellationToken)
+O alias `UseCase` resolve o conflito entre a classe de teste e o caso de uso de mesmo nome.
+
+## Agregado
+
+```csharp
+[Fact(DisplayName = nameof(CreateRaisesCategoryCreatedEvent))]
+[Trait("Domain", "Category - Aggregates")]
+public void CreateRaisesCategoryCreatedEvent()
 {
-    // Arrange & Act
-    var total = await _calculadora.CalcularTotalAsync(pedido, cancellationToken);
+    var category = fixture.Categories.GetValidCategory();
 
-    // Assert
-    total.Should().Be(totalEsperado);
-}
-
-public static IEnumerable<object[]> ObterDadosTestePedido()
-{
-    yield return new object[] { new Pedido { Itens = [] }, 0m, CancellationToken.None };
-    yield return new object[] { new Pedido { Itens = [new() { Preco = 10m, Quantidade = 2 }] }, 20m, CancellationToken.None };
+    category.Id.Version.Should().Be(7);
+    category.Events.Should().ContainSingle()
+        .Which.Should().BeOfType<CategoryCreatedEvent>()
+        .Which.CategoryId.Should().Be(category.Id);
 }
 ```

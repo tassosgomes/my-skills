@@ -96,7 +96,7 @@ precise reconstruir a intencao consultando camadas sem relacao com esta fatia.]
 **Convencoes da stack (das skills consultadas):**
 - [Convencao 1 — ex: "Usar Repository Pattern conforme dotnet-architecture"]
 - [Convencao 2 — ex: "Testes seguem padrao Arrange-Act-Assert conforme dotnet-testing"]
-- [Convencao 3 — ex: "Logs estruturados com Serilog conforme dotnet-observability"]
+- [Convencao 3 — ex: "Logs estruturados com OpenTelemetry conforme dotnet-observability"]
 
 ## Prontidao para Implementacao
 
