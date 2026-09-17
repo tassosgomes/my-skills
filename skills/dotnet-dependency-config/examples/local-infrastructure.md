@@ -69,7 +69,7 @@ services:
       RABBITMQ_DEFAULT_PASS: projectname
     ports:
       - "5672:5672"   # protocolo AMQP
-      - "15672:15672" # UI de management
+      - "15672:15672" # management UI
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 10s
@@ -105,7 +105,7 @@ volumes:
 ## Relação com testes de integração
 
 Testes de integração usam Testcontainers, que sobe/derruba containers efêmeros por execução
-(`dotnet-testing/examples/integration-tests.md` e `dev-containers.md`) — não o `docker-compose.yml`
+(`dotnet-testing/examples/integration-tests.md` e `dotnet-testing/examples/dev-containers.md`) — não o `docker-compose.yml`
 deste arquivo, que é para desenvolvimento local interativo. As duas pontas devem usar a mesma tag
 de imagem (`postgres:18`, `rabbitmq:4.3-management-alpine`) para que um bug que só aparece em uma
 versão específica do banco não passe despercebido em um ambiente e quebre no outro.

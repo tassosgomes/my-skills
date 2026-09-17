@@ -70,7 +70,7 @@ samples/MinhaEmpresa.MinhaLib.Samples/…  (opcional)
   <Authors>Minha Empresa</Authors>
   <Description>Descricao clara e objetiva da biblioteca.</Description>
   <PackageTags>logging;rest;cliente-api</PackageTags>
-  <RepositoryUrl>https://github.com/minha-empresa/minha-lib</RepositoryUrl>
+  <RepositoryUrl>https://github.com/example-org/example-lib</RepositoryUrl>
   <PackageLicenseExpression>MIT</PackageLicenseExpression>
   <IncludeSymbols>true</IncludeSymbols>
   <SymbolPackageFormat>snupkg</SymbolPackageFormat>

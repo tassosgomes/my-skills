@@ -23,7 +23,7 @@ hipótese; não aplique otimizações por checklist quando não há gargalo.
 
 ### Cache e HTTP
 
-- Escolha `IMemoryCache` para processo local e `IDistributedCache`/Redis para múltiplas instâncias.
+- Escolha `IMemoryCache` para processo local e `IDistributedCache` com Valkey para múltiplas instâncias.
 - Toda entrada de cache precisa de chave, TTL, política de invalidação e comportamento de miss.
 - Use `IHttpClientFactory`, timeout explícito e Polly para retry/circuit breaker quando a chamada
   externa for resiliente.

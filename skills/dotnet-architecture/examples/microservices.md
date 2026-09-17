@@ -11,14 +11,16 @@ como ponto de partida padrão. Se essa necessidade ainda não existe, comece pel
 orders-service/
 ├── ProjectName.Orders.sln
 ├── src/
-│   ├── 1-Services/ProjectName.Orders.API/
-│   ├── 2-Application/ProjectName.Orders.Application/
-│   ├── 3-Domain/ProjectName.Orders.Domain/
-│   └── 4-Infra/ProjectName.Orders.Infra/
+│   ├── ProjectName.Orders.Api/
+│   ├── ProjectName.Orders.Application/
+│   ├── ProjectName.Orders.Domain/
+│   ├── ProjectName.Orders.Infra.Data/
+│   └── ProjectName.Orders.Infra.Messaging/
 └── tests/
+    ├── ProjectName.Orders.Tests.Common/
     ├── ProjectName.Orders.UnitTests/
     ├── ProjectName.Orders.IntegrationTests/
-    └── ProjectName.Orders.End2EndTests/
+    └── ProjectName.Orders.EndToEndTests/
 
 billing-service/
 ├── ProjectName.Billing.sln
@@ -44,9 +46,10 @@ de cada um.
 3. **Comunicação síncrona** via HTTP com cliente tipado registrado em `IHttpClientFactory`,
    timeout explícito e Polly para retry/circuit breaker (detalhe de implementação em
    `dotnet-performance`).
-4. **Comunicação assíncrona** via RabbitMQ + CloudEvents para eventos de integração
-   (`dotnet-dependency-config/examples/messaging-rabbitmq.md`); cada serviço consumidor é
-   responsável pela sua própria idempotência.
+4. **Comunicação assíncrona** via RabbitMQ (`RabbitMQ.Client`) para eventos de integração, com
+   outbox no produtor e idempotência (inbox quando a operação não é idempotente) no consumidor
+   (`dotnet-dependency-config/examples/messaging-rabbitmq.md` e `dotnet-dependency-config/examples/outbox-inbox.md`). Nunca publique
+   no broker de dentro do caso de uso: se o commit falhar depois, o evento já saiu.
 5. **Versionamento de contrato é aditivo.** Alterar um DTO publicado é breaking change; adicione
    campo novo opcional ou publique uma nova versão do pacote — nunca mude o significado de um
    campo existente sem coordenar os consumidores.
@@ -65,47 +68,55 @@ public sealed record OrderClosedIntegrationEvent(
 ```
 
 ```csharp
-// orders-service — publica o evento após persistir
-public class CreateOrderHandler : ICommandHandler<CreateOrderCommand, OrderResponse>
+// orders-service — the aggregate raises the event; the UnitOfWork writes it to the outbox in the same transaction
+public sealed class CloseOrder : ICloseOrder
 {
-    private readonly IOrderRepository _repository;
-    private readonly IEventPublisher _publisher;
+    private readonly IOrderRepository _orderRepository;
+    private readonly IUnitOfWork _unitOfWork;
 
-    public async Task<OrderResponse> HandleAsync(CreateOrderCommand command, CancellationToken cancellationToken)
+    public CloseOrder(IOrderRepository orderRepository, IUnitOfWork unitOfWork)
     {
-        var order = new Order(command.CustomerEmail);
-        await _repository.AddAsync(order, cancellationToken);
+        _orderRepository = orderRepository;
+        _unitOfWork = unitOfWork;
+    }
 
-        await _publisher.PublishAsync(
-            new OrderClosedIntegrationEvent(order.Id, order.CustomerEmail, order.Total, DateTimeOffset.UtcNow),
-            cancellationToken);
+    public async Task<OrderModelOutput> ExecuteAsync(CloseOrderInput input, CancellationToken cancellationToken)
+    {
+        var order = await _orderRepository.GetAsync(input.OrderId, cancellationToken);
+        NotFoundException.ThrowIfNull(order, $"Order '{input.OrderId}' not found");
 
-        return new OrderResponse(order.Id, order.CustomerEmail);
+        order!.Close(); // RaiseEvent(new OrderClosedEvent(...))
+
+        await _orderRepository.UpdateAsync(order, cancellationToken);
+        await _unitOfWork.CommitAsync(cancellationToken);
+
+        return OrderModelOutput.FromOrder(order);
     }
 }
+// Convert OrderClosedEvent into the public OrderClosedIntegrationEvent contract before writing it to the outbox.
 ```
 
 ```csharp
-// billing-service — consome o mesmo pacote de contratos, banco e domínio próprios
-public class OrderClosedConsumer : IConsumer<OrderClosedIntegrationEvent>
+// billing-service — consumes the same contracts package; own database and domain
+public sealed class OrderClosedMessageHandler : IMessageHandler<OrderClosedIntegrationEvent>
 {
-    private readonly IInvoiceRepository _invoices;
+    private readonly ICreateInvoice _createInvoice;
 
-    public async Task ConsumeAsync(OrderClosedIntegrationEvent @event, CancellationToken cancellationToken)
-    {
-        if (await _invoices.ExistsForOrderAsync(@event.OrderId, cancellationToken))
-            return; // idempotência: evento já processado
+    public OrderClosedMessageHandler(ICreateInvoice createInvoice) => _createInvoice = createInvoice;
 
-        var invoice = new Invoice(@event.OrderId, @event.CustomerEmail, @event.Total);
-        await _invoices.AddAsync(invoice, cancellationToken);
-    }
+    // Naturally idempotent: CreateInvoice checks whether the order already has an invoice.
+    // Without such a natural key, register this consumer with the inbox decorator (outbox-inbox.md).
+    public Task HandleAsync(OrderClosedIntegrationEvent message, MessageContext context, CancellationToken cancellationToken)
+        => _createInvoice.ExecuteAsync(
+            new CreateInvoiceInput(message.OrderId, message.CustomerEmail, message.Total),
+            cancellationToken);
 }
 ```
 
 ## Cliente HTTP tipado entre serviços
 
 ```csharp
-// billing-service — consumindo orders-service via HTTP quando precisa de leitura síncrona
+// billing-service — calls orders-service over HTTP when it needs a synchronous read
 public interface IOrdersServiceClient
 {
     Task<OrderSummaryDto?> GetOrderAsync(Guid orderId, CancellationToken cancellationToken);
@@ -127,7 +138,7 @@ public class OrdersServiceClient : IOrdersServiceClient
     }
 }
 
-// billing-service — registro em Extensions/HttpClientsExtensions.cs (ver dotnet-program-setup)
+// billing-service — registered in Extensions/HttpClientsExtensions.cs (see dotnet-program-setup)
 services.AddHttpClient<IOrdersServiceClient, OrdersServiceClient>(client =>
 {
     client.BaseAddress = new Uri(configuration["Services:Orders:BaseUrl"]!);

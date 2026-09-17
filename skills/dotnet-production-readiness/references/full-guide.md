@@ -1,107 +1,88 @@
 # Referência completa — Production Readiness .NET
 
-> Leia sob demanda para configurações detalhadas do gate de produção.
+> Leia sob demanda durante um gate de release, auditoria ou revisão pré-produção.
 
-Documento normativo e checklist consolidado.
-Bloqueia deploy que nao atenda aos requisitos minimos.
+Documento normativo e checklist consolidado. Bloqueia deploy que não atenda aos requisitos
+mínimos. A implementação de cada item fica na skill de origem; aqui está o que precisa existir e
+como verificar.
+
+## Índice
+
+1. [OpenTelemetry](#1-opentelemetry)
+2. [Formato e boas práticas de log](#2-formato-e-boas-práticas-de-log)
+3. [Sanitização de dados sensíveis](#3-sanitização-de-dados-sensíveis)
+4. [Níveis de log por ambiente](#4-níveis-de-log-por-ambiente)
+5. [Checklist de produção](#5-checklist-de-produção)
 
 ---
 
-## Indice
-1. [Logging e Tracing com OpenTelemetry](#logging-e-tracing-com-opentelemetry)
-2. [Formato de Logs](#formato-de-logs)
-3. [Boas Praticas de Logging](#boas-praticas-de-logging)
-4. [Sanitizacao de Dados Sensiveis](#sanitizacao-de-dados-sensiveis)
-5. [Niveis de Log por Ambiente](#niveis-de-log-por-ambiente)
-6. [Checklist de Producao](#checklist-de-producao)
+## 1. OpenTelemetry
 
----
+OpenTelemetry com exportação OTLP é o padrão. Não use Serilog + ECS em serviços novos.
 
-## Logging e Tracing com OpenTelemetry
+### Pacotes
 
-> **OpenTelemetry (OTLP) e o padrao oficial.**
-> Nao usar Serilog + ECS em novos servicos.
-
-### Pacotes Necessarios
-```xml
-<PackageReference Include="OpenTelemetry" Version="1.7.0" />
-<PackageReference Include="OpenTelemetry.Api" Version="1.7.0" />
-<PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.7.0" />
-<PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.7.0" />
-<PackageReference Include="OpenTelemetry.Instrumentation.Http" Version="1.7.0" />
-<PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.7.0" />
+```bash
+dotnet add src/ProjectName.Api package OpenTelemetry.Extensions.Hosting
+dotnet add src/ProjectName.Api package OpenTelemetry.Instrumentation.AspNetCore
+dotnet add src/ProjectName.Api package OpenTelemetry.Instrumentation.Http
+dotnet add src/ProjectName.Api package OpenTelemetry.Instrumentation.EntityFrameworkCore
+dotnet add src/ProjectName.Api package OpenTelemetry.Exporter.OpenTelemetryProtocol
 ```
 
-### Configuracao em Program.cs
+Use a versão estável mais recente e a mesma versão em todos os pacotes `OpenTelemetry.*`
+(`UseOtlpExporter` e `WithLogging` exigem 1.9 ou superior).
+
+### Registro
+
 ```csharp
-using OpenTelemetry.Logs;
-using OpenTelemetry.Metrics;
-using OpenTelemetry.Resources;
-using OpenTelemetry.Trace;
-
-var builder = WebApplication.CreateBuilder(args);
-
-// ── Recurso compartilhado ──
-var serviceName = builder.Configuration["ServiceName"] ?? "meu-servico";
-var serviceVersion = typeof(Program).Assembly.GetName().Version?.ToString() ?? "1.0.0";
-
-var resourceBuilder = ResourceBuilder.CreateDefault()
-    .AddService(serviceName, serviceVersion: serviceVersion)
-    .AddAttributes(new Dictionary<string, object>
-    {
-        ["deployment.environment"] = builder.Environment.EnvironmentName,
-        ["host.name"] = Environment.MachineName
-    });
-
-// ── Tracing ──
-builder.Services.AddOpenTelemetry()
-    .WithTracing(tracing => tracing
-        .SetResourceBuilder(resourceBuilder)
-        .AddAspNetCoreInstrumentation(opts =>
-        {
-            opts.RecordException = true;
-            opts.Filter = ctx => !ctx.Request.Path.StartsWithSegments("/health");
-        })
-        .AddHttpClientInstrumentation(opts =>
-        {
-            opts.RecordException = true;
-        })
-        .AddSource(serviceName)
-        .AddOtlpExporter(opts =>
-        {
-            opts.Endpoint = new Uri(
-                builder.Configuration["OpenTelemetry:OtlpEndpoint"] ?? "http://localhost:4317");
-        }));
-
-// ── Metrics ──
-builder.Services.AddOpenTelemetry()
-    .WithMetrics(metrics => metrics
-        .SetResourceBuilder(resourceBuilder)
-        .AddAspNetCoreInstrumentation()
-        .AddHttpClientInstrumentation()
-        .AddOtlpExporter());
-
-// ── Logging ──
-builder.Logging.ClearProviders();
-builder.Logging.AddOpenTelemetry(logging =>
+// Api/Extensions/ObservabilityExtensions.cs
+public static class ObservabilityExtensions
 {
-    logging.SetResourceBuilder(resourceBuilder);
-    logging.IncludeFormattedMessage = true;
-    logging.IncludeScopes = true;
-    logging.AddOtlpExporter(opts =>
+    public static IServiceCollection AddObservabilityConfiguration(
+        this IServiceCollection services,
+        IConfiguration configuration,
+        IHostEnvironment environment)
     {
-        opts.Endpoint = new Uri(
-            builder.Configuration["OpenTelemetry:OtlpEndpoint"] ?? "http://localhost:4317");
-    });
-});
+        var serviceName = configuration["OpenTelemetry:ServiceName"]
+            ?? throw new InvalidOperationException("OpenTelemetry:ServiceName is not configured.");
+
+        services.AddOpenTelemetry()
+            .ConfigureResource(resource => resource
+                .AddService(serviceName, serviceVersion: typeof(ObservabilityExtensions).Assembly.GetName().Version?.ToString())
+                .AddAttributes(new Dictionary<string, object>
+                {
+                    ["deployment.environment.name"] = environment.EnvironmentName
+                }))
+            .WithTracing(tracing => tracing
+                .AddAspNetCoreInstrumentation(options =>
+                    options.Filter = context => !context.Request.Path.StartsWithSegments("/health"))
+                .AddHttpClientInstrumentation()
+                .AddEntityFrameworkCoreInstrumentation()
+                .AddSource(ProjectNameTelemetry.SourceName)
+                .AddSource(RabbitMqTelemetry.SourceName))
+            .WithMetrics(metrics => metrics
+                .AddAspNetCoreInstrumentation()
+                .AddHttpClientInstrumentation()
+                .AddRuntimeInstrumentation()
+                .AddMeter(ProjectNameTelemetry.SourceName))
+            .WithLogging(logging => { }, options =>
+            {
+                options.IncludeScopes = true;
+                options.IncludeFormattedMessage = true;
+            })
+            .UseOtlpExporter(); // endpoint from OTEL_EXPORTER_OTLP_ENDPOINT
+
+        return services;
+    }
+}
 ```
 
-### Configuracao em appsettings.json
 ```json
+// appsettings.json
 {
-  "ServiceName": "meu-servico-api",
   "OpenTelemetry": {
-    "OtlpEndpoint": "http://otel-collector:4317"
+    "ServiceName": "catalog-api"
   },
   "Logging": {
     "LogLevel": {
@@ -114,219 +95,143 @@ builder.Logging.AddOpenTelemetry(logging =>
 }
 ```
 
-### ActivitySource para Tracing Manual
-```csharp
-using System.Diagnostics;
+O endpoint do collector vem de variável de ambiente no deploy (`OTEL_EXPORTER_OTLP_ENDPOINT`), não
+de arquivo versionado. `ActivitySource`, `Meter` e spans de negócio estão em
+`dotnet-observability/references/full-guide.md`.
 
-public class ServicoPedido
-{
-    private static readonly ActivitySource ActivitySource = new("meu-servico");
-    private readonly ILogger<ServicoPedido> _logger;
-
-    public ServicoPedido(ILogger<ServicoPedido> logger)
-    {
-        _logger = logger;
-    }
-
-    public async Task<Pedido> CriarPedidoAsync(SolicitacaoCriarPedido solicitacao, CancellationToken cancellationToken)
-    {
-        using var activity = ActivitySource.StartActivity("CriarPedido");
-        activity?.SetTag("pedido.cliente_id", solicitacao.IdCliente);
-        activity?.SetTag("pedido.total_itens", solicitacao.Itens.Count);
-
-        _logger.LogInformation(
-            "Criando pedido para cliente {ClienteId} com {TotalItens} itens",
-            solicitacao.IdCliente,
-            solicitacao.Itens.Count);
-
-        try
-        {
-            var pedido = await ProcessarPedidoAsync(solicitacao, cancellationToken);
-            
-            activity?.SetTag("pedido.id", pedido.Id);
-            activity?.SetStatus(ActivityStatusCode.Ok);
-            
-            _logger.LogInformation(
-                "Pedido {PedidoId} criado com sucesso para cliente {ClienteId}",
-                pedido.Id,
-                solicitacao.IdCliente);
-
-            return pedido;
-        }
-        catch (Exception ex)
-        {
-            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
-            activity?.RecordException(ex);
-            
-            _logger.LogError(ex,
-                "Erro ao criar pedido para cliente {ClienteId}",
-                solicitacao.IdCliente);
-            
-            throw;
-        }
-    }
-}
-```
+`RabbitMqTelemetry.SourceName` é a `ActivitySource` de `Infra.Messaging`: publisher e consumidor
+criam spans `publish`/`process` e propagam o `traceparent` nos headers da mensagem, ligando o
+request HTTP que gravou o outbox ao consumo no outro serviço.
 
 ---
 
-## Formato de Logs
+## 2. Formato e boas práticas de log
 
-### Estrutura JSON Padrao
+### Registro exportado
+
+O exportador OTLP envia cada log com os campos abaixo; o backend (Loki, Elastic, Datadog...) os
+indexa sem parsing de texto.
+
 ```json
 {
-  "timestamp": "2024-01-15T10:30:00.000Z",
-  "level": "Information",
-  "message": "Pedido criado com sucesso",
-  "service": "pedidos-api",
-  "traceId": "abc123def456",
-  "spanId": "789ghi012",
-  "context": {
-    "pedidoId": 12345,
-    "clienteId": 67890,
-    "totalItens": 3
+  "timestamp": "2026-01-15T10:30:00.000Z",
+  "severityText": "Information",
+  "body": "Category {CategoryId} created",
+  "attributes": {
+    "CategoryId": "0f8fad5b-d9cb-469f-a165-70867728950e",
+    "messaging.message.id": "7c9e6679-7425-40de-944b-e07fc1f90ae7"
   },
-  "error": null
+  "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
+  "spanId": "00f067aa0ba902b7",
+  "resource": {
+    "service.name": "catalog-api",
+    "deployment.environment.name": "production"
+  }
 }
 ```
 
-### Templates Estruturados (OBRIGATORIO)
+### Templates estruturados (obrigatório)
+
 ```csharp
-// ✅ CORRETO — Structured logging com templates
-_logger.LogInformation(
-    "Pedido {PedidoId} criado para cliente {ClienteId} com valor {Valor:C}",
-    pedido.Id, pedido.ClienteId, pedido.Valor);
+// Correct: structured template
+_logger.LogInformation("Genre {GenreId} created with {CategoryCount} categories", genre.Id, genre.Categories.Count);
 
-// ❌ PROIBIDO — Interpolacao de strings
-_logger.LogInformation($"Pedido {pedido.Id} criado para cliente {pedido.ClienteId}");
+// Forbidden: string interpolation
+_logger.LogInformation($"Genre {genre.Id} created with {genre.Categories.Count} categories");
 
-// ❌ PROIBIDO — Concatenacao
-_logger.LogInformation("Pedido " + pedido.Id + " criado");
+// Forbidden: concatenation
+_logger.LogInformation("Genre " + genre.Id + " created");
 ```
 
-### Log Scopes para Correlacao
+### Quando usar cada nível
+
+| Nível | Quando usar | Exemplo |
+|---|---|---|
+| `Trace` | Detalhe interno para depuração profunda | Valores intermediários de cálculo |
+| `Debug` | Fluxo de execução em desenvolvimento | "Handling message" no consumidor |
+| `Information` | Evento de negócio ou rejeição esperada | Categoria criada; request rejeitado com 422 |
+| `Warning` | Situação inesperada, não fatal | Retry acionado; outbox atrasado |
+| `Error` | Falha que interrompeu a operação | Exceção não tratada (500); mensagem enviada para DLQ |
+| `Critical` | Serviço não consegue operar | Configuração obrigatória ausente no boot |
+
+### Regras
+
 ```csharp
-public async Task ProcessarPedidoAsync(int pedidoId, CancellationToken cancellationToken)
-{
-    using (_logger.BeginScope(new Dictionary<string, object>
-    {
-        ["PedidoId"] = pedidoId,
-        ["Operacao"] = "ProcessamentoPedido",
-        ["CorrelationId"] = Activity.Current?.TraceId.ToString() ?? Guid.NewGuid().ToString()
-    }))
-    {
-        _logger.LogInformation("Inicio do processamento");
-        
-        await ValidarEstoqueAsync(pedidoId, cancellationToken);
-        await ProcessarPagamentoAsync(pedidoId, cancellationToken);
-        await EnviarConfirmacaoAsync(pedidoId, cancellationToken);
-        
-        _logger.LogInformation("Processamento concluido");
-    }
-}
+// 1. Enough context to diagnose, without sensitive data
+_logger.LogError(ex, "Failed to publish outbox message {MessageId} ({Type})", message.Id, message.Type);
+
+// 2. Aggregate instead of logging inside loops
+_logger.LogInformation("Published {PublishedCount} outbox messages, {FailedCount} failed", published, failed);
+
+// 3. Exceptions go as the first argument so the stack trace is exported as a log attribute,
+//    never in the HTTP response body
+_logger.LogError(ex, "Unhandled exception for {Method} {Path}", request.Method, request.Path);
 ```
 
 ---
 
-## Boas Praticas de Logging
+## 3. Sanitização de dados sensíveis
 
-### Niveis de Log — Quando Usar
-| Nivel | Quando Usar | Exemplo |
-|-------|-------------|---------|
-| `Trace` | Detalhes internos (debug profundo) | Valores de variaveis internas |
-| `Debug` | Fluxo de desenvolvimento | Entrada/saida de metodos |
-| `Information` | Eventos de negocio relevantes | Pedido criado, usuario logou |
-| `Warning` | Situacao inesperada nao-fatal | Retry acionado, cache miss |
-| `Error` | Erro tratavel | Falha de validacao, timeout de API |
-| `Critical` | Falha irrecuperavel | Banco indisponivel, corrupcao de dados |
+### Dados proibidos em logs, spans e métricas
 
-### Regras de Ouro
-```csharp
-// 1. SEMPRE usar templates estruturados
-_logger.LogInformation("Processado {Quantidade} itens em {Duracao}ms", qtd, ms);
-
-// 2. NUNCA logar dados sensiveis (ver secao Sanitizacao)
-
-// 3. SEMPRE incluir contexto suficiente para diagnostico
-_logger.LogError(ex, "Falha ao processar pedido {PedidoId} do cliente {ClienteId}", pedidoId, clienteId);
-
-// 4. SEMPRE usar CancellationToken em operacoes async
-public async Task ProcessarAsync(int id, CancellationToken cancellationToken)
-{
-    cancellationToken.ThrowIfCancellationRequested();
-    // ...
-}
-
-// 5. Nao logar em loops — agregar
-_logger.LogInformation("Processados {Total} registros com {Erros} erros", total, erros);
-```
-
----
-
-## Sanitizacao de Dados Sensiveis
-
-### Dados Proibidos em Logs
 | Dado | Tratamento | Exemplo |
-|------|-----------|---------|
+|---|---|---|
 | CPF | Mascarar | `***.***.***-34` |
-| CNPJ | Mascarar | `**.***.***/**34-**` |
-| Email | Mascarar | `t***@e***.com` |
+| CNPJ | Mascarar | `**.***.***/****-34` |
+| E-mail | Mascarar | `t***@e***.com` |
 | Telefone | Mascarar | `(**) ****-5678` |
-| Senha | NUNCA logar | — |
-| Token/API Key | NUNCA logar | — |
-| Numero cartao | NUNCA logar | — |
-| Dados medicos | NUNCA logar | — |
+| Senha | Nunca registrar | — |
+| Token, API key, connection string | Nunca registrar | — |
+| Número de cartão | Nunca registrar | — |
+| Dados de saúde | Nunca registrar | — |
 
-### Implementacao de Sanitizador
+### Sanitizador
+
 ```csharp
+// Application/Common/LogSanitizer.cs
 public static class LogSanitizer
 {
-    public static string MaskCpf(string cpf)
-    {
-        if (string.IsNullOrEmpty(cpf) || cpf.Length < 11)
-            return "***";
-        return $"***.***.***-{cpf[^2..]}";
-    }
+    public static string MaskCpf(string? cpf)
+        => string.IsNullOrEmpty(cpf) || cpf.Length < 11 ? "***" : $"***.***.***-{cpf[^2..]}";
 
-    public static string MaskEmail(string email)
+    public static string MaskEmail(string? email)
     {
-        if (string.IsNullOrEmpty(email))
+        var parts = email?.Split('@');
+        if (parts is not { Length: 2 } || parts[0].Length == 0 || parts[1].Length == 0)
             return "***";
-        var parts = email.Split('@');
-        if (parts.Length != 2) return "***";
+
         return $"{parts[0][0]}***@{parts[1][0]}***.{parts[1].Split('.').Last()}";
     }
 
-    public static string MaskPhone(string phone)
-    {
-        if (string.IsNullOrEmpty(phone) || phone.Length < 8)
-            return "***";
-        return $"(***) ****-{phone[^4..]}";
-    }
+    public static string MaskPhone(string? phone)
+        => string.IsNullOrEmpty(phone) || phone.Length < 8 ? "***" : $"(**) ****-{phone[^4..]}";
 }
-
-// Uso
-_logger.LogInformation(
-    "Cadastro do cliente CPF {Cpf} email {Email}",
-    LogSanitizer.MaskCpf(cliente.Cpf),
-    LogSanitizer.MaskEmail(cliente.Email));
 ```
+
+```csharp
+_logger.LogInformation(
+    "Customer registered with CPF {Cpf} and e-mail {Email}",
+    LogSanitizer.MaskCpf(customer.Cpf),
+    LogSanitizer.MaskEmail(customer.Email));
+```
+
+Prefira registrar o Id da entidade em vez do dado mascarado; mascarar é para quando o dado é
+indispensável ao diagnóstico.
 
 ---
 
-## Niveis de Log por Ambiente
+## 4. Níveis de log por ambiente
 
-### Configuracao Recomendada
-| Namespace | Development | Staging | Production |
-|-----------|-------------|---------|------------|
+| Categoria | Development | Staging | Production |
+|---|---|---|---|
 | Default | `Debug` | `Information` | `Information` |
-| Microsoft.AspNetCore | `Information` | `Warning` | `Warning` |
-| Microsoft.EFCore | `Information` | `Warning` | `Warning` |
-| System.Net.Http | `Information` | `Warning` | `Error` |
-| HealthChecks | `Debug` | `Information` | `Warning` |
+| `Microsoft.AspNetCore` | `Information` | `Warning` | `Warning` |
+| `Microsoft.EntityFrameworkCore` | `Information` | `Warning` | `Warning` |
+| `System.Net.Http.HttpClient` | `Information` | `Warning` | `Error` |
+| `Microsoft.Extensions.Diagnostics.HealthChecks` | `Debug` | `Information` | `Warning` |
 
-### appsettings.Production.json
 ```json
+// appsettings.Production.json
 {
   "Logging": {
     "LogLevel": {
@@ -342,52 +247,47 @@ _logger.LogInformation(
 
 ---
 
-## Checklist de Producao
+## 5. Checklist de produção
 
-### Logging e Tracing
-- [ ] OpenTelemetry configurado (tracing + metrics + logging)
-- [ ] OTLP exporter apontando para o collector
-- [ ] Structured logging com templates (sem interpolacao)
-- [ ] Log scopes com CorrelationId / TraceId
-- [ ] Dados sensiveis sanitizados (CPF, email, tokens)
-- [ ] Niveis de log ajustados por ambiente
-- [ ] Excecoes logadas com stack trace completo
-- [ ] Health check endpoints excluidos do tracing
+### Telemetria e logs
+- [ ] OpenTelemetry configurado para tracing, métricas e logs, com `service.name`.
+- [ ] Endpoint OTLP vem do ambiente de deploy.
+- [ ] `ActivitySource` e `Meter` da aplicação e da mensageria registrados.
+- [ ] Endpoints `/health/*` excluídos do tracing.
+- [ ] Logs com templates estruturados e scopes; sem interpolação.
+- [ ] Dados sensíveis ausentes de logs, spans, métricas e respostas de erro.
+- [ ] Níveis de log ajustados por ambiente.
 
-### Observabilidade
-- [ ] Health checks configurados (liveness + readiness)
-- [ ] Health check de banco de dados ativo
-- [ ] Kubernetes probes apontando para /health/*
-- [ ] Metricas customizadas de negocio expostas
-- [ ] ActivitySource configurado para tracing manual
-- [ ] Dashboards/alertas criados no observability stack
+### Health e operação (`dotnet-observability`)
+- [ ] `/health/live` sem dependências externas; `/health/ready` com as obrigatórias.
+- [ ] Probes de startup, liveness e readiness configuradas no Kubernetes.
+- [ ] Alerta para outbox atrasado ou com tentativas esgotadas.
+- [ ] Alerta para mensagens em DLQ.
+- [ ] Dashboards de latência, erro e saturação publicados.
 
-### Resiliencia
-- [ ] Retry policies configuradas (Polly)
-- [ ] Circuit breaker para dependencias externas
-- [ ] Timeouts definidos em chamadas HTTP
-- [ ] CancellationToken propagado em toda cadeia async
-- [ ] Graceful shutdown configurado
+### Resiliência
+- [ ] Clientes HTTP com `AddStandardResilienceHandler`, timeouts explícitos e retry só em métodos idempotentes.
+- [ ] Consumidores RabbitMQ com retry, DLQ e idempotência (inbox quando necessário).
+- [ ] `CancellationToken` propagado em toda a cadeia assíncrona.
+- [ ] Graceful shutdown: `HostOptions.ShutdownTimeout` maior que o tempo de um lote do outbox e de uma mensagem.
 
-### Performance
-- [ ] AsNoTracking em queries de leitura
-- [ ] Paginacao implementada em endpoints de lista
-- [ ] Cache configurado (Memory e/ou Redis)
-- [ ] Connection pooling de banco ativo
-- [ ] Indices de banco revisados
+### Dados e performance
+- [ ] Migrations aplicadas por step de deploy, nunca no boot (`dotnet-dependency-config`).
+- [ ] Listagens paginadas com `_page`/`_size` e limite de `_size`.
+- [ ] Índices revisados para as consultas novas.
+- [ ] Cache com TTL e invalidação definidos, quando usado.
 
-### Seguranca
-- [ ] Autenticacao/autorizacao configurada
-- [ ] CORS policy definida
-- [ ] HTTPS obrigatorio
-- [ ] Secrets em vault (nao em appsettings)
-- [ ] Rate limiting configurado
-- [ ] Validacao de input (FluentValidation)
+### Segurança
+- [ ] Autenticação e policies de autorização aplicadas aos endpoints.
+- [ ] CORS restrito às origens conhecidas.
+- [ ] HTTPS obrigatório na borda.
+- [ ] Segredos no orquestrador ou cofre (Kubernetes Secret, Vault); nenhum em `appsettings*.json` versionado.
+- [ ] Rate limiting nos endpoints expostos.
+- [ ] Input validado (FluentValidation e invariantes de domínio) e erros em `ProblemDetails` sem stack trace.
 
-### Deploy
-- [ ] Dockerfile otimizado (multi-stage build)
-- [ ] Container health check configurado
-- [ ] Variaveis de ambiente documentadas
-- [ ] Migrations automatizadas no pipeline
-- [ ] Rollback strategy definida
-- [ ] Smoke tests pos-deploy
+### Entrega
+- [ ] Build, testes unitários, de integração e end-to-end passaram.
+- [ ] Dockerfile multi-stage, imagem sem SDK e usuário não root.
+- [ ] Variáveis de ambiente documentadas.
+- [ ] Estratégia de rollback definida, incluindo compatibilidade das migrations.
+- [ ] Smoke test pós-deploy.

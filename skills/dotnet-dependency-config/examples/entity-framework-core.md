@@ -7,262 +7,135 @@
 - **Lazy/Eager Loading**: Controle flexivel de carregamento de dados relacionados
 - **Multi-Provider**: Suporte a diversos bancos de dados (PostgreSQL, Oracle, SQL Server)
 
-### DbContext - Configuracao Base
-```csharp
-public class AppDbContext : DbContext
-{
-    public AppDbContext(DbContextOptions<AppDbContext> options)
-        : base(options)
-    {
-    }
+### DbContext
 
-    public DbSet<User> Users { get; set; } = null!;
-    public DbSet<Product> Products { get; set; } = null!;
-    public DbSet<Order> Orders { get; set; } = null!;
+Um `DbContext` por serviço (ou por módulo no monolito modular), com os agregados e as tabelas
+técnicas de mensageria. Configurações por entidade em `Configurations/`, aplicadas por assembly.
+
+```csharp
+// Infra.Data/ProjectNameDbContext.cs
+public sealed class ProjectNameDbContext : DbContext
+{
+    public ProjectNameDbContext(DbContextOptions<ProjectNameDbContext> options) : base(options) { }
+
+    public DbSet<Category> Categories => Set<Category>();
+    public DbSet<Genre> Genres => Set<Genre>();
+    public DbSet<GenresCategories> GenresCategories => Set<GenresCategories>();
+    public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
+    public DbSet<ProcessedMessage> ProcessedMessages => Set<ProcessedMessage>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
+        modelBuilder.ApplyConfigurationsFromAssembly(typeof(ProjectNameDbContext).Assembly);
         base.OnModelCreating(modelBuilder);
     }
 }
 ```
 
-### Configuracao de Entidade com Fluent API
+### Configuração de agregado com Fluent API
+
 ```csharp
-public class UserConfiguration : IEntityTypeConfiguration<User>
+// Infra.Data/Configurations/CategoryConfiguration.cs
+public sealed class CategoryConfiguration : IEntityTypeConfiguration<Category>
 {
-    public void Configure(EntityTypeBuilder<User> builder)
+    public void Configure(EntityTypeBuilder<Category> builder)
     {
-        builder.ToTable("users");
-        
-        builder.HasKey(u => u.Id);
-        
-        builder.Property(u => u.Id)
-            .HasColumnName("user_id")
-            .ValueGeneratedOnAdd();
-        
-        builder.Property(u => u.Name)
+        builder.ToTable("categories");
+
+        builder.HasKey(category => category.Id);
+        builder.Property(category => category.Id)
+            .HasColumnName("id")
+            .ValueGeneratedNever(); // the aggregate generates its own Guid
+
+        builder.Property(category => category.Name)
             .HasColumnName("name")
-            .HasMaxLength(100)
-            .IsRequired();
-        
-        builder.Property(u => u.Email)
-            .HasColumnName("email")
             .HasMaxLength(255)
             .IsRequired();
-        
-        builder.HasIndex(u => u.Email)
-            .IsUnique()
-            .HasDatabaseName("ix_users_email");
-        
-        builder.HasMany(u => u.Orders)
-            .WithOne(o => o.User)
-            .HasForeignKey(o => o.UserId)
-            .HasConstraintName("fk_orders_users")
-            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.Property(category => category.Description)
+            .HasColumnName("description")
+            .HasMaxLength(10_000)
+            .IsRequired();
+
+        builder.Property(category => category.IsActive).HasColumnName("is_active");
+        builder.Property(category => category.CreatedAt).HasColumnName("created_at");
+
+        builder.HasIndex(category => category.Name).HasDatabaseName("ix_categories_name");
+
+        builder.Ignore(category => category.Events); // domain events are not columns
+    }
+}
+
+// Infra.Data/Configurations/GenresCategoriesConfiguration.cs
+public sealed class GenresCategoriesConfiguration : IEntityTypeConfiguration<GenresCategories>
+{
+    public void Configure(EntityTypeBuilder<GenresCategories> builder)
+    {
+        builder.ToTable("genres_categories");
+        builder.HasKey(relation => new { relation.GenreId, relation.CategoryId });
+
+        // Aggregates reference each other by Id only: foreign keys without navigation properties
+        builder.HasOne<Genre>().WithMany().HasForeignKey(relation => relation.GenreId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne<Category>().WithMany().HasForeignKey(relation => relation.CategoryId).OnDelete(DeleteBehavior.Restrict);
     }
 }
 ```
 
-### Registro no DI — PostgreSQL (Padrao)
+- Agregados têm Id gerado no domínio (`Guid`): `ValueGeneratedNever`.
+- Relação entre agregados é só por chave estrangeira, sem navegação de um agregado para outro.
+- Coleção que pertence ao agregado (ex.: `Order.Items`) é mapeada com `OwnsMany` ou `HasMany`
+  com navegação, e carregada pelo repositório do agregado.
+
+### Registro no DI — PostgreSQL (padrão)
+
 ```csharp
-// Program.cs — PostgreSQL (padrao oficial)
-var builder = WebApplication.CreateBuilder(args);
-
-builder.Services.AddDbContext<AppDbContext>(options =>
+// Api/Extensions/PersistenceExtensions.cs
+public static class PersistenceExtensions
 {
-    var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
-    options.UseNpgsql(connectionString, npgsqlOptions =>
+    public static IServiceCollection AddPersistenceConfiguration(this IServiceCollection services, IConfiguration configuration)
     {
-        npgsqlOptions.MigrationsHistoryTable("__ef_migrations_history");
-    });
-    
-    if (builder.Environment.IsDevelopment())
-    {
-        options.EnableSensitiveDataLogging();
-        options.EnableDetailedErrors();
+        services.AddDbContext<ProjectNameDbContext>(options =>
+            options.UseNpgsql(
+                configuration.GetConnectionString("DefaultConnection"),
+                npgsql => npgsql.MigrationsHistoryTable("__ef_migrations_history")));
+
+        services.AddScoped<IUnitOfWork, UnitOfWork>();
+        services.AddScoped<ICategoryRepository, CategoryRepository>();
+        services.AddScoped<IGenreRepository, GenreRepository>();
+
+        return services;
     }
-});
-
-// Alternative: DbContext Pooling for better performance
-builder.Services.AddDbContextPool<AppDbContext>(options =>
-{
-    var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
-    options.UseNpgsql(connectionString);
-}, poolSize: 128);
-
-// Repository registration
-builder.Services.AddScoped<IUserRepository, UserRepository>();
-builder.Services.AddScoped<IProductRepository, ProductRepository>();
-builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
+}
 ```
 
-### Registro no DI — Oracle (Alternativa)
+`EnableSensitiveDataLogging` e `EnableDetailedErrors` só em Development (expõem valores de parâmetros
+nos logs). `AddDbContextPool` só depois de medir custo de criação de contexto (`dotnet-performance`); o pool
+exige que o `DbContext` não guarde estado próprio entre requests.
+
+### Registro no DI — Oracle (alternativa)
+
 ```csharp
-// Program.cs — Oracle (alternativa suportada por excecao)
-builder.Services.AddDbContext<AppDbContext>(options =>
-{
-    var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
-    options.UseOracle(connectionString, oracleOptions =>
-    {
-        oracleOptions.MigrationsHistoryTable("__EF_MIGRATIONS_HISTORY");
-        oracleOptions.UseOracleSQLCompatibility(OracleSQLCompatibility.DatabaseVersion19);
-    });
-    
-    if (builder.Environment.IsDevelopment())
-    {
-        options.EnableSensitiveDataLogging();
-        options.EnableDetailedErrors();
-    }
-});
+// Api/Extensions/PersistenceExtensions.cs — Oracle, only for services that already use it
+services.AddDbContext<ProjectNameDbContext>(options =>
+    options.UseOracle(
+        configuration.GetConnectionString("DefaultConnection"),
+        oracle =>
+        {
+            oracle.MigrationsHistoryTable("__EF_MIGRATIONS_HISTORY");
+            oracle.UseOracleSQLCompatibility(OracleSQLCompatibility.DatabaseVersion19);
+        }));
 ```
 
-### Unit of Work Pattern
-```csharp
-public interface IUnitOfWork : IDisposable
-{
-    IUserRepository Users { get; }
-    IProductRepository Products { get; }
-    IOrderRepository Orders { get; }
-    Task<int> CommitAsync(CancellationToken cancellationToken = default);
-    Task RollbackAsync();
-}
+### Unit of Work e repositórios
 
-public class UnitOfWork : IUnitOfWork
-{
-    private readonly AppDbContext _context;
-    private IUserRepository? _users;
-    private IProductRepository? _products;
-    private IOrderRepository? _orders;
+Repositórios existem por agregado, com contratos no Domain
+(`dotnet-architecture/examples/repository-pattern.md`). O `UnitOfWork` não expõe repositórios nem
+faz rollback manual: grava dados e eventos de domínio (outbox) em um único `SaveChangesAsync`, que
+já é uma transação (`examples/outbox-inbox.md`).
 
-    public UnitOfWork(AppDbContext context)
-    {
-        _context = context;
-    }
-
-    public IUserRepository Users => 
-        _users ??= new UserRepository(_context);
-    
-    public IProductRepository Products => 
-        _products ??= new ProductRepository(_context);
-    
-    public IOrderRepository Orders => 
-        _orders ??= new OrderRepository(_context);
-
-    public async Task<int> CommitAsync(CancellationToken cancellationToken = default)
-    {
-        return await _context.SaveChangesAsync(cancellationToken);
-    }
-
-    public async Task RollbackAsync()
-    {
-        await _context.Database.RollbackTransactionAsync();
-    }
-
-    public void Dispose()
-    {
-        _context.Dispose();
-    }
-}
-```
-
-### Generic Repository Pattern
-```csharp
-public interface IBaseRepository<T> where T : class
-{
-    Task<T?> GetByIdAsync(int id, CancellationToken cancellationToken = default);
-    Task<IEnumerable<T>> GetAllAsync(CancellationToken cancellationToken = default);
-    Task<IEnumerable<T>> SearchAsync(Expression<Func<T, bool>> predicate, CancellationToken cancellationToken = default);
-    Task AddAsync(T entity, CancellationToken cancellationToken = default);
-    void Update(T entity);
-    void Remove(T entity);
-}
-
-public class BaseRepository<T> : IBaseRepository<T> where T : class
-{
-    protected readonly AppDbContext _context;
-    protected readonly DbSet<T> _dbSet;
-
-    public BaseRepository(AppDbContext context)
-    {
-        _context = context;
-        _dbSet = context.Set<T>();
-    }
-
-    public virtual async Task<T?> GetByIdAsync(int id, CancellationToken cancellationToken = default)
-    {
-        return await _dbSet.FindAsync(new object[] { id }, cancellationToken);
-    }
-
-    public virtual async Task<IEnumerable<T>> GetAllAsync(CancellationToken cancellationToken = default)
-    {
-        return await _dbSet.ToListAsync(cancellationToken);
-    }
-
-    public virtual async Task<IEnumerable<T>> SearchAsync(
-        Expression<Func<T, bool>> predicate, 
-        CancellationToken cancellationToken = default)
-    {
-        return await _dbSet.Where(predicate).ToListAsync(cancellationToken);
-    }
-
-    public virtual async Task AddAsync(T entity, CancellationToken cancellationToken = default)
-    {
-        await _dbSet.AddAsync(entity, cancellationToken);
-    }
-
-    public virtual void Update(T entity)
-    {
-        _dbSet.Update(entity);
-    }
-
-    public virtual void Remove(T entity)
-    {
-        _dbSet.Remove(entity);
-    }
-}
-```
-
-### Repositorio Especifico com Queries Complexas
-```csharp
-public interface IUserRepository : IBaseRepository<User>
-{
-    Task<User?> GetByEmailAsync(string email, CancellationToken cancellationToken = default);
-    Task<User?> GetWithOrdersAsync(int id, CancellationToken cancellationToken = default);
-    Task<IEnumerable<User>> GetActiveUsersAsync(CancellationToken cancellationToken = default);
-}
-
-public class UserRepository : BaseRepository<User>, IUserRepository
-{
-    public UserRepository(AppDbContext context) : base(context) { }
-
-    public async Task<User?> GetByEmailAsync(string email, CancellationToken cancellationToken = default)
-    {
-        return await _dbSet
-            .AsNoTracking()
-            .FirstOrDefaultAsync(u => u.Email == email, cancellationToken);
-    }
-
-    public async Task<User?> GetWithOrdersAsync(int id, CancellationToken cancellationToken = default)
-    {
-        return await _dbSet
-            .Include(u => u.Orders)
-                .ThenInclude(o => o.Items)
-                    .ThenInclude(i => i.Product)
-            .FirstOrDefaultAsync(u => u.Id == id, cancellationToken);
-    }
-
-    public async Task<IEnumerable<User>> GetActiveUsersAsync(CancellationToken cancellationToken = default)
-    {
-        return await _dbSet
-            .AsNoTracking()
-            .Where(u => u.Active)
-            .OrderBy(u => u.Name)
-            .ToListAsync(cancellationToken);
-    }
-}
-```
+Não crie `BaseRepository<T> where T : class` com `GetAllAsync` ou `SearchAsync(Expression<...>)`:
+isso expõe o modelo de persistência para qualquer classe e empurra filtros para fora do
+repositório do agregado.
 
 ### Migrations - Comandos Essenciais
 ```bash
@@ -285,73 +158,67 @@ dotnet ef migrations list
 dotnet ef migrations remove
 ```
 
-### Configuracao de Connection String
+### Connection string
+
 ```json
-// appsettings.json — PostgreSQL (padrao)
+// appsettings.json — no password; the full value comes from user-secrets or ConnectionStrings__DefaultConnection
 {
   "ConnectionStrings": {
-    "DefaultConnection": "Host=localhost;Port=5432;Database=mydb;Username=myuser;Password=mypassword;"
+    "DefaultConnection": "Host=localhost;Port=5432;Database=projectname;Username=projectname"
   }
 }
-
-// appsettings.json — Oracle (alternativa)
-// {
-//   "ConnectionStrings": {
-//     "DefaultConnection": "User Id=myUser;Password=myPassword;Data Source=localhost:1521/ORCLPDB1;"
-//   }
-// }
 ```
 
-### Interceptors para Auditoria
+Segredos seguem `examples/configuration-secrets.md`.
+
+### Interceptor de auditoria
+
+Colunas técnicas de auditoria (`updated_at`, `updated_by`) não pertencem ao agregado. Mapeie como
+shadow properties e preencha em um interceptor, sem setters públicos no domínio.
+
 ```csharp
-public class AuditInterceptor : SaveChangesInterceptor
+// Infra.Data/Configurations/CategoryConfiguration.cs (trecho)
+builder.Property<DateTime?>("UpdatedAt").HasColumnName("updated_at");
+
+// Infra.Data/Interceptors/AuditInterceptor.cs
+public sealed class AuditInterceptor : SaveChangesInterceptor
 {
-    public override InterceptionResult<int> SavingChanges(
-        DbContextEventData eventData,
-        InterceptionResult<int> result)
-    {
-        UpdateAuditFields(eventData.Context);
-        return base.SavingChanges(eventData, result);
-    }
+    private const string UpdatedAtProperty = "UpdatedAt";
 
     public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
         DbContextEventData eventData,
         InterceptionResult<int> result,
         CancellationToken cancellationToken = default)
     {
-        UpdateAuditFields(eventData.Context);
+        if (eventData.Context is not null)
+            SetUpdatedAt(eventData.Context);
+
         return base.SavingChangesAsync(eventData, result, cancellationToken);
     }
 
-    private void UpdateAuditFields(DbContext? context)
+    private static void SetUpdatedAt(DbContext context)
     {
-        if (context is null) return;
-
         var now = DateTime.UtcNow;
-        
-        foreach (var entry in context.ChangeTracker.Entries<IAuditableEntity>())
+
+        foreach (var entry in context.ChangeTracker.Entries<AggregateRoot>())
         {
-            switch (entry.State)
-            {
-                case EntityState.Added:
-                    entry.Entity.CreatedAt = now;
-                    entry.Entity.UpdatedAt = now;
-                    break;
-                case EntityState.Modified:
-                    entry.Entity.UpdatedAt = now;
-                    break;
-            }
+            if (entry.State is not (EntityState.Added or EntityState.Modified))
+                continue;
+
+            if (entry.Metadata.FindProperty(UpdatedAtProperty) is not null)
+                entry.Property(UpdatedAtProperty).CurrentValue = now;
         }
     }
 }
 
-// Interceptor registration
-builder.Services.AddDbContext<AppDbContext>((sp, options) =>
-{
+// Registration
+services.AddSingleton<AuditInterceptor>();
+services.AddDbContext<ProjectNameDbContext>((serviceProvider, options) =>
     options.UseNpgsql(connectionString)
-           .AddInterceptors(new AuditInterceptor());
-});
+        .AddInterceptors(serviceProvider.GetRequiredService<AuditInterceptor>()));
 ```
+
+Use interceptor de auditoria só quando o requisito pedir rastreabilidade.
 
 ## Troubleshooting de Migrations
 
@@ -367,11 +234,11 @@ projeto, ele gera migrations com a sintaxe da versão instalada — não da vers
 `.csproj`. Trave a ferramenta por projeto com um manifest versionado:
 
 ```bash
-# Uma vez por repositório
+# Once per repository
 dotnet new tool-manifest
-dotnet tool install dotnet-ef --version 9.0.0   # mesma major do Microsoft.EntityFrameworkCore.Design
+dotnet tool install dotnet-ef --version 9.0.0   # same major as Microsoft.EntityFrameworkCore.Design
 
-# Em qualquer clone novo ou pipeline de CI
+# On every fresh clone or CI pipeline
 dotnet tool restore
 dotnet tool run dotnet-ef migrations add MigrationName
 ```
@@ -420,9 +287,9 @@ Sintoma típico: comando trava, falha com erro genérico de DI, ou usa a connect
 Resolva com uma factory explícita para design-time:
 
 ```csharp
-public class AppDbContextFactory : IDesignTimeDbContextFactory<AppDbContext>
+public class ProjectNameDbContextFactory : IDesignTimeDbContextFactory<ProjectNameDbContext>
 {
-    public AppDbContext CreateDbContext(string[] args)
+    public ProjectNameDbContext CreateDbContext(string[] args)
     {
         var configuration = new ConfigurationBuilder()
             .SetBasePath(Directory.GetCurrentDirectory())
@@ -430,10 +297,10 @@ public class AppDbContextFactory : IDesignTimeDbContextFactory<AppDbContext>
             .AddEnvironmentVariables()
             .Build();
 
-        var optionsBuilder = new DbContextOptionsBuilder<AppDbContext>();
+        var optionsBuilder = new DbContextOptionsBuilder<ProjectNameDbContext>();
         optionsBuilder.UseNpgsql(configuration.GetConnectionString("DefaultConnection"));
 
-        return new AppDbContext(optionsBuilder.Options);
+        return new ProjectNameDbContext(optionsBuilder.Options);
     }
 }
 ```
@@ -444,9 +311,9 @@ Sem os flags corretos, `dotnet-ef` escolhe o `DbContext` ou o projeto errado sil
 
 ```bash
 dotnet ef migrations add MigrationName \
-  --project src/4-Infra/ProjectName.Infra \
-  --startup-project src/1-Services/ProjectName.API \
-  --context AppDbContext
+  --project src/ProjectName.Infra.Data \
+  --startup-project src/ProjectName.Api \
+  --context ProjectNameDbContext
 ```
 
 `--startup-project` precisa apontar para o projeto executável (tem `appsettings.json` e DI
@@ -459,10 +326,10 @@ disponibilidade do banco e roda a cada réplica subindo — em produção isso v
 entre pods e falha de boot mascarando falha de schema. Separe em um step de deploy/job dedicado:
 
 ```bash
-# Pipeline de deploy — antes do rollout da aplicação
-dotnet ef database update --project src/4-Infra/ProjectName.Infra --startup-project src/1-Services/ProjectName.API
+# Deploy pipeline — before rolling out the application
+dotnet ef database update --project src/ProjectName.Infra.Data --startup-project src/ProjectName.Api
 
-# Ou, para ambientes sem acesso direto ao dotnet-ef, gere um script idempotente
+# Or, where dotnet-ef cannot reach the database, generate an idempotent script
 dotnet ef migrations script --idempotent -o migrate.sql
 ```
 

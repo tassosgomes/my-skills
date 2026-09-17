@@ -1,6 +1,6 @@
 ---
 name: dotnet-dependency-config
-description: "Use quando uma tarefa .NET adiciona ou altera pacotes, EF Core, banco, cache, mensageria, configuração, DI, migrations ou uma biblioteca NuGet. Não use para criar apenas um endpoint ou revisar estilo."
+description: "Use quando uma tarefa .NET adiciona ou altera pacotes, EF Core, banco, cache, mensageria (RabbitMQ, outbox, inbox), configuração, DI, migrations ou uma biblioteca NuGet. Não use para criar apenas um endpoint ou revisar estilo."
 metadata:
   group: dotnet
 ---
@@ -15,10 +15,12 @@ componente alterado; os exemplos completos estão em `examples/`.
 - **Banco:** PostgreSQL para novos serviços; Oracle somente para legado, integração existente ou
   aprovação explícita.
 - **ORM:** Entity Framework Core; configure entidades com Fluent API e registre o contexto via DI.
-- **Mapeamento:** Mapster ou mapeamento manual; AutoMapper não é o padrão deste catálogo.
+- **Mapeamento:** manual, com `static From{Entidade}` no Output do caso de uso. AutoMapper não é
+  usado (licença comercial desde 2025); Mapster só com justificativa de volume.
 - **Validação:** FluentValidation.
 - **Resiliência HTTP:** `IHttpClientFactory` com Polly e timeouts explícitos.
-- **Mensageria:** `Rmq.CloudEvents` quando RabbitMQ for adotado.
+- **Mensageria:** `RabbitMQ.Client` 7.x direto (API assíncrona), sem biblioteca wrapper; outbox
+  obrigatório no produtor e consumidor idempotente (inbox quando necessário).
 - **Observabilidade:** OpenTelemetry/OTLP quando a tarefa configurar telemetria.
 - **Configuração:** opções tipadas (`IOptions<T>`), `appsettings.{Environment}.json` para config não
   sensível, variáveis de ambiente (`__`) para overrides e `dotnet user-secrets` para segredos em
@@ -41,20 +43,31 @@ pacotes; não introduza upgrade amplo como efeito colateral de uma mudança loca
 - Fixe a versão do `dotnet-ef` por projeto via `.config/dotnet-tools.json`, na mesma major do
   `Microsoft.EntityFrameworkCore.Design` referenciado — descompasso de versão é a causa mais comum
   de migration com sintaxe incompatível.
-- Use Unit of Work explícito; queries de leitura devem considerar `AsNoTracking`.
+- Use Unit of Work explícito (`IUnitOfWork.CommitAsync`) que grava dados e outbox no mesmo
+  `SaveChangesAsync`; leitura para alteração é rastreada, listagem usa `AsNoTracking`.
 - Use interceptors de auditoria apenas quando o requisito exigir rastreabilidade.
 - Não aplique migration automaticamente no boot do `Program.cs` em produção; separe em step de
   deploy (`examples/entity-framework-core.md#troubleshooting-de-migrations`).
 
 ### DI e mapeamento
 
-- Registre dependências por interface e mantenha composition root na API/Infrastructure.
-- Centralize configurações Mapster e não exponha entidades de persistência nos contratos HTTP.
+- Registre dependências por interface e mantenha o composition root na Api (`Extensions/`).
+- Casos de uso, repositórios, `IUnitOfWork` e `DbContext` são `Scoped`; conexão e publisher do
+  RabbitMQ são `Singleton`.
+- Casos de uso são registrados pela interface de mesmo nome (Scrutor `AsMatchingInterface` ou
+  registro manual).
+- Não exponha entidades de persistência nos contratos HTTP.
 
-### RabbitMQ
+### RabbitMQ, outbox e inbox
 
-- Use CloudEvents, ACK em sucesso e NACK sem requeue após falha final.
-- Configure retry com backoff e DLQ; não esconda falhas de consumo em loops infinitos.
+- Caso de uso nunca publica no broker; o evento vai para o outbox na mesma transação e um
+  `BackgroundService` publica com publisher confirms.
+- Topologia declarada em `IHostedService` antes dos consumidores: exchange `topic`, filas quorum,
+  DLX/DLQ por fila e `x-delivery-limit`.
+- Consumidor com `autoAck: false`, ACK após sucesso, retry com backoff para falha transitória e NACK
+  sem requeue na falha final.
+- Consumidor com efeito não idempotente usa inbox (`MessageId` + consumidor na mesma transação).
+- Nunca abra conexão ou canal com `.GetAwaiter().GetResult()`.
 
 ### Bibliotecas NuGet
 
@@ -67,8 +80,9 @@ pacotes; não introduza upgrade amplo como efeito colateral de uma mudança loca
 | Necessidade | Recurso |
 |---|---|
 | EF Core, providers, migrations, interceptors e troubleshooting | `examples/entity-framework-core.md` |
-| DI e Mapster | `examples/di-patterns.md` |
-| RabbitMQ, retry e DLQ | `examples/messaging-rabbitmq.md` |
+| registro de casos de uso, repositórios e lifetimes | `examples/di-patterns.md` |
+| RabbitMQ: conexão, topologia, publisher confirms, consumidor, retry e DLQ | `examples/messaging-rabbitmq.md` |
+| outbox, worker de publicação, inbox e idempotência | `examples/outbox-inbox.md` |
 | empacotamento e publicação NuGet | `examples/nuget-library.md` |
 | appsettings, variáveis de ambiente e `dotnet user-secrets` | `examples/configuration-secrets.md` |
 | docker-compose local e versões fixas de Postgres/Mongo/Valkey/RabbitMQ | `examples/local-infrastructure.md` |
@@ -81,7 +95,7 @@ pacotes; não introduza upgrade amplo como efeito colateral de uma mudança loca
 - [ ] Segredo de desenvolvimento local usa `dotnet user-secrets`, não arquivo versionado.
 - [ ] Registro DI, options e migrations estão coerentes.
 - [ ] A versão do `dotnet-ef` está fixada no `.config/dotnet-tools.json` e bate com o pacote `Design`.
-- [ ] Queries de leitura e Unit of Work respeitam o padrão.
-- [ ] Retry, timeout, DLQ e idempotência foram considerados nas integrações.
+- [ ] Queries de leitura e Unit of Work respeitam o padrão; eventos passam pelo outbox.
+- [ ] Retry, timeout, DLQ e idempotência (inbox quando necessário) foram considerados nas integrações.
 - [ ] Container local (se alterado) usa a tag fixada em `examples/local-infrastructure.md`.
 - [ ] A alteração não atualiza dependências não relacionadas.

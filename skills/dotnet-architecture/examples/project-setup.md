@@ -1,78 +1,119 @@
-# Comandos para Criacao da Estrutura
+# Estrutura da Solution — API simples
 
-Comandos `dotnet` CLI para criar a solution, projetos, adicionar a solution e configurar as referencias entre camadas.
+Layout `src/` + `tests/`, um projeto por camada e um projeto de infraestrutura por tecnologia.
+Os testes espelham a árvore de `src/`.
 
-## 1. Criar Solution
+## Árvore
+
+```text
+ProjectName.sln
+docker-compose.yml                      # infraestrutura local (dotnet-dependency-config)
+.config/dotnet-tools.json               # dotnet-ef fixado
+src/
+├── ProjectName.Domain/
+│   ├── SeedWork/                       # Entity, AggregateRoot, ValueObject, DomainEvent, IUnitOfWork, repositórios genéricos
+│   ├── Entities/                       # Category.cs, Genre.cs
+│   ├── ValueObjects/
+│   ├── Events/                         # CategoryCreatedEvent.cs
+│   ├── Enums/
+│   ├── Exceptions/                     # EntityValidationException.cs
+│   ├── Repositories/                   # ICategoryRepository.cs
+│   └── Validation/                     # DomainValidation, ValidationHandler, validators por notificação
+├── ProjectName.Application/
+│   ├── Common/                         # PaginatedListInput, PaginatedListOutput, IUseCase
+│   ├── Exceptions/                     # NotFoundException, RelatedAggregateException
+│   ├── Interfaces/                     # portas técnicas: IStorageService, IEmailSender
+│   └── UseCases/
+│       └── Categories/
+│           ├── Common/                 # CategoryModelOutput.cs
+│           ├── CreateCategory/         # ICreateCategory, CreateCategory, CreateCategoryInput, CreateCategoryInputValidator
+│           └── ListCategories/         # IListCategories, ListCategories, ListCategoriesInput, ListCategoriesOutput
+├── ProjectName.Infra.Data/
+│   ├── ProjectNameDbContext.cs
+│   ├── UnitOfWork.cs
+│   ├── Configurations/                 # IEntityTypeConfiguration<T>
+│   ├── Repositories/
+│   ├── Outbox/                         # OutboxMessage + configuração
+│   ├── Inbox/                          # ProcessedMessage + configuração
+│   └── Migrations/
+├── ProjectName.Infra.Messaging/
+│   ├── Configuration/                  # RabbitMqOptions, EventRoutes
+│   ├── Connection/                     # RabbitMqConnectionProvider
+│   ├── Topology/                       # RabbitMqTopologyInitializer
+│   ├── Publishing/                     # RabbitMqPublisher, OutboxPublisherWorker
+│   └── Consuming/                      # RabbitMqConsumerWorker<T>, IMessageHandler<T>
+└── ProjectName.Api/
+    ├── Program.cs
+    ├── Extensions/                     # um arquivo por concern (dotnet-program-setup)
+    ├── Controllers/
+    ├── ApiModels/
+    │   ├── Responses/                  # ApiResponse<T>, ApiResponseList<T>, PaginationMeta
+    │   └── Categories/                 # UpdateCategoryApiInput.cs
+    ├── Authorization/                  # Policies.cs, Roles.cs
+    ├── ExceptionHandlers/              # GlobalExceptionHandler.cs
+    └── MessageHandlers/                # IMessageHandler<T> que chamam casos de uso
+tests/
+├── ProjectName.Tests.Common/           # BaseFixture e geradores de dados compartilhados
+├── ProjectName.UnitTests/
+│   ├── Domain/Entities/Categories/
+│   └── Application/UseCases/Categories/CreateCategory/
+├── ProjectName.IntegrationTests/
+│   ├── Application/UseCases/Categories/CreateCategory/
+│   └── Infra.Data/Repositories/CategoryRepository/
+└── ProjectName.EndToEndTests/
+    ├── Base/                           # ProjectNameWebApplicationFactory, ApiClient
+    └── Api/Categories/CreateCategory/
+```
+
+Regras de nomes das pastas:
+
+- PascalCase, cada pasta é um segmento do namespace (`ProjectName.Application.UseCases.Categories.CreateCategory`).
+- Pastas que agrupam tipos ficam no plural (`Entities`, `UseCases/Categories`). Isso evita que o
+  namespace `...UseCases.Category` colida com a classe `Category` e obrigue alias como
+  `using DomainEntity = ...`.
+
+## Comandos
 
 ```bash
 dotnet new sln -n ProjectName
+
+dotnet new classlib -n ProjectName.Domain -o src/ProjectName.Domain
+dotnet new classlib -n ProjectName.Application -o src/ProjectName.Application
+dotnet new classlib -n ProjectName.Infra.Data -o src/ProjectName.Infra.Data
+dotnet new classlib -n ProjectName.Infra.Messaging -o src/ProjectName.Infra.Messaging
+dotnet new webapi --use-controllers -n ProjectName.Api -o src/ProjectName.Api
+
+dotnet new classlib -n ProjectName.Tests.Common -o tests/ProjectName.Tests.Common
+dotnet new xunit -n ProjectName.UnitTests -o tests/ProjectName.UnitTests
+dotnet new xunit -n ProjectName.IntegrationTests -o tests/ProjectName.IntegrationTests
+dotnet new xunit -n ProjectName.EndToEndTests -o tests/ProjectName.EndToEndTests
+
+dotnet sln add src/*/*.csproj tests/*/*.csproj
 ```
 
-## 2. Criar Projetos
+## Referências
 
 ```bash
-# API
-mkdir 1-Services && cd 1-Services
-dotnet new webapi -n ProjectName.API
-cd ..
+# Application → Domain
+dotnet add src/ProjectName.Application reference src/ProjectName.Domain
 
-# Application
-mkdir 2-Application && cd 2-Application
-dotnet new classlib -n ProjectName.Application
-cd ..
+# Infra.Data → Domain (+ Application only to implement a technical port from Application/Interfaces)
+dotnet add src/ProjectName.Infra.Data reference src/ProjectName.Domain
 
-# Domain
-mkdir 3-Domain && cd 3-Domain
-dotnet new classlib -n ProjectName.Domain
-cd ProjectName.Domain && mkdir Entities Services Interfaces
-cd ../..
+# Infra.Messaging → Infra.Data (reads the outbox, writes the inbox)
+dotnet add src/ProjectName.Infra.Messaging reference src/ProjectName.Infra.Data
 
-# Infra
-mkdir 4-Infra && cd 4-Infra
-dotnet new classlib -n ProjectName.Infra
-cd ProjectName.Infra && mkdir Repositories
-cd ../..
+# Api → Application + Infra.* (composition root)
+dotnet add src/ProjectName.Api reference src/ProjectName.Application
+dotnet add src/ProjectName.Api reference src/ProjectName.Infra.Data
+dotnet add src/ProjectName.Api reference src/ProjectName.Infra.Messaging
 
 # Tests
-mkdir 5-Tests && cd 5-Tests
-dotnet new xunit -n ProjectName.UnitTests
-dotnet new xunit -n ProjectName.IntegrationTests
-dotnet new xunit -n ProjectName.End2EndTests
-cd ..
+dotnet add tests/ProjectName.Tests.Common reference src/ProjectName.Domain
+dotnet add tests/ProjectName.UnitTests reference src/ProjectName.Application tests/ProjectName.Tests.Common
+dotnet add tests/ProjectName.IntegrationTests reference src/ProjectName.Application src/ProjectName.Infra.Data tests/ProjectName.Tests.Common
+dotnet add tests/ProjectName.EndToEndTests reference src/ProjectName.Api tests/ProjectName.Tests.Common
 ```
 
-## 3. Adicionar Projetos a Solution
-
-```bash
-dotnet sln add 1-Services/ProjectName.API/ProjectName.API.csproj
-dotnet sln add 2-Application/ProjectName.Application/ProjectName.Application.csproj
-dotnet sln add 3-Domain/ProjectName.Domain/ProjectName.Domain.csproj
-dotnet sln add 4-Infra/ProjectName.Infra/ProjectName.Infra.csproj
-dotnet sln add 5-Tests/ProjectName.UnitTests/ProjectName.UnitTests.csproj
-dotnet sln add 5-Tests/ProjectName.IntegrationTests/ProjectName.IntegrationTests.csproj
-dotnet sln add 5-Tests/ProjectName.End2EndTests/ProjectName.End2EndTests.csproj
-```
-
-## 4. Configurar Referencias
-
-```bash
-# API → Application
-dotnet add 1-Services/ProjectName.API reference 2-Application/ProjectName.Application
-
-# Application → Domain
-dotnet add 2-Application/ProjectName.Application reference 3-Domain/ProjectName.Domain
-
-# Infra → Domain
-dotnet add 4-Infra/ProjectName.Infra reference 3-Domain/ProjectName.Domain
-
-# UnitTests → Application + Domain
-dotnet add 5-Tests/ProjectName.UnitTests reference 2-Application/ProjectName.Application
-dotnet add 5-Tests/ProjectName.UnitTests reference 3-Domain/ProjectName.Domain
-
-# IntegrationTests → Application + Infra
-dotnet add 5-Tests/ProjectName.IntegrationTests reference 2-Application/ProjectName.Application
-dotnet add 5-Tests/ProjectName.IntegrationTests reference 4-Infra/ProjectName.Infra
-
-# End2EndTests → API
-dotnet add 5-Tests/ProjectName.End2EndTests reference 1-Services/ProjectName.API
-```
+A `Api` referencia `Infra.*` apenas para registrar implementações na DI; controllers nunca usam
+tipos de `Infra.*` diretamente.

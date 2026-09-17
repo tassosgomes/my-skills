@@ -1,490 +1,365 @@
 # Referência completa — Observabilidade .NET
 
-> Leia sob demanda para configurações detalhadas de health checks, logging, tracing e probes.
+> Leia sob demanda para configurações detalhadas de health checks, logging, tracing, métricas e
+> probes.
 
-Documento normativo para health checks, logging integrado e estrategias de monitoramento.
-Use este guia somente quando o core da skill tiver roteado a tarefa para observabilidade.
+Os exemplos seguem as demais skills .NET: bootstrap em `Api/Extensions/` (`dotnet-program-setup`),
+casos de uso na Application (`dotnet-architecture`), PostgreSQL como banco padrão, Valkey como
+cache e RabbitMQ com outbox (`dotnet-dependency-config`). Código, nomes de métricas, tags e
+mensagens de log ficam em inglês.
 
-> **Politica de Banco de Dados nos exemplos**
-> - **PostgreSQL e o padrao oficial** — exemplos principais usam PostgreSQL
-> - **Oracle e alternativa suportada** — apenas para servicos oficialmente Oracle
+## Índice
+
+1. [Health checks](#1-health-checks)
+2. [Kubernetes probes](#2-kubernetes-probes)
+3. [Tracing e métricas da aplicação](#3-tracing-e-métricas-da-aplicação)
+4. [Logging estruturado e correlação](#4-logging-estruturado-e-correlação)
+5. [Checklist](#checklist-de-observabilidade)
 
 ---
 
-## Indice
+## 1. Health checks
 
-1. [Health Checks](#health-checks)
-2. [Logging Integrado com Tracing](#logging-integrado-com-tracing)
+Separe por intenção com tags:
 
----
+| Tag | Endpoint | Pergunta | Pode depender de serviço externo? |
+|---|---|---|---|
+| `live` | `/health/live` | O processo está vivo e não travado? | **Não** — falha reinicia o pod |
+| `ready` | `/health/ready` | O pod pode receber tráfego agora? | Sim, só dependências obrigatórias |
 
-# 1. Health Checks
+Dependência opcional (cache, API de terceiros) retorna `Degraded`, nunca `Unhealthy` na
+readiness: tirar todos os pods do balanceador porque o cache caiu transforma degradação em
+indisponibilidade.
 
-> **Por que Health Checks sao essenciais?**
-> - **Monitoramento proativo**: Detectam problemas antes que afetem usuarios finais
-> - **Orquestracao de containers**: Kubernetes e Docker usam health checks para tomada de decisoes automaticas
-> - **Load balancers inteligentes**: Direcionam trafego apenas para instancias saudaveis
-> - **Alertas automaticos**: Sistemas de monitoramento podem gerar alertas baseados em health checks
-> - **Diagnostico rapido**: Identificam rapidamente qual componente esta falhando
-> - **SLA e SLI**: Fundamentais para medir disponibilidade e performance do sistema
+### Pacotes
 
-### Biblioteca Recomendada: AspNetCore.Diagnostics.HealthChecks
-
-```xml
-<!-- Pacotes principais -->
-<PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks" Version="8.0.0" />
-<PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="8.0.0" />
-
-<!-- AspNetCore.HealthChecks - Extensoes especificas -->
-<PackageReference Include="AspNetCore.HealthChecks.UI.Client" Version="7.1.0" />
-
-<!-- Health checks especificos -->
-<PackageReference Include="AspNetCore.HealthChecks.NpgSql" Version="7.0.0" />
-<PackageReference Include="AspNetCore.HealthChecks.Redis" Version="7.0.0" />
-<PackageReference Include="AspNetCore.HealthChecks.RabbitMQ" Version="7.0.0" />
-<PackageReference Include="AspNetCore.HealthChecks.Elasticsearch" Version="7.0.0" />
-<PackageReference Include="AspNetCore.HealthChecks.Network" Version="7.0.0" />
-
-<!-- Alternativa Oracle (quando servico usa Oracle) -->
-<!-- <PackageReference Include="AspNetCore.HealthChecks.Oracle" Version="7.0.0" /> -->
+```bash
+dotnet add src/ProjectName.Api package AspNetCore.HealthChecks.NpgSql
+dotnet add src/ProjectName.Api package AspNetCore.HealthChecks.Redis   # works with Valkey
 ```
 
-### Configuracao Basica — PostgreSQL (Padrao)
+Oracle, só para serviços que o utilizam: `AspNetCore.HealthChecks.Oracle`.
+
+### Registro
 
 ```csharp
-// Program.cs
-using HealthChecks.UI.Client;
-using Microsoft.Extensions.Diagnostics.HealthChecks;
-
-var builder = WebApplication.CreateBuilder(args);
-
-builder.Services.AddHealthChecks()
-    // Health check basico da aplicacao
-    .AddCheck("aplicacao", () => HealthCheckResult.Healthy("Aplicacao esta funcionando"))
-    
-    // Health check de banco de dados PostgreSQL (padrao)
-    .AddNpgSql(
-        connectionString: builder.Configuration.GetConnectionString("DefaultConnection")!,
-        name: "banco-postgresql",
-        failureStatus: HealthStatus.Unhealthy,
-        tags: new[] { "banco", "postgresql" })
-    
-    // Health check de Entity Framework
-    .AddDbContextCheck<AppDbContext>(
-        name: "contexto-ef",
-        failureStatus: HealthStatus.Degraded,
-        tags: new[] { "banco", "ef-core" })
-    
-    // Health check de servico HTTP externo
-    .AddUrlGroup(
-        uri: new Uri("https://api.externa.com/health"),
-        name: "api-externa",
-        failureStatus: HealthStatus.Degraded,
-        tags: new[] { "externo", "api" })
-    
-    // Health check de Redis
-    .AddRedis(
-        connectionString: builder.Configuration.GetConnectionString("Redis")!,
-        name: "cache-redis",
-        failureStatus: HealthStatus.Degraded,
-        tags: new[] { "cache", "redis" })
-    
-    // Health check customizado com dependency injection
-    .AddCheck<VerificadorServicoCustomizado>(
-        name: "servico-customizado",
-        failureStatus: HealthStatus.Unhealthy,
-        tags: new[] { "negocio", "customizado" });
-
-var app = builder.Build();
-
-// Endpoint basico de health check
-app.MapHealthChecks("/health", new HealthCheckOptions
+// Api/Extensions/HealthCheckExtensions.cs
+public static class HealthCheckExtensions
 {
-    ResponseWriter = UIResponseWriter.WriteHealthCheckUIResponse,
-    ResultStatusCodes =
+    private const string LiveTag = "live";
+    private const string ReadyTag = "ready";
+
+    public static IServiceCollection AddHealthCheckConfiguration(this IServiceCollection services, IConfiguration configuration)
     {
-        [HealthStatus.Healthy] = StatusCodes.Status200OK,
-        [HealthStatus.Degraded] = StatusCodes.Status200OK,
-        [HealthStatus.Unhealthy] = StatusCodes.Status503ServiceUnavailable
+        services.AddHealthChecks()
+            .AddCheck("self", () => HealthCheckResult.Healthy(), tags: [LiveTag])
+            .AddNpgSql(
+                configuration.GetConnectionString("DefaultConnection")!,
+                name: "postgresql",
+                failureStatus: HealthStatus.Unhealthy,
+                tags: [ReadyTag],
+                timeout: TimeSpan.FromSeconds(5))
+            .AddCheck<RabbitMqHealthCheck>(
+                "rabbitmq",
+                failureStatus: HealthStatus.Unhealthy,
+                tags: [ReadyTag],
+                timeout: TimeSpan.FromSeconds(5))
+            .AddRedis(
+                configuration.GetConnectionString("Cache")!,
+                name: "valkey",
+                failureStatus: HealthStatus.Degraded,
+                tags: [ReadyTag],
+                timeout: TimeSpan.FromSeconds(3))
+            .AddCheck<OutboxHealthCheck>(
+                "outbox",
+                failureStatus: HealthStatus.Degraded,
+                tags: [ReadyTag]);
+
+        return services;
     }
-});
 
-// Endpoint filtrado por tags
-app.MapHealthChecks("/health/banco", new HealthCheckOptions
-{
-    Predicate = check => check.Tags.Contains("banco"),
-    ResponseWriter = UIResponseWriter.WriteHealthCheckUIResponse
-});
+    public static IEndpointRouteBuilder MapHealthCheckConfiguration(this IEndpointRouteBuilder endpoints)
+    {
+        endpoints.MapHealthChecks("/health/live", new HealthCheckOptions
+        {
+            Predicate = check => check.Tags.Contains(LiveTag)
+        });
 
-app.MapHealthChecks("/health/externos", new HealthCheckOptions
-{
-    Predicate = check => check.Tags.Contains("externo"),
-    ResponseWriter = UIResponseWriter.WriteHealthCheckUIResponse
-});
+        endpoints.MapHealthChecks("/health/ready", new HealthCheckOptions
+        {
+            Predicate = check => check.Tags.Contains(ReadyTag)
+        });
 
-app.Run();
+        return endpoints;
+    }
+}
 ```
 
-### Health Check Customizado
+O writer padrão responde só `Healthy`/`Degraded`/`Unhealthy`. Não publique o detalhe de cada
+check (descrição, exceção, host) em endpoint acessível de fora do cluster.
+
+### Check customizado — RabbitMQ
 
 ```csharp
-public class VerificadorServicoCustomizado : IHealthCheck
+// Infra.Messaging/HealthChecks/RabbitMqHealthCheck.cs
+public sealed class RabbitMqHealthCheck : IHealthCheck
 {
-    private readonly IServicoNegocio _servicoNegocio;
-    private readonly ILogger<VerificadorServicoCustomizado> _logger;
+    private readonly RabbitMqConnectionProvider _connectionProvider;
 
-    public VerificadorServicoCustomizado(
-        IServicoNegocio servicoNegocio,
-        ILogger<VerificadorServicoCustomizado> logger)
+    public RabbitMqHealthCheck(RabbitMqConnectionProvider connectionProvider) => _connectionProvider = connectionProvider;
+
+    public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
     {
-        _servicoNegocio = servicoNegocio;
+        try
+        {
+            var connection = await _connectionProvider.GetConnectionAsync(cancellationToken);
+            return connection.IsOpen
+                ? HealthCheckResult.Healthy()
+                : new HealthCheckResult(context.Registration.FailureStatus, "RabbitMQ connection is closed");
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return new HealthCheckResult(context.Registration.FailureStatus, "RabbitMQ is unreachable", ex);
+        }
+    }
+}
+```
+
+### Check customizado — outbox
+
+Mensagem presa no outbox é evento de negócio que não saiu. O check degrada o serviço e expõe os
+números em `data` para o monitoramento.
+
+```csharp
+// Infra.Data/HealthChecks/OutboxHealthCheck.cs
+public sealed class OutboxHealthCheck : IHealthCheck
+{
+    private static readonly TimeSpan MaxPendingAge = TimeSpan.FromMinutes(5);
+
+    private readonly ProjectNameDbContext _context;
+    private readonly OutboxOptions _options;
+
+    public OutboxHealthCheck(ProjectNameDbContext context, IOptions<OutboxOptions> options)
+    {
+        _context = context;
+        _options = options.Value;
+    }
+
+    public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
+    {
+        var exhaustedCount = await _context.OutboxMessages
+            .CountAsync(m => m.ProcessedOn == null && m.Attempts >= _options.MaxAttempts, cancellationToken);
+
+        var oldestPending = await _context.OutboxMessages
+            .Where(m => m.ProcessedOn == null)
+            .MinAsync(m => (DateTime?)m.OccurredOn, cancellationToken);
+
+        var oldestPendingAge = oldestPending is null ? TimeSpan.Zero : DateTime.UtcNow - oldestPending.Value;
+
+        var data = new Dictionary<string, object>
+        {
+            ["exhaustedMessages"] = exhaustedCount,
+            ["oldestPendingAgeSeconds"] = (int)oldestPendingAge.TotalSeconds
+        };
+
+        if (exhaustedCount > 0)
+            return new HealthCheckResult(context.Registration.FailureStatus, "Outbox has messages with exhausted attempts", data: data);
+
+        if (oldestPendingAge > MaxPendingAge)
+            return new HealthCheckResult(context.Registration.FailureStatus, "Outbox publishing is lagging", data: data);
+
+        return HealthCheckResult.Healthy(data: data);
+    }
+}
+```
+
+Regras para checks customizados:
+
+- Retorne `context.Registration.FailureStatus` em vez de fixar `Unhealthy`: quem decide a
+  severidade é o registro.
+- Nunca coloque stack trace, connection string ou dado pessoal em `description` ou `data`.
+- Todo check tem timeout; um check lento derruba a probe inteira.
+
+---
+
+## 2. Kubernetes probes
+
+```yaml
+# deployment.yaml (trecho)
+containers:
+  - name: api
+    image: registry.example.com/projectname-api:1.4.0
+    ports:
+      - containerPort: 8080
+    startupProbe:
+      httpGet:
+        path: /health/live
+        port: 8080
+      periodSeconds: 5
+      failureThreshold: 30        # up to 150 s to start
+    livenessProbe:
+      httpGet:
+        path: /health/live
+        port: 8080
+      periodSeconds: 20
+      timeoutSeconds: 3
+      failureThreshold: 3
+    readinessProbe:
+      httpGet:
+        path: /health/ready
+        port: 8080
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 3
+```
+
+- Liveness nunca aponta para `/health/ready`: banco fora do ar reiniciaria todos os pods em loop.
+- Enquanto a startup probe não passa, liveness e readiness não rodam.
+- Migrations não rodam no boot (`dotnet-dependency-config`); a startup probe não precisa esperar
+  por elas.
+
+---
+
+## 3. Tracing e métricas da aplicação
+
+A instrumentação de ASP.NET Core, HttpClient e EF Core já gera os spans de borda. Crie spans e
+métricas próprios só para operações de negócio que precisam ser observadas separadamente.
+
+### Fonte única por serviço
+
+```csharp
+// Application/Common/ProjectNameTelemetry.cs
+public static class ProjectNameTelemetry
+{
+    public const string SourceName = "ProjectName.Application";
+
+    public static readonly ActivitySource ActivitySource = new(SourceName);
+
+    public static readonly Meter Meter = new(SourceName);
+
+    public static readonly Counter<long> CategoriesCreated =
+        Meter.CreateCounter<long>("catalog.categories.created", unit: "{category}", description: "Categories created");
+}
+```
+
+`ActivitySource` e `Meter` pertencem a `System.Diagnostics`, sem dependência de OpenTelemetry na
+Application. O registro dos exportadores fica em `Api/Extensions/ObservabilityExtensions.cs`
+(`dotnet-production-readiness`), com `.AddSource(ProjectNameTelemetry.SourceName)` e
+`.AddMeter(ProjectNameTelemetry.SourceName)`.
+
+### Span e métrica em um caso de uso
+
+```csharp
+public sealed class CreateCategory : ICreateCategory
+{
+    private readonly ICategoryRepository _categoryRepository;
+    private readonly IUnitOfWork _unitOfWork;
+    private readonly ILogger<CreateCategory> _logger;
+
+    public CreateCategory(ICategoryRepository categoryRepository, IUnitOfWork unitOfWork, ILogger<CreateCategory> logger)
+    {
+        _categoryRepository = categoryRepository;
+        _unitOfWork = unitOfWork;
         _logger = logger;
     }
 
-    public async Task<HealthCheckResult> CheckHealthAsync(
-        HealthCheckContext context, 
-        CancellationToken cancellationToken = default)
+    public async Task<CategoryModelOutput> ExecuteAsync(CreateCategoryInput input, CancellationToken cancellationToken)
     {
-        try
-        {
-            var statusServico = await _servicoNegocio.VerificarStatusAsync(cancellationToken);
-            
-            if (!statusServico.EstaOperacional)
-            {
-                return HealthCheckResult.Unhealthy(
-                    description: $"Servico de negocio nao operacional: {statusServico.Motivo}",
-                    data: new Dictionary<string, object>
-                    {
-                        ["ultimaVerificacao"] = DateTime.UtcNow,
-                        ["motivoFalha"] = statusServico.Motivo,
-                        ["tentativasReconexao"] = statusServico.TentativasReconexao
-                    });
-            }
-
-            if (statusServico.PerformanceDegradada)
-            {
-                return HealthCheckResult.Degraded(
-                    description: "Servico operacional mas com performance degradada",
-                    data: new Dictionary<string, object>
-                    {
-                        ["tempoResposta"] = statusServico.TempoResposta.TotalMilliseconds,
-                        ["limitePerformance"] = statusServico.LimitePerformance.TotalMilliseconds
-                    });
-            }
-
-            return HealthCheckResult.Healthy(
-                description: "Servico de negocio operacional",
-                data: new Dictionary<string, object>
-                {
-                    ["tempoResposta"] = statusServico.TempoResposta.TotalMilliseconds,
-                    ["ultimaVerificacao"] = DateTime.UtcNow,
-                    ["versaoServico"] = statusServico.Versao
-                });
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Erro ao verificar health check do servico customizado");
-            
-            return HealthCheckResult.Unhealthy(
-                description: $"Erro inesperado: {ex.Message}",
-                exception: ex,
-                data: new Dictionary<string, object>
-                {
-                    ["tipoErro"] = ex.GetType().Name,
-                    ["stackTrace"] = ex.StackTrace ?? "N/A"
-                });
-        }
-    }
-}
-```
-
-### Health Checks em Kubernetes
-
-```yaml
-# deployment.yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: minha-aplicacao
-spec:
-  template:
-    spec:
-      containers:
-      - name: app
-        image: minha-aplicacao:latest
-        ports:
-        - containerPort: 8080
-        
-        livenessProbe:
-          httpGet:
-            path: /health
-            port: 8080
-          initialDelaySeconds: 30
-          periodSeconds: 30
-          timeoutSeconds: 5
-          failureThreshold: 3
-          
-        readinessProbe:
-          httpGet:
-            path: /health
-            port: 8080
-          initialDelaySeconds: 5
-          periodSeconds: 10
-          timeoutSeconds: 3
-          failureThreshold: 1
-          
-        startupProbe:
-          httpGet:
-            path: /health
-            port: 8080
-          initialDelaySeconds: 10
-          periodSeconds: 5
-          timeoutSeconds: 3
-          failureThreshold: 30
-```
-
-### Melhores Praticas
-
-#### 1. Categorizacao por Tags
-```csharp
-.AddCheck("banco", () => HealthCheckResult.Healthy(), tags: new[] { "critico", "infraestrutura" })
-.AddCheck("cache", () => HealthCheckResult.Healthy(), tags: new[] { "performance", "cache" })
-.AddCheck("negocio", () => HealthCheckResult.Healthy(), tags: new[] { "negocio", "funcional" })
-```
-
-#### 2. Timeouts Apropriados
-```csharp
-.AddNpgSql(connectionString, timeout: TimeSpan.FromSeconds(5))   // Critico: rapido
-.AddRedis(connectionString, timeout: TimeSpan.FromSeconds(10))    // Cache: moderado
-.AddUrlGroup(uri, timeout: TimeSpan.FromSeconds(30))              // Externo: generoso
-```
-
-#### 3. Status Granular
-```csharp
-// Healthy: Tudo funcionando perfeitamente
-// Degraded: Funcionando mas com limitacoes (cache offline, replica indisponivel)
-// Unhealthy: Nao funcionando (banco principal offline, servico critico down)
-```
-
-#### 4. Dados Contextuais
-```csharp
-return HealthCheckResult.Healthy("Conectado ao banco", new Dictionary<string, object>
-{
-    ["servidor"] = "server01.empresa.com",
-    ["versao"] = "16.2",
-    ["tempoResposta"] = "15ms",
-    ["conexoesAtivas"] = 25,
-    ["ultimaVerificacao"] = DateTime.UtcNow
-});
-```
-
----
-
-# 2. Logging Integrado com Tracing
-
-### Logging com Scopes para Correlacao
-
-```csharp
-public async Task ProcessarLoteAsync(IEnumerable<Lead> leads)
-{
-    var loteId = Guid.NewGuid();
-    
-    // Scope adiciona contexto a todos os logs dentro do bloco
-    using (_logger.BeginScope(new Dictionary<string, object>
-    {
-        ["LoteId"] = loteId,
-        ["TotalLeads"] = leads.Count()
-    }))
-    {
-        _logger.LogInformation("Iniciando processamento de lote");
-        
-        foreach (var lead in leads)
-        {
-            _logger.LogDebug("Processando lead {LeadId}", lead.Id);
-        }
-        
-        _logger.LogInformation("Lote processado com sucesso");
-    }
-}
-```
-
-### Logging em Controllers com Spans OpenTelemetry
-
-```csharp
-using System.Diagnostics;
-
-[ApiController]
-[Route("api/[controller]")]
-public class LeadsController : ControllerBase
-{
-    private readonly ILogger<LeadsController> _logger;
-    private readonly ILeadService _leadService;
-    private static readonly ActivitySource ActivitySource = new("GestAuto.Commercial");
-
-    [HttpPost]
-    public async Task<IActionResult> CriarLead([FromBody] LeadDto lead)
-    {
-        using var activity = ActivitySource.StartActivity("CriarLead");
-        activity?.SetTag("lead.nome", lead.Nome);
-        activity?.SetTag("lead.origem", lead.Origem);
-
-        _logger.LogInformation(
-            "Criando lead para {Nome} via {Origem}", 
-            lead.Nome, lead.Origem);
+        using var activity = ProjectNameTelemetry.ActivitySource.StartActivity("CreateCategory");
 
         try
         {
-            var resultado = await _leadService.CriarAsync(lead);
-            
-            _logger.LogInformation(
-                "Lead {LeadId} criado com sucesso para {Nome}",
-                resultado.Id, lead.Nome);
-            
-            activity?.SetTag("lead.id", resultado.Id);
-            
-            return CreatedAtAction(nameof(ObterLead), new { id = resultado.Id }, resultado);
-        }
-        catch (ValidationException ex)
-        {
-            _logger.LogWarning(ex,
-                "Validacao falhou ao criar lead para {Nome}: {Mensagem}",
-                lead.Nome, ex.Message);
-            
-            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
-            return BadRequest(ex.Message);
+            var category = Category.Create(input.Name, input.Description ?? string.Empty, input.IsActive);
+
+            await _categoryRepository.InsertAsync(category, cancellationToken);
+            await _unitOfWork.CommitAsync(cancellationToken);
+
+            activity?.SetTag("catalog.category.id", category.Id);
+            ProjectNameTelemetry.CategoriesCreated.Add(1);
+            _logger.LogInformation("Category {CategoryId} created", category.Id);
+
+            return CategoryModelOutput.FromCategory(category);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Erro ao criar lead para {Nome}", lead.Nome);
-            
-            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
-            activity?.RecordException(ex);
+            activity?.SetStatus(ActivityStatusCode.Error, ex.GetType().Name);
+            activity?.AddException(ex); // .NET 9+; on .NET 8 use RecordException from OpenTelemetry.Api
             throw;
         }
     }
 }
 ```
 
-### Logging em Services com Spans
-
-```csharp
-public class LeadService : ILeadService
-{
-    private readonly ILogger<LeadService> _logger;
-    private readonly ILeadRepository _repository;
-    private static readonly ActivitySource ActivitySource = new("GestAuto.Commercial");
-
-    public async Task<Lead> ProcessarLeadAsync(Guid leadId, CancellationToken ct)
-    {
-        using var activity = ActivitySource.StartActivity("ProcessarLead");
-        activity?.SetTag("lead.id", leadId);
-
-        _logger.LogDebug("Iniciando processamento do lead {LeadId}", leadId);
-
-        var lead = await _repository.ObterPorIdAsync(leadId, ct);
-        
-        if (lead is null)
-        {
-            _logger.LogWarning("Lead {LeadId} nao encontrado", leadId);
-            throw new NotFoundException($"Lead {leadId} nao encontrado");
-        }
-
-        _logger.LogInformation(
-            "Lead {LeadId} processado com sucesso. Status: {Status}",
-            leadId, lead.Status);
-
-        return lead;
-    }
-}
-```
-
-### Integracao de Health Check com Logging Estruturado
-
-```csharp
-public class HealthCheckComLogging : IHealthCheck
-{
-    private readonly ILogger<HealthCheckComLogging> _logger;
-
-    public async Task<HealthCheckResult> CheckHealthAsync(
-        HealthCheckContext context, 
-        CancellationToken cancellationToken = default)
-    {
-        using var escopo = _logger.BeginScope(new Dictionary<string, object>
-        {
-            ["healthCheck.nome"] = context.Registration.Name,
-            ["healthCheck.tags"] = string.Join(",", context.Registration.Tags),
-            ["event.action"] = "health.check"
-        });
-
-        var cronometro = Stopwatch.StartNew();
-        
-        try
-        {
-            _logger.LogInformation("Iniciando health check {HealthCheckNome}", context.Registration.Name);
-            
-            // Verificacao real...
-            
-            cronometro.Stop();
-            
-            _logger.LogInformation(
-                "Health check {HealthCheckNome} concluido com sucesso em {Duracao}ms",
-                context.Registration.Name, cronometro.ElapsedMilliseconds);
-                
-            return HealthCheckResult.Healthy(
-                description: "Conexao com banco de dados bem-sucedida",
-                data: new Dictionary<string, object>
-                {
-                    ["duracao"] = cronometro.ElapsedMilliseconds,
-                    ["timestamp"] = DateTime.UtcNow
-                });
-        }
-        catch (Exception ex)
-        {
-            cronometro.Stop();
-            
-            _logger.LogError(ex, 
-                "Health check {HealthCheckNome} falhou apos {Duracao}ms: {ErroMensagem}",
-                context.Registration.Name, cronometro.ElapsedMilliseconds, ex.Message);
-                
-            return HealthCheckResult.Unhealthy(
-                description: $"Falha na conexao: {ex.Message}",
-                exception: ex,
-                data: new Dictionary<string, object>
-                {
-                    ["duracao"] = cronometro.ElapsedMilliseconds,
-                    ["tipoErro"] = ex.GetType().Name
-                });
-        }
-    }
-}
-```
+- O controller continua fino: sem `try/catch`, sem span manual. A falha HTTP é registrada pela
+  instrumentação de ASP.NET Core e respondida pelo `GlobalExceptionHandler`.
+- Tags de span e dimensões de métrica não recebem dado pessoal (nome, e-mail, documento).
+- Dimensão de métrica tem cardinalidade baixa: nunca Id de entidade como dimensão.
 
 ---
 
-## Checklist de Observabilidade
+## 4. Logging estruturado e correlação
 
-### Health Checks
-- [ ] AspNetCore.Diagnostics.HealthChecks configurado
-- [ ] Health checks por categoria (tags)
-- [ ] Endpoints basicos (/health) e filtrados
-- [ ] Health checks customizados para regras de negocio
-- [ ] Timeouts apropriados por criticidade
-- [ ] Logging estruturado integrado
-- [ ] Kubernetes probes configurados (liveness/readiness/startup)
-- [ ] Dados contextuais uteis
-- [ ] Status granular (Healthy/Degraded/Unhealthy)
-- [ ] PostgreSQL como exemplo principal nos health checks
+### Templates
 
-### Logging Integrado
-- [ ] Scopes de log para correlacao de contexto
-- [ ] ActivitySource com spans customizados
-- [ ] Tags adicionadas aos spans
-- [ ] Excecoes registradas nos spans
-- [ ] Log levels apropriados por camada
+```csharp
+// Correct: structured template, values become queryable fields
+_logger.LogInformation("Category {CategoryId} updated by {UserId}", category.Id, userId);
 
-### Monitoramento
-- [ ] Metricas de performance de health checks
-- [ ] Correlation IDs para rastreamento
-- [ ] Dashboard para visualizacao
-- [ ] Alertas automaticos baseados em status
-- [ ] SLI/SLO definidos e medidos
+// Wrong: interpolation loses the fields and allocates even when the level is disabled
+_logger.LogInformation($"Category {category.Id} updated by {userId}");
+```
+
+### Scopes
+
+O scope adiciona campos a todos os logs dentro do bloco. Com `IncludeScopes = true` no exportador
+OpenTelemetry, eles chegam como atributos do log, junto com `TraceId` e `SpanId`.
+
+```csharp
+// Infra.Messaging/Consuming/RabbitMqConsumerWorker.cs (trecho)
+using var scope = _logger.BeginScope(new Dictionary<string, object?>
+{
+    ["messaging.system"] = "rabbitmq",
+    ["messaging.destination.name"] = _queue,
+    ["messaging.message.id"] = context.MessageId
+});
+
+_logger.LogDebug("Handling message");
+```
+
+Use os nomes das convenções semânticas do OpenTelemetry quando existirem (`messaging.*`,
+`http.*`, `db.*`); para atributos de negócio, prefixe com o domínio (`catalog.category.id`).
+
+### Níveis por camada
+
+| Onde | Nível típico |
+|---|---|
+| Caso de uso concluído (evento de negócio) | `Information` |
+| Rejeição esperada (validação, 404, 422) | `Information` no `GlobalExceptionHandler` |
+| Retry acionado, dependência opcional degradada | `Warning` |
+| Falha não tratada, mensagem enviada para DLQ | `Error` |
+| Detalhe de fluxo para diagnóstico | `Debug` |
+
+Health checks já registram falhas na categoria `Microsoft.Extensions.Diagnostics.HealthChecks`;
+não duplique log dentro do check.
+
+---
+
+## Checklist de observabilidade
+
+### Health checks
+- [ ] `/health/live` só com checks locais; `/health/ready` com dependências obrigatórias.
+- [ ] Dependências opcionais retornam `Degraded`.
+- [ ] Todo check tem timeout e usa `context.Registration.FailureStatus`.
+- [ ] Outbox e broker têm check próprio.
+- [ ] Resposta pública sem detalhes internos.
+- [ ] Probes do Kubernetes apontam para os endpoints corretos.
+
+### Tracing e métricas
+- [ ] Uma `ActivitySource` e um `Meter` por serviço, registrados no OpenTelemetry.
+- [ ] Spans manuais só em operações de negócio relevantes, com status de erro e exceção registrados.
+- [ ] Tags e dimensões sem dado pessoal e com cardinalidade controlada.
+
+### Logging
+- [ ] Templates estruturados, sem interpolação.
+- [ ] Scopes com convenções semânticas em consumidores e workers.
+- [ ] Níveis coerentes com a tabela acima.

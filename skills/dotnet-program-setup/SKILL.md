@@ -14,7 +14,7 @@ chamadas de extensão; nunca contém a configuração em si.**
 
 ## Regra central
 
-Cada concern de bootstrap (CORS, autenticação, Swagger, health checks, persistência, mensageria,
+Cada concern de bootstrap (controllers, tratamento de erros, casos de uso, CORS, autenticação, Swagger, health checks, persistência, mensageria,
 observabilidade, rate limiting, versionamento de API) vira **um método de extensão em um arquivo
 próprio**, agrupado em uma pasta `Extensions/` (ou `HostConfiguration/`) na raiz do projeto de
 entrada (API/Host). `Program.cs` chama esses métodos em sequência e nada mais.
@@ -23,12 +23,15 @@ entrada (API/Host). `Program.cs` chama esses métodos em sequência e nada mais.
 ProjectName.API/
 ├── Program.cs                          # ~20-40 linhas: só chamadas de extensão, nunca configuração
 ├── Extensions/
+│   ├── ControllersExtensions.cs        # AddControllersConfiguration
+│   ├── ErrorHandlingExtensions.cs      # AddErrorHandlingConfiguration (ProblemDetails + IExceptionHandler)
+│   ├── UseCasesExtensions.cs           # AddUseCasesConfiguration (casos de uso + validators)
 │   ├── CorsExtensions.cs               # AddCorsConfiguration
 │   ├── AuthenticationExtensions.cs     # AddAuthenticationConfiguration
 │   ├── SwaggerExtensions.cs            # AddSwaggerConfiguration
 │   ├── HealthCheckExtensions.cs        # AddHealthCheckConfiguration
-│   ├── PersistenceExtensions.cs        # AddPersistenceConfiguration (DbContext, repositórios)
-│   ├── MessagingExtensions.cs          # AddMessagingConfiguration (RabbitMQ)
+│   ├── PersistenceExtensions.cs        # AddPersistenceConfiguration (DbContext, repositórios, UnitOfWork)
+│   ├── MessagingExtensions.cs          # AddMessagingConfiguration (RabbitMQ, outbox worker, consumidores)
 │   ├── ObservabilityExtensions.cs      # AddObservabilityConfiguration (OpenTelemetry)
 │   └── MiddlewarePipelineExtensions.cs # UseApplicationPipeline (ordem do app.UseX())
 ```
@@ -48,10 +51,13 @@ Ver `examples/program-organization.md` para o exemplo completo lado a lado (Prog
 de ~150 linhas vs. a versão organizada). O núcleo da transformação:
 
 ```csharp
-// Program.cs — depois
+// Program.cs — after
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services
+    .AddControllersConfiguration()
+    .AddErrorHandlingConfiguration()
+    .AddUseCasesConfiguration()
     .AddCorsConfiguration(builder.Configuration)
     .AddAuthenticationConfiguration(builder.Configuration)
     .AddSwaggerConfiguration()

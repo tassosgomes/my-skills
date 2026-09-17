@@ -1,45 +1,91 @@
-# Configuracao e DI Patterns — Exemplo
+# Registro na DI — Casos de Uso, Persistência e Lifetimes
 
-Uso de `IUnitOfWork` e mapeamento (Mapster) injetados em um controller ASP.NET Core.
+O composition root fica na Api, um arquivo de extensão por concern (`dotnet-program-setup`).
+Controllers dependem só das interfaces dos casos de uso.
+
+## Lifetimes
+
+| Tipo | Lifetime | Motivo |
+|---|---|---|
+| `DbContext` | Scoped | Um por request/mensagem |
+| Repositórios e `IUnitOfWork` | Scoped | Compartilham o `DbContext` do escopo |
+| Casos de uso (`ICreateCategory`...) | Scoped | Dependem de repositórios |
+| Validators do FluentValidation | Scoped (padrão do `AddValidatorsFrom...`) | Podem depender de serviços scoped |
+| `RabbitMqConnectionProvider`, `RabbitMqPublisher` | Singleton | Uma conexão por processo |
+| `IMessageHandler<T>` | Scoped | Resolvido em um escopo por mensagem |
+
+Nunca injete um serviço scoped em um singleton ou `BackgroundService`; crie um escopo com
+`IServiceScopeFactory.CreateAsyncScope()`.
+
+## Casos de uso
 
 ```csharp
-public class UsersController : ControllerBase
+// Api/Extensions/UseCasesExtensions.cs
+public static class UseCasesExtensions
 {
-    private readonly IUnitOfWork _unitOfWork;
-    private readonly ILogger<UsersController> _logger;
-
-    public UsersController(
-        IUnitOfWork unitOfWork,
-        ILogger<UsersController> logger)
+    public static IServiceCollection AddUseCasesConfiguration(this IServiceCollection services)
     {
-        _unitOfWork = unitOfWork;
-        _logger = logger;
-    }
+        // CreateCategory → ICreateCategory, GetCategory → IGetCategory...
+        services.Scan(scan => scan
+            .FromAssemblyOf<ICreateCategory>()
+            .AddClasses(classes => classes.AssignableToAny(typeof(IUseCase<,>), typeof(IUseCase<>)))
+            .AsMatchingInterface()
+            .WithScopedLifetime());
 
-    [HttpGet("{id}")]
-    public async Task<IActionResult> GetByIdAsync(int id, CancellationToken cancellationToken)
-    {
-        var user = await _unitOfWork.Users.GetByIdAsync(id, cancellationToken);
-        
-        if (user is null)
-            return NotFound();
-        
-        return Ok(user.Adapt<UserDto>());
-    }
+        services.AddValidatorsFromAssemblyContaining<ICreateCategory>();
 
-    [HttpPost]
-    public async Task<IActionResult> CreateAsync(
-        [FromBody] CreateUserRequest request,
-        CancellationToken cancellationToken)
-    {
-        var user = request.Adapt<User>();
-        
-        await _unitOfWork.Users.AddAsync(user, cancellationToken);
-        await _unitOfWork.CommitAsync(cancellationToken);
-        
-        _logger.LogInformation("User {UserId} created successfully", user.Id);
-        
-        return CreatedAtAction(nameof(GetByIdAsync), new { id = user.Id }, user.Adapt<UserDto>());
+        return services;
     }
 }
 ```
+
+Sem Scrutor, registre cada caso de uso explicitamente:
+
+```csharp
+services.AddScoped<ICreateCategory, CreateCategory>();
+services.AddScoped<IGetCategory, GetCategory>();
+services.AddScoped<IListCategories, ListCategories>();
+```
+
+## Persistência
+
+```csharp
+// Api/Extensions/PersistenceExtensions.cs
+public static class PersistenceExtensions
+{
+    public static IServiceCollection AddPersistenceConfiguration(this IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddDbContext<ProjectNameDbContext>(options =>
+            options.UseNpgsql(
+                configuration.GetConnectionString("DefaultConnection"),
+                npgsql => npgsql.MigrationsHistoryTable("__ef_migrations_history")));
+
+        services.AddScoped<IUnitOfWork, UnitOfWork>();
+        services.AddScoped<ICategoryRepository, CategoryRepository>();
+        services.AddScoped<IGenreRepository, GenreRepository>();
+
+        return services;
+    }
+}
+```
+
+## Uso
+
+```csharp
+public sealed class CategoriesController : ControllerBase
+{
+    private readonly ICreateCategory _createCategory;
+
+    public CategoriesController(ICreateCategory createCategory) => _createCategory = createCategory;
+
+    [HttpPost]
+    public async Task<IActionResult> Create([FromBody] CreateCategoryInput input, CancellationToken cancellationToken)
+    {
+        var output = await _createCategory.ExecuteAsync(input, cancellationToken);
+        return CreatedAtAction(nameof(GetById), new { id = output.Id }, new ApiResponse<CategoryModelOutput>(output));
+    }
+}
+```
+
+Não injete `IUnitOfWork`, repositórios ou `DbContext` em controllers: persistência é
+responsabilidade do caso de uso.

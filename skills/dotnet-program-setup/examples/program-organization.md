@@ -3,7 +3,7 @@
 ## Antes (o que aparece na prática depois de algumas sprints)
 
 ```csharp
-// Program.cs — ~150 linhas, tudo inline, ordem difícil de auditar
+// Program.cs — ~150 lines, everything inline, order hard to audit
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
@@ -49,7 +49,7 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 
-builder.Services.AddDbContext<AppDbContext>(options =>
+builder.Services.AddDbContext<ProjectNameDbContext>(options =>
 {
     var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
     options.UseNpgsql(connectionString, npgsql => npgsql.MigrationsHistoryTable("__ef_migrations_history"));
@@ -103,12 +103,14 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services
     .AddControllersConfiguration()
+    .AddErrorHandlingConfiguration()
+    .AddUseCasesConfiguration()
     .AddCorsConfiguration(builder.Configuration)
     .AddAuthenticationConfiguration(builder.Configuration)
     .AddSwaggerConfiguration()
     .AddPersistenceConfiguration(builder.Configuration)
     .AddMessagingConfiguration(builder.Configuration)
-    .AddObservabilityConfiguration(builder.Configuration)
+    .AddObservabilityConfiguration(builder.Configuration, builder.Environment)
     .AddHealthCheckConfiguration(builder.Configuration);
 
 var app = builder.Build();
@@ -116,6 +118,24 @@ var app = builder.Build();
 app.UseApplicationPipeline(app.Environment);
 
 app.Run();
+```
+
+```csharp
+// Extensions/ControllersExtensions.cs
+public static class ControllersExtensions
+{
+    // camelCase JSON is the System.Text.Json default: do not configure another naming policy.
+    public static IServiceCollection AddControllersConfiguration(this IServiceCollection services)
+    {
+        services.AddControllers();
+        return services;
+    }
+}
+```
+
+```csharp
+// Extensions/UseCasesExtensions.cs — implementation in dotnet-architecture/examples/use-cases.md
+// Extensions/ErrorHandlingExtensions.cs — implementation in dotnet-architecture/examples/error-handling.md
 ```
 
 ```csharp
@@ -127,7 +147,7 @@ public static class CorsExtensions
     public static IServiceCollection AddCorsConfiguration(this IServiceCollection services, IConfiguration configuration)
     {
         var allowedOrigins = configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
-            ?? throw new InvalidOperationException("Cors:AllowedOrigins não configurado.");
+            ?? throw new InvalidOperationException("Cors:AllowedOrigins is not configured.");
 
         services.AddCors(options =>
         {
@@ -217,14 +237,14 @@ public static class PersistenceExtensions
 {
     public static IServiceCollection AddPersistenceConfiguration(this IServiceCollection services, IConfiguration configuration)
     {
-        services.AddDbContext<AppDbContext>(options =>
+        services.AddDbContext<ProjectNameDbContext>(options =>
         {
             var connectionString = configuration.GetConnectionString("DefaultConnection");
             options.UseNpgsql(connectionString, npgsql => npgsql.MigrationsHistoryTable("__ef_migrations_history"));
         });
 
-        services.AddScoped<IOrderRepository, OrderRepository>();
         services.AddScoped<IUnitOfWork, UnitOfWork>();
+        services.AddScoped<IOrderRepository, OrderRepository>();
 
         return services;
     }
@@ -237,31 +257,39 @@ public static class MessagingExtensions
 {
     public static IServiceCollection AddMessagingConfiguration(this IServiceCollection services, IConfiguration configuration)
     {
-        services.AddSingleton<IConnectionFactory>(_ => new ConnectionFactory
-        {
-            Uri = new Uri(configuration["RabbitMQ:ConnectionString"]!)
-        });
-        services.AddHostedService<OrderCreatedConsumer>();
+        services.AddOptions<RabbitMqOptions>()
+            .Bind(configuration.GetSection(RabbitMqOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
 
+        services.AddSingleton<RabbitMqConnectionProvider>();
+        services.AddSingleton<RabbitMqPublisher>();
+
+        // Order matters: topology before the outbox worker and the consumers.
+        services.AddHostedService<RabbitMqTopologyInitializer>();
+        services.AddHostedService<OutboxPublisherWorker>();
+
+        // Consumers: see dotnet-dependency-config/examples/messaging-rabbitmq.md
         return services;
     }
 }
 ```
 
 ```csharp
-// Extensions/ObservabilityExtensions.cs
+// Extensions/ObservabilityExtensions.cs — full implementation in dotnet-production-readiness/references/full-guide.md
 public static class ObservabilityExtensions
 {
-    public static IServiceCollection AddObservabilityConfiguration(this IServiceCollection services, IConfiguration configuration)
+    public static IServiceCollection AddObservabilityConfiguration(
+        this IServiceCollection services,
+        IConfiguration configuration,
+        IHostEnvironment environment)
     {
         services.AddOpenTelemetry()
+            .ConfigureResource(resource => resource.AddService(configuration["OpenTelemetry:ServiceName"]!))
             .WithTracing(tracing => tracing
                 .AddAspNetCoreInstrumentation()
-                .AddHttpClientInstrumentation()
-                .AddOtlpExporter(opts =>
-                {
-                    opts.Endpoint = new Uri(configuration["OpenTelemetry:OtlpEndpoint"] ?? "http://localhost:4317");
-                }));
+                .AddHttpClientInstrumentation())
+            .UseOtlpExporter();
 
         return services;
     }
@@ -269,22 +297,23 @@ public static class ObservabilityExtensions
 ```
 
 ```csharp
-// Extensions/HealthCheckExtensions.cs
+// Extensions/HealthCheckExtensions.cs — full implementation (live/ready tags, custom checks) in
+// dotnet-observability/references/full-guide.md
 public static class HealthCheckExtensions
 {
     public static IServiceCollection AddHealthCheckConfiguration(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddHealthChecks()
-            .AddNpgSql(configuration.GetConnectionString("DefaultConnection")!)
-            .AddRabbitMQ();
+            .AddCheck("self", () => HealthCheckResult.Healthy(), tags: ["live"])
+            .AddNpgSql(configuration.GetConnectionString("DefaultConnection")!, name: "postgresql", tags: ["ready"]);
 
         return services;
     }
 
     public static IEndpointRouteBuilder MapHealthCheckConfiguration(this IEndpointRouteBuilder endpoints)
     {
-        endpoints.MapHealthChecks("/health/live");
-        endpoints.MapHealthChecks("/health/ready");
+        endpoints.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = check => check.Tags.Contains("live") });
+        endpoints.MapHealthChecks("/health/ready", new HealthCheckOptions { Predicate = check => check.Tags.Contains("ready") });
         return endpoints;
     }
 }
@@ -292,11 +321,12 @@ public static class HealthCheckExtensions
 
 ```csharp
 // Extensions/MiddlewarePipelineExtensions.cs
-// Compõe a ordem real de execução — o único lugar que precisa ser lido para auditar o pipeline.
+// Composes the real execution order — the only place to read when auditing the pipeline.
 public static class MiddlewarePipelineExtensions
 {
     public static WebApplication UseApplicationPipeline(this WebApplication app, IWebHostEnvironment environment)
     {
+        app.UseExceptionHandler();
         app.UseSwaggerConfiguration(environment);
         app.UseHttpsRedirection();
         app.UseCorsConfiguration();

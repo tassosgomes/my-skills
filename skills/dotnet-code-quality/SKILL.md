@@ -18,8 +18,13 @@ uma auditoria global; os exemplos detalhados ficam em `examples/best-practices.m
   da linguagem ubíqua do domínio documentados no glossário.
 - Tipos, métodos e propriedades usam `PascalCase`; variáveis e parâmetros usam `camelCase`.
 - Interfaces usam prefixo `I`; campos privados usam `_camelCase`; constantes usam `PascalCase`.
-- Diretórios usam `kebab-case` e arquivos/tipos usam `PascalCase`.
+- Diretórios usam `PascalCase` e cada pasta é um segmento do namespace (analisador `IDE0130`);
+  `kebab-case` não serve para .NET porque vira `_` no namespace. Arquivo tem o nome do tipo.
+- Pastas que agrupam tipos ficam no plural (`Entities`, `UseCases/Categories`) para o namespace não
+  colidir com o nome da classe.
 - Nomes de métodos começam com verbo e não usam abreviações desnecessárias.
+- Métodos assíncronos terminam em `Async`, exceto actions de controller (o ASP.NET Core remove o
+  sufixo do nome da action e quebra `CreatedAtAction(nameof(...))`) e métodos de teste.
 
 ### Design de métodos e classes
 
@@ -49,7 +54,7 @@ as regras que o diff toca.
 
 ## Checklist do diff
 
-- [ ] Naming e idioma seguem as convenções.
+- [ ] Naming e idioma seguem as convenções (pastas PascalCase = namespace, sufixo `Async`).
 - [ ] Métodos têm uma responsabilidade e parâmetros controlados.
 - [ ] Não há flag parameter, bloqueio síncrono ou aninhamento excessivo.
 - [ ] `CancellationToken` é propagado na cadeia assíncrona.

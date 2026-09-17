@@ -28,12 +28,12 @@ configuram a infraestrutura, testes validam o comportamento e production-readine
 
 | # | Skill | Escopo |
 |---|-------|--------|
-| 1 | **dotnet-architecture** | Clean Architecture, camadas, estrutura de pastas, CQRS nativo, Repository Pattern, FluentValidation, error handling, Result Pattern |
-| 2 | **dotnet-code-quality** | Naming conventions, coding standards, async/await, CancellationToken, DI, SOLID, estilo de codigo |
-| 3 | **dotnet-dependency-config** | Pacotes recomendados, EF Core (PostgreSQL padrao / Oracle alternativo), Mapster, Unit of Work, connection strings, library authoring (NuGet) |
+| 1 | **dotnet-architecture** | Clean Architecture, layout `src/`+`tests/`, SeedWork e agregados, um caso de uso por classe (sem MediatR), Repository por agregado, eventos de domínio, API e envelope de resposta, error handling |
+| 2 | **dotnet-code-quality** | Naming conventions (pastas = namespace, sufixo `Async`), coding standards, async/await, CancellationToken, DI, SOLID, estilo de codigo |
+| 3 | **dotnet-dependency-config** | Pacotes recomendados, EF Core (PostgreSQL padrao / Oracle alternativo), Unit of Work, registro na DI, RabbitMQ (`RabbitMQ.Client`), outbox e inbox, connection strings, library authoring (NuGet) |
 | 4 | **dotnet-observability** | Health checks (liveness/readiness), Kubernetes probes, metricas, logging integrado com tracing (scopes, ActivitySource) |
-| 5 | **dotnet-performance** | EF Core otimizado (AsNoTracking, projections, pagination, bulk), caching (Memory/Redis), HttpClient (IHttpClientFactory, Polly) |
-| 6 | **dotnet-testing** | Testes unitarios (xUnit + AwesomeAssertions + Moq), integracao (WebApplicationFactory + Testcontainers PostgreSQL), E2E (Playwright), Dev Containers |
+| 5 | **dotnet-performance** | EF Core otimizado (AsNoTracking, projections, pagination, bulk), caching (Memory/Valkey), HttpClient (IHttpClientFactory, Polly) |
+| 6 | **dotnet-testing** | Unitarios (xUnit + AwesomeAssertions + Moq + Bogus, fixtures em camadas), integracao de casos de uso e repositorios (Testcontainers PostgreSQL), E2E da API (WebApplicationFactory + Testcontainers), Dev Containers |
 | 7 | **dotnet-production-readiness** | OpenTelemetry (OTLP), logging estruturado, sanitizacao de dados, niveis de log, checklist consolidado de deploy |
 | 8 | **dotnet-program-setup** | Organizacao do `Program.cs`: metodos de extensao por concern (CORS, autenticacao, Swagger, health checks, pipeline de middlewares) |
 
@@ -44,8 +44,8 @@ configuram a infraestrutura, testes validam o comportamento e production-readine
 | Criar novo servico / projeto | dotnet-architecture |
 | Definir estrutura de pastas | dotnet-architecture |
 | Escolher API simples / Monolito Modular / Microsservicos | dotnet-architecture |
-| Implementar CQRS | dotnet-architecture |
-| Decidir entre CQRS e Service Pattern simples | dotnet-architecture |
+| Criar caso de uso / endpoint | dotnet-architecture |
+| Modelar agregado, value object ou evento de domínio | dotnet-architecture |
 | Implementar Repository Pattern | dotnet-architecture |
 | Configurar FluentValidation | dotnet-architecture |
 | Error handling / Result Pattern | dotnet-architecture |
@@ -56,7 +56,8 @@ configuram a infraestrutura, testes validam o comportamento e production-readine
 | Configurar EF Core / DbContext | dotnet-dependency-config |
 | Setup PostgreSQL / Oracle | dotnet-dependency-config |
 | Diagnosticar migration que nao aplica / sintaxe incompativel | dotnet-dependency-config |
-| Configurar Mapster | dotnet-dependency-config |
+| Registrar casos de uso e repositórios na DI | dotnet-dependency-config |
+| Publicar/consumir RabbitMQ, outbox, inbox, DLQ | dotnet-dependency-config |
 | Gerenciar pacotes NuGet | dotnet-dependency-config |
 | Criar biblioteca NuGet | dotnet-dependency-config |
 | Configurar connection strings, appsettings ou segredos | dotnet-dependency-config |
@@ -72,8 +73,8 @@ configuram a infraestrutura, testes validam o comportamento e production-readine
 | Paginacao de resultados | dotnet-performance |
 | Criar testes unitarios | dotnet-testing |
 | Criar testes de integracao | dotnet-testing |
-| Configurar Testcontainers | dotnet-testing |
-| Criar testes E2E (Playwright) | dotnet-testing |
+| Configurar Testcontainers, fixtures e dados de teste | dotnet-testing |
+| Criar testes E2E da API | dotnet-testing |
 | Configurar Dev Containers | dotnet-testing |
 | Implementar OpenTelemetry, logs ou tracing | dotnet-observability |
 | Validar OpenTelemetry e logs no deploy | dotnet-production-readiness |
@@ -91,6 +92,7 @@ configuram a infraestrutura, testes validam o comportamento e production-readine
 |---|---|---|
 | Nova feature ou endpoint | `dotnet-testing` | Criar o comportamento e sua regressão |
 | EF Core, migration ou integração | `dotnet-architecture` | Manter fronteiras e contratos |
+| Evento de domínio publicado ou consumido | `dotnet-architecture` | Agregado levanta o evento; outbox/inbox ficam na dependency-config |
 | Bug de performance | `dotnet-dependency-config` | Só quando a causa estiver na infraestrutura |
 | Preparação para deploy | `dotnet-observability` ou `dotnet-testing` | Apenas pelo item concreto do gate |
 | Novo serviço/projeto (bootstrap) | `dotnet-program-setup` | Registrar CORS/auth/Swagger/health checks já organizados desde o início |

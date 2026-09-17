@@ -1,190 +1,177 @@
-# Dev Containers para Testes de Integracao — Exemplos
+# Dev Containers — Ambiente de Desenvolvimento e Testes
 
-Ambiente PostgreSQL isolado e reproduzivel para testes de integracao, com cleanup automatico. A
-versao de imagem usada aqui deve ser a mesma do baseline de infraestrutura local
-(`dotnet-dependency-config/examples/local-infrastructure.md`) — nao escolha uma tag diferente so
-para o ambiente de teste.
+O Dev Container dá a todo desenvolvedor (e ao Codespaces) o mesmo SDK, as mesmas ferramentas e os
+mesmos serviços de apoio. Os testes continuam os mesmos de `integration-tests.md` e
+`e2e-tests.md`; o que muda é de onde vem o PostgreSQL:
 
-## Estrutura de Arquivos
+| Ambiente | PostgreSQL dos testes |
+|---|---|
+| Máquina com Docker | Testcontainers sobe um container por execução |
+| Dev Container | Serviço `postgres` do compose do Dev Container, indicado por variável de ambiente |
+| CI | Testcontainers (padrão) |
 
-```
+As tags de imagem seguem `dotnet-dependency-config/examples/local-infrastructure.md`.
+
+## Estrutura
+
+```text
+.devcontainer/
+├── devcontainer.json
+└── docker-compose.yml
 tests/
-├── IntegrationTests/
-│   ├── .devcontainer/
-│   │   ├── devcontainer.json
-│   │   ├── docker-compose.yml
-│   │   └── test-data/
-│   │       ├── 01-schema.sql
-│   │       └── 02-test-data.sql
-│   ├── Infrastructure/
-│   │   ├── PostgresTestFixture.cs
-│   │   └── TestDatabaseFactory.cs
-│   └── Tests/
-│       ├── UserRepositoryTests.cs
-│       └── OrderServiceTests.cs
+└── ProjectName.IntegrationTests/
+    └── Base/
+        └── DatabaseFixture.cs          # usa o serviço do compose se a variável existir
 ```
 
-## docker-compose.yml (PostgreSQL Padrao)
+O Dev Container fica na raiz do repositório, não dentro de um projeto de teste: ele é o ambiente
+de trabalho da solution inteira.
+
+## devcontainer.json
+
+```json
+{
+  "name": "projectname",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "workspace",
+  "workspaceFolder": "/workspaces/projectname",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {}
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": ["ms-dotnettools.csdevkit"]
+    }
+  },
+  "postCreateCommand": "dotnet tool restore && dotnet restore"
+}
+```
+
+`docker-outside-of-docker` permite rodar Testcontainers de dentro do Dev Container quando alguém
+quiser o mesmo comportamento da CI.
+
+## docker-compose.yml
 
 ```yaml
-version: '3.8'
+name: projectname-devcontainer
 
 services:
-  test-runner:
-    build: 
-      context: ../..
-      dockerfile: tests/IntegrationTests/.devcontainer/Dockerfile
+  workspace:
+    image: mcr.microsoft.com/devcontainers/dotnet:9.0
     volumes:
-      - ../../:/workspace:cached
-    working_dir: /workspace/tests/IntegrationTests
+      - ..:/workspaces/projectname:cached
     command: sleep infinity
+    environment:
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=projectname;Username=projectname;Password=projectname
+      TEST_POSTGRES_CONNECTION: Host=postgres;Port=5432;Database=projectname_tests;Username=projectname;Password=projectname
+      RabbitMQ__HostName: rabbitmq
+      RabbitMQ__UserName: projectname
+      RabbitMQ__Password: projectname
     depends_on:
-      postgres-test-db:
+      postgres:
         condition: service_healthy
-    environment:
-      - POSTGRES_TEST_CONNECTION=Host=postgres-test-db;Port=5432;Database=testdb;Username=testuser;Password=Test123;
+      rabbitmq:
+        condition: service_healthy
 
-  postgres-test-db:
-    image: postgres:18-alpine
+  postgres:
+    image: postgres:18
     environment:
-      - POSTGRES_USER=testuser
-      - POSTGRES_PASSWORD=Test123
-      - POSTGRES_DB=testdb
-    volumes:
-      - ./test-data:/docker-entrypoint-initdb.d:ro
+      POSTGRES_USER: projectname
+      POSTGRES_PASSWORD: projectname
+      POSTGRES_DB: projectname
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U testuser -d testdb"]
+      test: ["CMD-SHELL", "pg_isready -U projectname"]
       interval: 5s
       timeout: 5s
       retries: 10
     tmpfs:
       - /var/lib/postgresql/data
+
+  rabbitmq:
+    image: rabbitmq:4.3-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: projectname
+      RABBITMQ_DEFAULT_PASS: projectname
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 ```
 
-## Infraestrutura de Testes
+Credenciais aqui são só do ambiente descartável de desenvolvimento; nunca as reutilize em outro
+ambiente.
+
+## Fixture que funciona nos dois ambientes
+
+A `DatabaseFixture` de `integration-tests.md` ganha um desvio: se `TEST_POSTGRES_CONNECTION`
+existir, usa o serviço do compose; senão, sobe o Testcontainer. Nos dois casos o schema vem das
+migrations e a limpeza é por `TRUNCATE`.
 
 ```csharp
-using Npgsql;
-using Xunit;
-
-namespace IntegrationTests.Infrastructure;
-
-public class PostgresTestFixture : IAsyncLifetime
+// tests/ProjectName.IntegrationTests/Base/DatabaseFixture.cs
+public sealed class DatabaseFixture : IAsyncLifetime
 {
-    private readonly string _connectionString;
-    
-    public PostgresTestFixture()
+    private const string ExternalConnectionVariable = "TEST_POSTGRES_CONNECTION";
+
+    private readonly PostgreSqlContainer? _container;
+
+    public DatabaseFixture()
     {
-        _connectionString = Environment.GetEnvironmentVariable("POSTGRES_TEST_CONNECTION") 
-            ?? "Host=localhost;Port=5432;Database=testdb;Username=testuser;Password=Test123;";
+        var externalConnection = Environment.GetEnvironmentVariable(ExternalConnectionVariable);
+
+        if (string.IsNullOrWhiteSpace(externalConnection))
+            _container = new PostgreSqlBuilder().WithImage("postgres:18").Build();
+        else
+            ConnectionString = externalConnection;
     }
 
-    public NpgsqlConnection CreateConnection()
-    {
-        var connection = new NpgsqlConnection(_connectionString);
-        connection.Open();
-        return connection;
-    }
+    public string ConnectionString { get; private set; } = string.Empty;
 
     public async Task InitializeAsync()
     {
-        await using var connection = CreateConnection();
-        await using var command = connection.CreateCommand();
-        command.CommandText = "SELECT COUNT(*) FROM Users";
-        var count = await command.ExecuteScalarAsync();
-        
-        if (count == null)
-            throw new InvalidOperationException("Test database is not properly initialized");
+        if (_container is not null)
+        {
+            await _container.StartAsync();
+            ConnectionString = _container.GetConnectionString();
+        }
+
+        await using var context = CreateDbContext();
+        await context.Database.MigrateAsync(); // creates the test database if it does not exist
     }
 
     public async Task DisposeAsync()
     {
-        await Task.CompletedTask;
+        if (_container is not null)
+            await _container.DisposeAsync();
     }
 
-    public async Task CleanupDataAsync()
+    public ProjectNameDbContext CreateDbContext()
+        => new(new DbContextOptionsBuilder<ProjectNameDbContext>().UseNpgsql(ConnectionString).Options);
+
+    public async Task ResetDatabaseAsync()
     {
-        await using var connection = CreateConnection();
-        await using var command = connection.CreateCommand();
-        command.CommandText = @"
-            DELETE FROM Orders WHERE Id > 3;
-            DELETE FROM Users WHERE Id > 3;
-        ";
-        await command.ExecuteNonQueryAsync();
-    }
-}
+        await using var context = CreateDbContext();
+        var tables = context.Model.GetEntityTypes()
+            .Select(entityType => entityType.GetTableName())
+            .Where(tableName => tableName is not null)
+            .Distinct()
+            .Select(tableName => $"\"{tableName}\"");
 
-[CollectionDefinition("PostgreSQL Integration Tests")]
-public class PostgresTestCollection : ICollectionFixture<PostgresTestFixture>
-{
-}
-```
-
-## Exemplo de Teste de Integracao com Fixture
-
-```csharp
-using IntegrationTests.Infrastructure;
-using AwesomeAssertions;
-using Xunit;
-
-namespace IntegrationTests.Tests;
-
-[Collection("PostgreSQL Integration Tests")]
-public class UserRepositoryTests
-{
-    private readonly PostgresTestFixture _fixture;
-    private readonly UserRepository _repository;
-
-    public UserRepositoryTests(PostgresTestFixture fixture)
-    {
-        _fixture = fixture;
-        _repository = new UserRepository(_fixture.CreateConnection());
-    }
-
-    [Fact]
-    public async Task GetAllAsync_ShouldReturnTestUsers()
-    {
-        // Arrange
-        var cancellationToken = CancellationToken.None;
-
-        // Act
-        var users = await _repository.GetAllAsync(cancellationToken);
-
-        // Assert
-        users.Should().NotBeNull();
-        users.Should().HaveCountGreaterOrEqualTo(3);
-        users.Should().Contain(u => u.Email == "test1@example.com");
-    }
-
-    [Fact]
-    public async Task CreateAsync_WithValidUser_ShouldPersistToDatabase()
-    {
-        // Arrange
-        var cancellationToken = CancellationToken.None;
-        var newUser = new User 
-        { 
-            Name = "Integration Test User", 
-            Email = $"integration.{Guid.NewGuid()}@test.com" 
-        };
-
-        try
-        {
-            // Act
-            var createdUser = await _repository.AddAsync(newUser, cancellationToken);
-
-            // Assert
-            createdUser.Should().NotBeNull();
-            createdUser.Id.Should().BeGreaterThan(0);
-            createdUser.Name.Should().Be("Integration Test User");
-
-            var retrievedUser = await _repository.GetByIdAsync(createdUser.Id, cancellationToken);
-            retrievedUser.Should().NotBeNull();
-            retrievedUser!.Email.Should().Be(newUser.Email);
-        }
-        finally
-        {
-            await _fixture.CleanupDataAsync();
-        }
+        await context.Database.ExecuteSqlRawAsync($"TRUNCATE TABLE {string.Join(", ", tables)} CASCADE");
     }
 }
 ```
+
+Os testes não mudam: continuam na `DatabaseCollection`, chamam `ResetDatabaseAsync` no
+`InitializeAsync` e seguem `DisplayName` + `Trait` (`integration-tests.md`).
+
+## Regras
+
+- Banco de testes separado do banco de desenvolvimento (`projectname_tests`): `TRUNCATE` nunca
+  pode apagar dados com que o desenvolvedor está trabalhando.
+- Schema sempre por migrations; nada de scripts SQL em `docker-entrypoint-initdb.d` que divergem do
+  modelo EF.
+- Dados de teste criados pelo próprio teste (geradores de `Tests.Common`), nunca seed fixo
+  compartilhado.
+- Tags de imagem iguais às de `dotnet-dependency-config/examples/local-infrastructure.md`.

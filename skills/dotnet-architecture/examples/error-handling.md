@@ -1,269 +1,151 @@
-# Tratamento de Erros — Exemplo
+# Tratamento de Erros — Exceções e ProblemDetails
 
-> **Por que tratamento de erros e fundamental?**
-> - **Resiliencia**: Aplicacoes robustas se recuperam graciosamente de falhas
-> - **Debugging eficiente**: Stack traces e logs estruturados aceleram identificacao de problemas
-> - **UX superior**: Usuarios recebem mensagens claras ao inves de crashes
-> - **Monitoramento**: Erros estruturados permitem alertas e metricas uteis
-> - **Compliance**: Muitas regulamentacoes exigem logging e auditoria de erros
-> - **Previne vazamentos**: Tratamento adequado evita expor informacoes sensiveis
+Erros viram `application/problem+json` (RFC 9457) em um único `IExceptionHandler`. Controllers e
+casos de uso não montam respostas de erro.
 
-## Global Exception Handler (ASP.NET Core 8+)
+## Mapa de exceções
+
+| Exceção | Camada | Status | Quando |
+|---|---|---|---|
+| `FluentValidation.ValidationException` | Application | 400 | Formato do input inválido (validator explícito no caso de uso) |
+| `NotFoundException` | Application | 404 | Caso de uso não encontrou o agregado (repositório retornou `null`) |
+| `EntityValidationException` | Domain | 422 | Invariante do agregado violada |
+| `RelatedAggregateException` | Application | 422 | Agregado relacionado informado não existe |
+| qualquer outra | — | 500 | Erro inesperado; detalhe genérico, sem stack trace |
+
+As exceções de Domain estão em `domain-model.md`; as de Application em `use-cases.md`.
+
+## Global Exception Handler
 
 ```csharp
-public class GlobalExceptionHandler : IExceptionHandler
+// Api/ExceptionHandlers/GlobalExceptionHandler.cs
+public sealed class GlobalExceptionHandler : IExceptionHandler
 {
+    private readonly IProblemDetailsService _problemDetailsService;
     private readonly ILogger<GlobalExceptionHandler> _logger;
 
-    public GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logger)
+    public GlobalExceptionHandler(IProblemDetailsService problemDetailsService, ILogger<GlobalExceptionHandler> logger)
     {
+        _problemDetailsService = problemDetailsService;
         _logger = logger;
     }
 
-    public async ValueTask<bool> TryHandleAsync(
-        HttpContext httpContext,
-        Exception exception,
-        CancellationToken cancellationToken)
+    public async ValueTask<bool> TryHandleAsync(HttpContext httpContext, Exception exception, CancellationToken cancellationToken)
     {
-        var (statusCode, title, detail) = exception switch
+        var problemDetails = exception switch
         {
-            ValidationException ex => (400, "Validation Error", ex.Message),
-            UserNotFoundException ex => (404, "Resource Not Found", ex.Message),
-            UnauthorizedAccessException => (401, "Unauthorized", "Authentication required"),
-            ArgumentNullException ex => (400, "Invalid Request", $"Required parameter {ex.ParamName} is missing"),
-            _ => (500, "Internal Server Error", "An unexpected error occurred")
+            FluentValidation.ValidationException ex => CreateProblem(StatusCodes.Status400BadRequest, "validation-error",
+                "One or more input fields are invalid", ex.Message,
+                ex.Errors.Select(e => new { field = e.PropertyName, message = e.ErrorMessage })),
+
+            NotFoundException ex => CreateProblem(StatusCodes.Status404NotFound, "not-found",
+                "Resource not found", ex.Message),
+
+            EntityValidationException ex => CreateProblem(StatusCodes.Status422UnprocessableEntity, "business-rule-violation",
+                "One or more validation errors occurred", ex.Message,
+                ex.Errors.Select(e => new { field = e.Field, message = e.Message })),
+
+            RelatedAggregateException ex => CreateProblem(StatusCodes.Status422UnprocessableEntity, "related-aggregate-not-found",
+                "Related aggregate not found", ex.Message),
+
+            _ => CreateProblem(StatusCodes.Status500InternalServerError, "unexpected-error",
+                "An unexpected error occurred", "An unexpected error occurred")
         };
 
-        _logger.LogError(exception, "Exception occurred: {Message}", exception.Message);
+        if (problemDetails.Status >= StatusCodes.Status500InternalServerError)
+            _logger.LogError(exception, "Unhandled exception for {Method} {Path}", httpContext.Request.Method, httpContext.Request.Path);
+        else
+            _logger.LogInformation("Request rejected with {Status}: {Message}", problemDetails.Status, exception.Message);
 
-        var problemDetails = new ProblemDetails
+        httpContext.Response.StatusCode = problemDetails.Status!.Value;
+
+        return await _problemDetailsService.TryWriteAsync(new ProblemDetailsContext
         {
-            Status = statusCode,
+            HttpContext = httpContext,
+            ProblemDetails = problemDetails,
+            Exception = exception
+        });
+    }
+
+    private static ProblemDetails CreateProblem(int status, string type, string title, string detail, object? errors = null)
+    {
+        var problem = new ProblemDetails
+        {
+            Status = status,
+            Type = $"/problems/{type}",
             Title = title,
-            Detail = detail,
-            Instance = httpContext.Request.Path
+            Detail = detail
         };
 
-        httpContext.Response.StatusCode = statusCode;
-        await httpContext.Response.WriteAsJsonAsync(problemDetails, cancellationToken);
+        if (errors is not null)
+            problem.Extensions["errors"] = errors;
 
-        return true;
+        return problem;
+    }
+}
+```
+
+```csharp
+// Api/Extensions/ErrorHandlingExtensions.cs (see dotnet-program-setup)
+public static class ErrorHandlingExtensions
+{
+    public static IServiceCollection AddErrorHandlingConfiguration(this IServiceCollection services)
+    {
+        services.AddProblemDetails(options =>
+            options.CustomizeProblemDetails = context =>
+                context.ProblemDetails.Instance = context.HttpContext.Request.Path);
+
+        services.AddExceptionHandler<GlobalExceptionHandler>();
+        return services;
     }
 }
 
-// Registration in Program.cs
-builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+// In the pipeline composition, before the other middlewares:
 app.UseExceptionHandler();
 ```
 
-## Custom Exceptions
+Exemplo de resposta 422:
 
-```csharp
-public abstract class DomainException : Exception
+```json
 {
-    protected DomainException(string message) : base(message) { }
-    protected DomainException(string message, Exception innerException) : base(message, innerException) { }
-}
-
-public class UserNotFoundException : DomainException
-{
-    public UserNotFoundException(int userId)
-        : base($"User with ID {userId} was not found") { }
-}
-
-public class ValidationException : DomainException
-{
-    public IDictionary<string, string[]> Errors { get; }
-
-    public ValidationException(IDictionary<string, string[]> errors)
-        : base("One or more validation errors occurred")
-    {
-        Errors = errors;
-    }
-}
-
-public class BusinessException : DomainException
-{
-    public string RuleCode { get; }
-
-    public BusinessException(string ruleCode, string message)
-        : base(message)
-    {
-        RuleCode = ruleCode;
-    }
+  "type": "/problems/business-rule-violation",
+  "title": "One or more validation errors occurred",
+  "status": 422,
+  "detail": "Name should be at least 3 characters long",
+  "instance": "/v1/categories",
+  "errors": []
 }
 ```
 
-## Result Pattern
+## Regras
+
+- Nunca inclua stack trace, nome de tabela ou mensagem de exceção inesperada no corpo da resposta,
+  nem em Development — use o log.
+- Não use `IExceptionFilter` do MVC: ele não cobre erros fora dos controllers (middlewares,
+  minimal APIs) e duplica o papel do `IExceptionHandler`.
+- Não capture exceção no controller para devolver `NotFound()`; deixe o handler global mapear.
+- `Type` é estável por categoria de erro; clientes decidem por `type`/`status`, não por `detail`.
+
+## Result Pattern (somente integrações)
+
+Para chamadas a sistemas externos em que a falha é esperada e faz parte do fluxo (ex.: consulta a
+um parceiro que pode estar indisponível), prefira `Result<T>` a exceções. Não use `Result<T>` para
+invariantes de domínio nem para "não encontrado".
 
 ```csharp
-public class Result<T>
+public sealed class Result<T>
 {
-    public bool IsSuccess { get; private set; }
-    public T? Value { get; private set; }
-    public string? Error { get; private set; }
-    public Exception? Exception { get; private set; }
+    private Result(T value) => (IsSuccess, Value) = (true, value);
+    private Result(string error) => (IsSuccess, Error) = (false, error);
 
-    private Result(T value)
-    {
-        IsSuccess = true;
-        Value = value;
-    }
-
-    private Result(string error, Exception? exception = null)
-    {
-        IsSuccess = false;
-        Error = error;
-        Exception = exception;
-    }
+    public bool IsSuccess { get; }
+    public T? Value { get; }
+    public string? Error { get; }
 
     public static Result<T> Success(T value) => new(value);
     public static Result<T> Failure(string error) => new(error);
-    public static Result<T> Failure(string error, Exception exception) => new(error, exception);
 
     public TResult Match<TResult>(Func<T, TResult> onSuccess, Func<string, TResult> onFailure)
-    {
-        return IsSuccess ? onSuccess(Value!) : onFailure(Error!);
-    }
-
-    public async Task<TResult> MatchAsync<TResult>(
-        Func<T, Task<TResult>> onSuccess,
-        Func<string, Task<TResult>> onFailure)
-    {
-        return IsSuccess ? await onSuccess(Value!) : await onFailure(Error!);
-    }
+        => IsSuccess ? onSuccess(Value!) : onFailure(Error!);
 }
-
-// Usage
-public async Task<Result<User>> GetUserAsync(int id, CancellationToken cancellationToken)
-{
-    try
-    {
-        var user = await _repository.GetByIdAsync(id, cancellationToken);
-        return user == null
-            ? Result<User>.Failure($"User {id} not found")
-            : Result<User>.Success(user);
-    }
-    catch (Exception ex)
-    {
-        _logger.LogError(ex, "Error retrieving user {UserId}", id);
-        return Result<User>.Failure("An error occurred while retrieving the user", ex);
-    }
-}
-
-// Usage in Controllers
-[HttpGet("{id}")]
-public async Task<IActionResult> GetUser(int id, CancellationToken cancellationToken)
-{
-    var result = await _userService.GetUserAsync(id, cancellationToken);
-
-    return result.Match<IActionResult>(
-        onSuccess: user => Ok(user),
-        onFailure: error => NotFound(error)
-    );
-}
-```
-
-## Middleware para Logging de Erros
-
-```csharp
-public class ErrorLoggingMiddleware
-{
-    private readonly RequestDelegate _next;
-    private readonly ILogger<ErrorLoggingMiddleware> _logger;
-
-    public ErrorLoggingMiddleware(RequestDelegate next, ILogger<ErrorLoggingMiddleware> logger)
-    {
-        _next = next;
-        _logger = logger;
-    }
-
-    public async Task InvokeAsync(HttpContext context)
-    {
-        try
-        {
-            await _next(context);
-        }
-        catch (Exception ex)
-        {
-            await LogErrorAsync(context, ex);
-            throw; // Re-throw to allow other middlewares to process
-        }
-    }
-
-    private async Task LogErrorAsync(HttpContext context, Exception exception)
-    {
-        var correlationId = context.TraceIdentifier;
-        var userId = context.User?.Identity?.Name ?? "Anonymous";
-        var endpoint = $"{context.Request.Method} {context.Request.Path}";
-
-        using var scope = _logger.BeginScope(new Dictionary<string, object>
-        {
-            ["correlation.id"] = correlationId,
-            ["user.id"] = userId,
-            ["http.request.method"] = context.Request.Method,
-            ["url.path"] = context.Request.Path,
-            ["error.type"] = exception.GetType().Name
-        });
-
-        _logger.LogError(exception,
-            "Unhandled exception occurred for {Endpoint} by user {UserId}. Correlation ID: {CorrelationId}",
-            endpoint, userId, correlationId);
-
-        context.Items["Exception"] = exception;
-        context.Items["CorrelationId"] = correlationId;
-    }
-}
-
-// Pipeline registration
-app.UseMiddleware<ErrorLoggingMiddleware>();
-```
-
-## Validacao com FluentValidation
-
-```csharp
-public class CreateUserCommandValidator : AbstractValidator<CreateUserCommand>
-{
-    public CreateUserCommandValidator()
-    {
-        RuleFor(x => x.Name)
-            .NotEmpty()
-            .WithMessage("Name is required")
-            .MaximumLength(100)
-            .WithMessage("Name must have at most 100 characters");
-
-        RuleFor(x => x.Email)
-            .NotEmpty()
-            .WithMessage("Email is required")
-            .EmailAddress()
-            .WithMessage("Email must have a valid format")
-            .MaximumLength(255)
-            .WithMessage("Email must have at most 255 characters");
-    }
-}
-
-// Manual validation in handlers
-public class CreateUserHandler : ICommandHandler<CreateUserCommand, CreateUserResponse>
-{
-    private readonly IValidator<CreateUserCommand> _validator;
-
-    public async Task<CreateUserResponse> HandleAsync(CreateUserCommand command, CancellationToken cancellationToken)
-    {
-        // Manual validation
-        var validationResult = await _validator.ValidateAsync(command, cancellationToken);
-        if (!validationResult.IsValid)
-        {
-            var errors = validationResult.Errors
-                .GroupBy(x => x.PropertyName)
-                .ToDictionary(g => g.Key, g => g.Select(x => x.ErrorMessage).ToArray());
-
-            throw new ValidationException(errors);
-        }
-
-        // Handler logic...
-    }
-}
-
-// DI registration
-builder.Services.AddValidatorsFromAssembly(typeof(Program).Assembly);
 ```

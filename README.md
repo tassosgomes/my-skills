@@ -127,14 +127,14 @@ e permanecem com esse namespace nesta etapa.
 | Skill | Tipo | Propósito |
 |-------|------|-----------|
 | :star: [dotnet-index](#dotnet-index) | Índice | Mapa de navegação entre os 8 módulos de skills .NET |
-| :star: [dotnet-architecture](#dotnet-architecture) | Normativo | Clean Architecture com camadas numeradas, CQRS nativo ou Service Pattern simples, Repository Pattern, FluentValidation, API simples/Monolito Modular/Microsserviços |
+| :star: [dotnet-architecture](#dotnet-architecture) | Normativo | Clean Architecture com `src/`+`tests/`, SeedWork e agregados, um caso de uso por classe (sem MediatR), Repository por agregado, eventos de domínio, API simples/Monolito Modular/Microsserviços |
 | :star: [dotnet-code-quality](#dotnet-code-quality) | Transversal | Naming conventions, SOLID, async/await, CancellationToken, DI, estilo C# |
-| :star: [dotnet-dependency-config](#dotnet-dependency-config) | Baseline | NuGet baseline, EF Core + PostgreSQL (com troubleshooting de migrations), Mapster, Polly, RabbitMQ, appsettings/env vars/user-secrets, containers locais padronizados |
+| :star: [dotnet-dependency-config](#dotnet-dependency-config) | Baseline | NuGet baseline, EF Core + PostgreSQL (com troubleshooting de migrations), Polly, RabbitMQ com outbox/inbox, appsettings/env vars/user-secrets, containers locais padronizados |
 | :star: [dotnet-observability](#dotnet-observability) | Normativo | Health Checks, Kubernetes probes, OpenTelemetry logging integrado a tracing |
-| :star: [dotnet-performance](#dotnet-performance) | Code review | EF Core otimizado, IMemoryCache/Redis, HttpClient + Polly, paginação, IAsyncEnumerable |
+| :star: [dotnet-performance](#dotnet-performance) | Code review | EF Core otimizado, paginação offset/keyset, cache de Output (Memory/Valkey), HttpClient com resilience handler, IAsyncEnumerable |
 | :star: [dotnet-production-readiness](#dotnet-production-readiness) | Checklist | OpenTelemetry OTLP, logs JSON estruturados, sanitização de dados sensíveis, deploy checklist |
 | :star: [dotnet-program-setup](#dotnet-program-setup) | Normativo | Organização do `Program.cs` em extensions por concern (CORS, auth, Swagger, health checks, pipeline) |
-| :star: [dotnet-testing](#dotnet-testing) | Normativo | xUnit + AwesomeAssertions + Moq, WebApplicationFactory + Testcontainers, Playwright E2E |
+| :star: [dotnet-testing](#dotnet-testing) | Normativo | xUnit + AwesomeAssertions + Moq + Bogus, fixtures em camadas, integração e E2E da API com Testcontainers |
 
 ### React / Vite / TypeScript
 
@@ -405,14 +405,14 @@ security-audit-workflow/
 
 | Módulo | Escopo |
 |--------|--------|
-| `dotnet-architecture` | Camadas, estrutura de pastas (API simples/Monolito Modular/Microsserviços), CQRS ou Service Pattern simples, Repository Pattern, error handling |
+| `dotnet-architecture` | Camadas, estrutura de pastas (API simples/Monolito Modular/Microsserviços), agregados, casos de uso, Repository por agregado, error handling |
 | `dotnet-code-quality` | Naming, SOLID, async/await, CancellationToken, DI |
-| `dotnet-dependency-config` | NuGet baseline, EF Core + troubleshooting de migrations, Mapster, Polly, messaging, appsettings/env vars/user-secrets, containers locais |
+| `dotnet-dependency-config` | NuGet baseline, EF Core + troubleshooting de migrations, Polly, RabbitMQ + outbox/inbox, appsettings/env vars/user-secrets, containers locais |
 | `dotnet-observability` | Health checks, Kubernetes probes, OpenTelemetry logging |
 | `dotnet-performance` | EF Core queries, caching, HttpClient, paginação |
 | `dotnet-production-readiness` | OTLP, logs JSON, sanitização, deploy checklist |
 | `dotnet-program-setup` | Organização do `Program.cs`, extensions por concern (CORS, auth, Swagger, health checks) |
-| `dotnet-testing` | xUnit, Testcontainers, Playwright E2E |
+| `dotnet-testing` | xUnit, fixtures, Testcontainers, E2E da API |
 
 **Quando acionar:** ao iniciar qualquer tarefa .NET e querer direcionar para o módulo certo sem abrir todos.
 
@@ -422,17 +422,19 @@ security-audit-workflow/
 
 **Papel:** Define padrões obrigatórios de arquitetura e estrutura de projeto para .NET C# / ASP.NET Core.
 
-**Modelo arquitetural:** Clean Architecture com camadas numeradas — `Domain` (puro, sem infraestrutura), `Application` (use cases + FluentValidation), `Api` (controllers finos) e `Infrastructure` (EF Core, adapters).
+**Modelo arquitetural:** Clean Architecture com `src/` e `tests/` na raiz — `Domain` (SeedWork, agregados, eventos, portas de persistência), `Application` (um caso de uso por pasta), `Api` (controllers finos, envelope, exception handler) e um projeto de infraestrutura por tecnologia (`Infra.Data`, `Infra.Messaging`).
 
 **Formatos de solução:** três exemplos completos que evoluem com o estágio do projeto — API simples (um serviço), Monolito Modular (módulos isolados com fronteira in-process, host único) e Microsserviços (solutions independentes, contrato compartilhado via pacote NuGet, banco por serviço).
 
 **Pilares normativos:**
-- **CQRS nativo ou Service Pattern simples**, escolhido pela complexidade real do caso de uso — CQRS (sem MediatR) com `ICommand<R>` / `IQuery<R>`, handlers e `Dispatcher` com DI para casos elaborados; serviço de aplicação direto para CRUD simples. Proibido lookup por nome em ambos.
-- **Repository Pattern** com interface no `Domain` e implementação no `Infrastructure`; Mapster para mapeamento; nunca expor entidade EF fora do `Infrastructure`.
-- **Tratamento de erros** via `IExceptionHandler` + `ProblemDetails` (RFC 9457); Custom Exceptions por domínio; Result Pattern apenas para integrações resilientes.
-- **FluentValidation** nos handlers de command/query.
+- **Casos de uso** em `Application/UseCases/{Agregado}/{CasoDeUso}/` com Input, Output, interface e validator; o controller injeta a interface do caso de uso diretamente — sem MediatR nem dispatcher.
+- **Modelo de domínio** com `SeedWork` (`Entity`, `AggregateRoot`, `ValueObject`, `DomainEvent`), fábricas estáticas e validação por exceção ou por notificação.
+- **Repository por agregado** com contratos no `Domain`; o repositório retorna `null` e o caso de uso decide sobre `NotFoundException`; mapeamento manual via `From{Entidade}`.
+- **Eventos de domínio** gravados no outbox pelo `IUnitOfWork` na mesma transação dos dados.
+- **Tratamento de erros** via `IExceptionHandler` + `ProblemDetails` (RFC 9457): 400 para input, 404, 422 para regra de negócio.
+- **Contrato HTTP** alinhado à `restful-api`: `/v1/`, `_page`/`_size`, envelope `data`/`pagination`, JSON camelCase.
 
-**Quando acionar:** criar microserviço, criar módulo/feature, definir ou revisar camadas, implementar endpoints CQRS.
+**Quando acionar:** criar serviço, módulo, feature, caso de uso ou endpoint; definir ou revisar camadas e agregados.
 
 ---
 
@@ -441,7 +443,7 @@ security-audit-workflow/
 **Papel:** Skill transversal aplicada após qualquer geração de código C#. Define HARD RULES e guidelines de estilo.
 
 **Categorias cobertas:**
-- **Nomenclatura:** PascalCase (tipos, propriedades), camelCase (variáveis locais, parâmetros), kebab-case (rotas); sem prefixo `I` em interfaces (exceto contratos externos); `is/has/can` para booleanos.
+- **Nomenclatura:** PascalCase (tipos, propriedades, pastas = namespace), camelCase (variáveis locais, parâmetros), kebab-case (rotas); prefixo `I` em interfaces; sufixo `Async` em métodos assíncronos (exceto actions de controller); `is/has/can` para booleanos.
 - **async/await:** sempre propagar `CancellationToken`, nunca `.Result`/`.Wait()`, `ConfigureAwait(false)` em libraries.
 - **DI:** constructor injection obrigatório; `[FromServices]` proibido em controllers; registrar por interface.
 - **Estilo:** guard clauses, máx 2 níveis de aninhamento, responsabilidade única, sem flag params.
@@ -454,11 +456,12 @@ security-audit-workflow/
 
 **Papel:** Define o baseline de dependências e configuração de infraestrutura para projetos .NET C# / ASP.NET Core.
 
-**Stack baseline:** EF Core + Npgsql (PostgreSQL padrão; Oracle como alternativa suportada), Mapster, FluentValidation, Polly (retry + circuit breaker), RabbitMQ com CloudEvents, `IOptions<T>` para configuração tipada.
+**Stack baseline:** EF Core + Npgsql (PostgreSQL padrão; Oracle como alternativa suportada), mapeamento manual, FluentValidation, Polly (retry + circuit breaker), `RabbitMQ.Client` com outbox e inbox, `IOptions<T>` para configuração tipada.
 
 **Configurações padronizadas:**
-- **EF Core:** `AsNoTracking` como padrão em queries de leitura; migrations versionadas; Unit of Work explícito; interceptors para auditoria; troubleshooting normativo para migration com sintaxe incompatível ou que não aplica (versão do `dotnet-ef`, `IDesignTimeDbContextFactory`, `has-pending-model-changes`).
+- **EF Core:** `AsNoTracking` em listagens; migrations versionadas; Unit of Work explícito que grava dados e outbox na mesma transação; interceptors para auditoria; troubleshooting normativo para migration com sintaxe incompatível ou que não aplica (versão do `dotnet-ef`, `IDesignTimeDbContextFactory`, `has-pending-model-changes`).
 - **Configuração e segredos:** `appsettings.{Environment}.json` para config não sensível, variáveis de ambiente com separador `__` para overrides de produção, `dotnet user-secrets` para segredos em desenvolvimento — nunca versionado.
+- **Mensageria:** conexão única assíncrona, topologia com filas quorum e DLQ, publisher confirms a partir do worker de outbox, consumidor com retry e NACK para DLQ, inbox para efeitos não idempotentes.
 - **Containers locais:** `docker-compose.yml` de referência com versões fixas (PostgreSQL 18, MongoDB 8, Valkey 8.1, RabbitMQ 4.3) para não divergir entre máquinas e projetos.
 - **NuGet library authoring:** estrutura de projeto para publicação de packages profissionais.
 
@@ -471,10 +474,9 @@ security-audit-workflow/
 **Papel:** Skill normativa de observabilidade — health checks, logging integrado a tracing e monitoramento para .NET.
 
 **Pilares:**
-- **Health Checks** com `AspNetCore.Diagnostics.HealthChecks` — liveness, readiness e startup probes prontos para Kubernetes; checks customizados para regras de negócio e dependências externas.
-- **Logging com OpenTelemetry:** scopes de log para correlação com `TraceId`/`SpanId`; campos obrigatórios por evento; sanitização de dados sensíveis (LGPD/PCI-DSS).
-- **ActivitySource** para spans customizados em pontos críticos.
-- Configuração diferenciada por ambiente (dev/staging/prod).
+- **Health Checks** separados por tag — `/health/live` sem dependências externas e `/health/ready` com as obrigatórias; dependências opcionais como `Degraded`; checks customizados de RabbitMQ e outbox; probes de startup, liveness e readiness para Kubernetes.
+- **Tracing e métricas da aplicação** com `ActivitySource` e `Meter` próprios nos casos de uso, sem dado pessoal em tags.
+- **Logging estruturado** com templates, scopes nas convenções semânticas do OpenTelemetry e níveis por camada.
 
 **Quando acionar:** implementar health checks, configurar probes K8s, integrar logging a tracing, auditoria pré-produção.
 
@@ -485,10 +487,10 @@ security-audit-workflow/
 **Papel:** Guia normativo para revisão de performance — ideal para code review e PR review automático.
 
 **Áreas cobertas:**
-- **EF Core:** `AsNoTracking` em leitura, `AsSplitQuery` para coleções múltiplas, Compiled Queries para hot paths, projeções com `Select`, `ExecuteUpdateAsync`/`ExecuteDeleteAsync` para bulk.
-- **Caching:** `IMemoryCache` para cache local de processo curto, `IDistributedCache`/Redis para cache distribuído; TTL sempre definido; eviction policies explícitas.
-- **HttpClient:** `IHttpClientFactory` obrigatório; Polly para retry e circuit breaker; timeouts explícitos.
-- **Paginação eficiente** com cursor ou keyset; evitar `Count()` desnecessário.
+- **EF Core:** agregados rastreados pelo repositório para escrita; projeções em interfaces de consulta para leitura; `AsSplitQuery` e compiled queries só com medição; `ExecuteUpdateAsync`/`ExecuteDeleteAsync` só sem regra de domínio nem evento.
+- **Paginação:** offset com ordenação determinística e limite de `_size`; keyset para volumes grandes.
+- **Caching:** cache do Output no caso de uso de leitura, `IMemoryCache` ou `IDistributedCache` com Valkey; chave versionada, TTL e invalidação depois do commit.
+- **HttpClient:** cliente tipado atrás de porta da Application, `AddStandardResilienceHandler` com timeouts e retry só em métodos idempotentes.
 - **Streaming** com `IAsyncEnumerable<T>` para grandes volumes.
 
 ---
@@ -498,11 +500,11 @@ security-audit-workflow/
 **Papel:** Checklist consolidado de prontidão para produção — bloqueia deploy que não atenda aos requisitos mínimos.
 
 **Pilares:**
-- **OpenTelemetry OTLP** como padrão oficial de exportação; `service.name` obrigatório; auto-instrumentações ativas.
-- **Logs JSON estruturados** com campos obrigatórios (`timestamp`, `level`, `traceId`, `spanId`, `service`).
+- **OpenTelemetry OTLP** para tracing, métricas e logs em `ObservabilityExtensions`; `service.name` obrigatório; endpoint vindo do ambiente; trace propagado do request ao consumidor via outbox.
+- **Logs estruturados** exportados via OTLP com `traceId`/`spanId`, atributos e resource do serviço.
 - **Sanitização de dados sensíveis** — CPF, email, telefone, tokens nunca aparecem em logs.
 - **Níveis de log por ambiente:** `Debug` em dev, `Information` em staging, `Warning` em prod.
-- **Checklist de deploy:** type-check, lint, testes, build, health probes, OTLP configurado, secrets via env vars.
+- **Checklist de deploy:** testes, build, probes, alertas de outbox e DLQ, resiliência, migrations fora do boot, segredos no orquestrador, rollback.
 
 **Quando acionar:** preparar serviço para produção, revisar logs, configurar OpenTelemetry, validar deploy.
 
@@ -513,7 +515,7 @@ security-audit-workflow/
 **Papel:** Mantém `Program.cs` pequeno e legível — cada concern de bootstrap vira um método de extensão em arquivo próprio, `Program.cs` só orquestra as chamadas.
 
 **Pilares normativos:**
-- Um método de extensão por concern (`AddCorsConfiguration`, `AddAuthenticationConfiguration`, `AddSwaggerConfiguration`, `AddPersistenceConfiguration`, `AddObservabilityConfiguration`, `AddHealthCheckConfiguration`), agrupados em `Extensions/`.
+- Um método de extensão por concern (`AddUseCasesConfiguration`, `AddErrorHandlingConfiguration`, `AddCorsConfiguration`, `AddAuthenticationConfiguration`, `AddSwaggerConfiguration`, `AddPersistenceConfiguration`, `AddObservabilityConfiguration`, `AddHealthCheckConfiguration`), agrupados em `Extensions/`.
 - Convenção de nomes fixa: `AddXxxConfiguration` para registro em `IServiceCollection`, `UseXxx`/`MapXxx` para o pipeline.
 - Pipeline de middlewares centralizado em um único `UseApplicationPipeline`, documentando a ordem real de execução.
 - Nenhum segredo, connection string ou lógica condicional de ambiente solta direto em `Program.cs`.
@@ -527,14 +529,14 @@ security-audit-workflow/
 **Papel:** Define a estratégia de testes obrigatória para .NET — pode bloquear geração de código sem teste correspondente.
 
 **Camadas de teste:**
-- **Unitários** com xUnit + AwesomeAssertions + Moq; padrão AAA; naming `MethodName_Condition_ExpectedBehavior`; cobertura > 80% para lógica de negócio.
-- **Integração** com `WebApplicationFactory` + Testcontainers (PostgreSQL real; nunca SQLite/InMemory para lógica crítica); fixtures reutilizáveis por feature.
-- **E2E** com Playwright cobrindo fluxos críticos.
+- **Unitários** com xUnit + AwesomeAssertions + Moq + Bogus; agregados e casos de uso isolados; `DisplayName` + `Trait`; cobertura > 80% para lógica de negócio.
+- **Integração** de caso de uso + repositório + `UnitOfWork` reais contra PostgreSQL em Testcontainers (nunca InMemory/SQLite), aplicando as migrations e verificando o outbox.
+- **E2E da API** com `WebApplicationFactory` + Testcontainers, `ApiClient` e helper de persistência; Playwright fica para projetos com front-end.
 
-**Infraestrutura de teste:**
+**Organização:**
+- Árvore de testes espelha a de `src/`; cada cenário tem `Test`, `TestFixture` e, quando parametrizado, `TestDataGenerator`.
+- Fixtures em camadas (`BaseFixture` → `{Agregado}UseCasesBaseFixture` → `{CasoDeUso}TestFixture`) e geradores de dados compartilhados em `Tests.Common`.
 - Dev Containers para ambiente isolado e reprodutível.
-- `IAsyncLifetime` para setup/teardown de containers.
-- Helpers/builders para reduzir setup duplicado.
 
 **Quando acionar:** criar/revisar testes, garantir cobertura, configurar Testcontainers, setup de ambiente.
 

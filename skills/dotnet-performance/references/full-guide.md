@@ -1,411 +1,399 @@
 # Referência completa — Performance .NET
 
-> Leia sob demanda para tuning de EF Core, caching e HttpClient.
+> Leia sob demanda para tuning de EF Core, paginação, caching e HttpClient.
 
-Documento normativo para otimizacao de performance em projetos .NET.
-Use este guia somente após identificar um objetivo ou gargalo mensurável de performance.
+Use este guia somente após identificar um objetivo ou gargalo mensurável. Os exemplos seguem a
+arquitetura das demais skills .NET: agregados carregados por repositório
+(`dotnet-architecture/examples/repository-pattern.md`), casos de uso na Application e bootstrap
+em `Api/Extensions/`.
 
----
+## Índice
 
-## Indice
-1. [Performance e Otimizacao](#performance-e-otimizacao)
-2. [Entity Framework Core - Consultas Otimizadas](#entity-framework-core---consultas-otimizadas)
-3. [Caching](#caching)
-4. [HttpClient Otimizado](#httpclient-otimizado)
-
----
-
-## Performance e Otimizacao
-
-> **Por que performance importa?**
-> - **Custo operacional**: Aplicacoes eficientes reduzem custos de infraestrutura em 30-50%
-> - **Satisfacao do usuario**: Cada 100ms de latencia pode reduzir conversoes em 1%
-> - **Escalabilidade**: Codigo otimizado suporta mais usuarios com mesmos recursos
-> - **Sustentabilidade**: Menos CPU/memoria = menor pegada de carbono
-> - **Competitive advantage**: Performance superior pode ser diferencial de mercado
-> - **Developer experience**: Builds e testes rapidos aumentam produtividade da equipe
+1. [Método](#1-método)
+2. [EF Core: leitura](#2-ef-core-leitura)
+3. [EF Core: escrita em lote](#3-ef-core-escrita-em-lote)
+4. [Paginação](#4-paginação)
+5. [Caching](#5-caching)
+6. [HttpClient](#6-httpclient)
+7. [Checklist](#checklist-de-performance)
 
 ---
 
-## Entity Framework Core - Consultas Otimizadas
+## 1. Método
+
+1. Meça antes: tempo de resposta p95/p99, número de queries por request, alocação.
+2. Formule a hipótese ("a listagem faz N+1 em categorias").
+3. Aplique uma mudança por vez e compare com o baseline no mesmo ambiente.
+4. Registre ganho e custo (complexidade, consistência, memória).
+
+Ferramentas: spans de EF Core no OpenTelemetry (`dotnet-observability`), `dotnet-counters`,
+`dotnet-trace` e BenchmarkDotNet para código isolado.
+
+---
+
+## 2. EF Core: leitura
+
+### Onde cada tipo de consulta fica
+
+| Consulta | Retorna | Onde |
+|---|---|---|
+| Carregar agregado para alterar | Agregado rastreado | Repositório do agregado (Domain → Infra.Data) |
+| Listagem ou tela que só lê | Projeção (DTO) | Interface de consulta em `Application/Interfaces`, implementada em `Infra.Data` |
+
+Projeção não é agregado: não passa pelo repositório do Domain. A interface de consulta é uma porta
+técnica da Application, e a Infra a implementa sem conhecer casos de uso.
 
 ```csharp
-// Use AsNoTracking para consultas somente leitura
-public async Task<IEnumerable<ResumoProduto>> ObterResumosProdutosAsync(CancellationToken cancellationToken)
+// Application/Interfaces/IVideoQueries.cs
+public interface IVideoQueries
 {
-    return await _context.Produtos
-        .AsNoTracking()
-        .Where(p => p.EstaAtivo)
-        .Include(p => p.Categoria)
-        .Select(p => new ResumoProduto
-        {
-            Id = p.Id,
-            Nome = p.Nome,
-            Preco = p.Preco,
-            NomeCategoria = p.Categoria.Nome
-        })
-        .ToListAsync(cancellationToken);
+    Task<IReadOnlyList<VideoSummaryOutput>> ListPublishedAsync(SearchInput input, CancellationToken cancellationToken);
 }
 
-// Use projecao para evitar carregar entidades inteiras
-public async Task<Produto?> ObterProdutoPorIdAsync(int idProduto, CancellationToken cancellationToken)
-{
-    return await _context.Produtos
-        .AsNoTracking()
-        .FirstOrDefaultAsync(p => p.Id == idProduto && p.EstaAtivo, cancellationToken);
-}
+// Application/UseCases/Videos/Common/VideoSummaryOutput.cs
+public sealed record VideoSummaryOutput(Guid Id, string Title, int YearLaunched, int CategoryCount);
+```
 
-// Use Include/ThenInclude com criterio para relacionamentos
-public async Task<DetalhesPedido?> ObterPedidoComItensAsync(int idPedido, CancellationToken cancellationToken)
-{
-    var pedido = await _context.Pedidos
-        .AsNoTracking()
-        .Include(p => p.Itens)
-            .ThenInclude(i => i.Produto)
-        .FirstOrDefaultAsync(p => p.Id == idPedido, cancellationToken);
-    
-    if (pedido is null) return null;
-    
-    return new DetalhesPedido 
-    { 
-        Pedido = pedido, 
-        Itens = pedido.Itens.ToList() 
-    };
-}
+### Projeção com `AsNoTracking`
 
-// Use AsSplitQuery para evitar cartesian explosion com multiplos Includes
-public async Task<Pedido?> ObterPedidoCompletoAsync(int idPedido, CancellationToken cancellationToken)
+```csharp
+// Infra.Data/Queries/VideoQueries.cs
+public sealed class VideoQueries : IVideoQueries
 {
-    return await _context.Pedidos
-        .AsNoTracking()
+    private readonly ProjectNameDbContext _context;
+
+    public VideoQueries(ProjectNameDbContext context) => _context = context;
+
+    public async Task<IReadOnlyList<VideoSummaryOutput>> ListPublishedAsync(SearchInput input, CancellationToken cancellationToken)
+        => await _context.Videos
+            .AsNoTracking()
+            .Where(video => video.Published)
+            .OrderBy(video => video.Title).ThenBy(video => video.Id)
+            .Skip((input.Page - 1) * input.Size)
+            .Take(input.Size)
+            .Select(video => new VideoSummaryOutput(
+                video.Id,
+                video.Title,
+                video.YearLaunched,
+                _context.VideosCategories.Count(relation => relation.VideoId == video.Id)))
+            .ToListAsync(cancellationToken);
+}
+```
+
+- `Select` com o DTO final gera um único SELECT só com as colunas usadas; `AsNoTracking` é
+  redundante em projeção pura, mas deixa a intenção explícita.
+- A subconsulta de contagem vira SQL; não carregue a coleção para contar em memória.
+
+### N+1 e `AsSplitQuery`
+
+Dentro de um agregado com coleção própria (ex.: `Order` com `Items`), use `Include` no repositório.
+Com duas ou mais coleções, avalie `AsSplitQuery` para evitar explosão cartesiana:
+
+```csharp
+// Infra.Data/Repositories/OrderRepository.cs
+public Task<Order?> GetAsync(Guid id, CancellationToken cancellationToken)
+    => _context.Orders
+        .Include(order => order.Items)
+        .Include(order => order.Payments)
         .AsSplitQuery()
-        .Include(p => p.Itens)
-            .ThenInclude(i => i.Produto)
-        .Include(p => p.Cliente)
-        .Include(p => p.Endereco)
-        .FirstOrDefaultAsync(p => p.Id == idPedido, cancellationToken);
-}
+        .FirstOrDefaultAsync(order => order.Id == id, cancellationToken);
+```
 
-// Streaming para grandes datasets com AsAsyncEnumerable
-public async IAsyncEnumerable<Produto> ObterTodosProdutosAsync(
-    [EnumeratorCancellation] CancellationToken cancellationToken)
+`AsSplitQuery` troca uma query grande por várias menores; sem transação, as queries podem ver
+estados diferentes do banco. Meça antes de aplicar globalmente.
+
+### Streaming de grandes volumes
+
+```csharp
+public async IAsyncEnumerable<VideoExportRow> StreamForExportAsync([EnumeratorCancellation] CancellationToken cancellationToken)
 {
-    await foreach (var produto in _context.Produtos
+    var rows = _context.Videos
         .AsNoTracking()
-        .Where(p => p.EstaAtivo)
+        .OrderBy(video => video.Id)
+        .Select(video => new VideoExportRow(video.Id, video.Title, video.YearLaunched))
         .AsAsyncEnumerable()
-        .WithCancellation(cancellationToken))
-    {
-        yield return produto;
-    }
+        .WithCancellation(cancellationToken);
+
+    await foreach (var row in rows)
+        yield return row;
 }
+```
 
-// Bulk insert com AddRangeAsync
-public async Task InserirProdutosEmLoteAsync(
-    IEnumerable<Produto> produtos, 
-    CancellationToken cancellationToken)
-{
-    await _context.Produtos.AddRangeAsync(produtos, cancellationToken);
-    await _context.SaveChangesAsync(cancellationToken);
-}
+### Compiled query em hot path medido
 
-// ExecuteUpdateAsync para atualizacoes em lote (EF Core 7+)
-public async Task AtualizarStatusProdutosEmLoteAsync(
-    IEnumerable<int> idsProdutos, 
-    bool novoStatus, 
-    CancellationToken cancellationToken)
-{
-    await _context.Produtos
-        .Where(p => idsProdutos.Contains(p.Id))
-        .ExecuteUpdateAsync(setters => setters
-            .SetProperty(p => p.EstaAtivo, novoStatus)
-            .SetProperty(p => p.AtualizadoEm, DateTime.UtcNow),
-            cancellationToken);
-}
+```csharp
+private static readonly Func<ProjectNameDbContext, Guid, CancellationToken, Task<CategoryModelOutput?>> GetCategoryOutputQuery =
+    EF.CompileAsyncQuery((ProjectNameDbContext context, Guid id, CancellationToken cancellationToken) =>
+        context.Categories
+            .AsNoTracking()
+            .Where(category => category.Id == id)
+            .Select(category => new CategoryModelOutput(
+                category.Id, category.Name, category.Description, category.IsActive, category.CreatedAt))
+            .FirstOrDefault());
+```
 
-// ExecuteDeleteAsync para delecoes em lote (EF Core 7+)
-public async Task RemoverProdutosInativosAsync(CancellationToken cancellationToken)
-{
-    await _context.Produtos
-        .Where(p => !p.EstaAtivo && p.AtualizadoEm < DateTime.UtcNow.AddYears(-1))
-        .ExecuteDeleteAsync(cancellationToken);
-}
+Só vale quando o profiling mostrar custo de compilação da query relevante no total.
 
-// Paginacao eficiente com Skip/Take
-public async Task<PaginatedResult<Produto>> ObterProdutosPaginadosAsync(
-    int pagina, int tamanhoPagina, CancellationToken cancellationToken)
-{
-    var query = _context.Produtos
-        .AsNoTracking()
-        .Where(p => p.EstaAtivo)
-        .OrderBy(p => p.Nome);
+### SQL explícito para relatórios
 
-    var totalItens = await query.CountAsync(cancellationToken);
-    
-    var produtos = await query
-        .Skip((pagina - 1) * tamanhoPagina)
-        .Take(tamanhoPagina)
-        .ToListAsync(cancellationToken);
-
-    return new PaginatedResult<Produto>
-    {
-        Items = produtos,
-        TotalItens = totalItens,
-        Pagina = pagina,
-        TamanhoPagina = tamanhoPagina
-    };
-}
-
-// Raw SQL quando necessario para queries complexas
-public async Task<IEnumerable<RelatorioVendas>> ObterRelatorioVendasAsync(
-    DateTime dataInicio,
-    DateTime dataFim,
-    CancellationToken cancellationToken)
-{
-    return await _context.Database
-        .SqlQuery<RelatorioVendas>($"""
-            SELECT 
-                c.nome AS NomeCategoria,
-                COUNT(ip.id) AS QuantidadeVendida,
-                SUM(ip.quantidade * ip.preco_unitario) AS ValorTotal
-            FROM itens_pedido ip
-            INNER JOIN produtos p ON ip.id_produto = p.id
-            INNER JOIN categorias c ON p.id_categoria = c.id
-            INNER JOIN pedidos ped ON ip.id_pedido = ped.id
-            WHERE ped.criado_em BETWEEN {dataInicio} AND {dataFim}
-            GROUP BY c.nome
-            ORDER BY ValorTotal DESC
+```csharp
+public async Task<IReadOnlyList<CategoryUsageRow>> GetCategoryUsageAsync(DateTime from, DateTime to, CancellationToken cancellationToken)
+    => await _context.Database
+        .SqlQuery<CategoryUsageRow>($"""
+            SELECT c.name AS CategoryName, COUNT(vc.video_id) AS VideoCount
+            FROM categories c
+            LEFT JOIN videos_categories vc ON vc.category_id = c.id
+            LEFT JOIN videos v ON v.id = vc.video_id
+            WHERE v.created_at BETWEEN {from} AND {to}
+            GROUP BY c.name
+            ORDER BY VideoCount DESC
             """)
         .ToListAsync(cancellationToken);
-}
-
-// Compiled Queries para consultas frequentes
-private static readonly Func<AppDbContext, int, CancellationToken, Task<Produto?>> 
-    _obterProdutoPorIdCompilado = EF.CompileAsyncQuery(
-        (AppDbContext context, int id, CancellationToken ct) =>
-            context.Produtos
-                .AsNoTracking()
-                .FirstOrDefault(p => p.Id == id && p.EstaAtivo));
-
-public async Task<Produto?> ObterProdutoRapidoAsync(int id, CancellationToken cancellationToken)
-{
-    return await _obterProdutoPorIdCompilado(_context, id, cancellationToken);
-}
 ```
+
+A string interpolada do `SqlQuery` vira parâmetros; nunca concatene valores no SQL.
 
 ---
 
-## Caching
+## 3. EF Core: escrita em lote
+
+`ExecuteUpdateAsync`/`ExecuteDeleteAsync` executam direto no banco e **não passam pelo agregado**:
+não validam invariantes, não levantam eventos de domínio e não gravam outbox.
+
+| Situação | Abordagem |
+|---|---|
+| A operação tem regra de negócio ou precisa publicar evento | Carregar agregados em lotes, alterar pelo método de domínio, `CommitAsync` por lote |
+| Manutenção técnica sem regra nem evento (limpeza, backfill de coluna) | `ExecuteUpdateAsync`/`ExecuteDeleteAsync` no repositório ou em job |
 
 ```csharp
-public class ServicoProduto
+// Infra.Data/Outbox/OutboxCleanup.cs — maintenance, no domain rule involved
+public Task<int> DeleteProcessedBeforeAsync(DateTime threshold, CancellationToken cancellationToken)
+    => _context.OutboxMessages
+        .Where(message => message.ProcessedOn != null && message.ProcessedOn < threshold)
+        .ExecuteDeleteAsync(cancellationToken);
+```
+
+Para importar muitos agregados, faça `InsertAsync` + `CommitAsync` em blocos (ex.: 500) com um
+`DbContext` novo por bloco; um `ChangeTracker` com dezenas de milhares de entidades degrada a cada
+`SaveChanges`.
+
+---
+
+## 4. Paginação
+
+O contrato HTTP é sempre `_page`/`_size` com resposta `data`/`pagination` (`restful-api`). A
+implementação muda com o volume.
+
+### Offset (padrão)
+
+É a que está em `dotnet-architecture/examples/repository-pattern.md` (`Skip`/`Take` + `CountAsync`). Requisitos:
+
+- Ordenação determinística com desempate por Id.
+- Limite máximo de `_size` validado no input (ex.: 100).
+- Índice que cubra filtro + ordenação.
+
+### Keyset (volumes grandes ou páginas profundas)
+
+`Skip` alto obriga o banco a ler e descartar todas as linhas anteriores. Com keyset, a consulta
+começa depois da última linha vista:
+
+```csharp
+public async Task<IReadOnlyList<VideoSummaryOutput>> ListAfterAsync(
+    string? afterTitle, Guid? afterId, int size, CancellationToken cancellationToken)
 {
-    private readonly IMemoryCache _cache;
-    private readonly IRepositorioProduto _repositorio;
-    private readonly ILogger<ServicoProduto> _logger;
-    private static readonly TimeSpan ExpiracaoCache = TimeSpan.FromMinutes(30);
+    var query = _context.Videos.AsNoTracking().Where(video => video.Published);
 
-    public async Task<Produto?> ObterProdutoAsync(int id, CancellationToken cancellationToken)
-    {
-        return await _cache.GetOrCreateAsync($"produto_{id}", async entrada =>
-        {
-            entrada.AbsoluteExpirationRelativeToNow = ExpiracaoCache;
-            entrada.SetPriority(CacheItemPriority.High);
-            
-            _logger.LogDebug("Cache miss para produto {IdProduto}", id);
-            return await _repositorio.ObterPorIdAsync(id, cancellationToken);
-        });
-    }
+    // Npgsql row value comparison: (title, id) > (@afterTitle, @afterId), served by an index on (title, id)
+    if (afterTitle is not null && afterId is not null)
+        query = query.Where(video => EF.Functions.GreaterThan(
+            ValueTuple.Create(video.Title, video.Id),
+            ValueTuple.Create(afterTitle, afterId.Value)));
 
-    public async Task<Produto> AtualizarProdutoAsync(Produto produto, CancellationToken cancellationToken)
-    {
-        var produtoAtualizado = await _repositorio.AtualizarAsync(produto, cancellationToken);
-        
-        // Invalidar cache especifico
-        _cache.Remove($"produto_{produto.Id}");
-        _cache.Remove($"produtos_categoria_{produto.IdCategoria}");
-        
-        return produtoAtualizado;
-    }
-
-    // Cache com sliding expiration para dados acessados frequentemente
-    public async Task<IEnumerable<Categoria>> ObterCategoriasPopularesAsync(CancellationToken cancellationToken)
-    {
-        return await _cache.GetOrCreateAsync("categorias_populares", async entrada =>
-        {
-            entrada.SlidingExpiration = TimeSpan.FromHours(2);
-            entrada.AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(12);
-            
-            return await _repositorio.ObterCategoriasPopularesAsync(cancellationToken);
-        });
-    }
+    return await query
+        .OrderBy(video => video.Title).ThenBy(video => video.Id)
+        .Take(size)
+        .Select(video => new VideoSummaryOutput(video.Id, video.Title, video.YearLaunched, 0))
+        .ToListAsync(cancellationToken);
 }
+```
 
-// Cache distribuido com Redis para multiplas instancias
-public class ServicoProdutoDistribuido
+Keyset não permite pular direto para a página N nem dá total barato. Quando o contrato exigir
+`_page` com total, mantenha offset e otimize índice; mude o contrato só com acordo dos consumidores.
+
+### `Count` caro
+
+Em tabelas muito grandes, `CountAsync` pode custar mais que a página. Opções, na ordem: índice
+adequado ao filtro; cache curto do total; total estimado (documentado no contrato).
+
+---
+
+## 5. Caching
+
+Cache fica no caso de uso de leitura e guarda o **Output**, nunca o agregado: o agregado é para
+alteração e deve vir rastreado do banco.
+
+| Cache | Quando |
+|---|---|
+| `IMemoryCache` | Uma instância, ou dado que pode divergir entre pods por alguns segundos |
+| `IDistributedCache` (Valkey via `StackExchange.Redis`) | Várias instâncias precisam enxergar a mesma entrada ou a mesma invalidação |
+
+### Leitura com cache distribuído
+
+```csharp
+// Application/UseCases/Categories/GetCategory/GetCategory.cs
+public sealed class GetCategory : IGetCategory
 {
+    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly DistributedCacheEntryOptions CacheEntryOptions = new()
+    {
+        AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(10)
+    };
+
+    private readonly ICategoryRepository _categoryRepository;
     private readonly IDistributedCache _cache;
-    private readonly IRepositorioProduto _repositorio;
-    private readonly JsonSerializerOptions _jsonOptions;
 
-    public ServicoProdutoDistribuido(IDistributedCache cache, IRepositorioProduto repositorio)
+    public GetCategory(ICategoryRepository categoryRepository, IDistributedCache cache)
     {
+        _categoryRepository = categoryRepository;
         _cache = cache;
-        _repositorio = repositorio;
-        _jsonOptions = new JsonSerializerOptions
-        {
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-            WriteIndented = false
-        };
     }
 
-    public async Task<Produto?> ObterProdutoAsync(int id, CancellationToken cancellationToken)
+    public static string CacheKey(Guid id) => $"catalog:category:{id}:v1";
+
+    public async Task<CategoryModelOutput> ExecuteAsync(GetCategoryInput input, CancellationToken cancellationToken)
     {
-        var chaveCache = $"produto_{id}";
-        var produtoJson = await _cache.GetStringAsync(chaveCache, cancellationToken);
+        var cached = await _cache.GetStringAsync(CacheKey(input.Id), cancellationToken);
+        if (cached is not null)
+            return JsonSerializer.Deserialize<CategoryModelOutput>(cached, SerializerOptions)!;
 
-        if (produtoJson != null)
-        {
-            return JsonSerializer.Deserialize<Produto>(produtoJson, _jsonOptions);
-        }
+        var category = await _categoryRepository.GetAsync(input.Id, cancellationToken);
+        NotFoundException.ThrowIfNull(category, $"Category '{input.Id}' not found");
 
-        var produto = await _repositorio.ObterPorIdAsync(id, cancellationToken);
-        if (produto != null)
-        {
-            var options = new DistributedCacheEntryOptions
-            {
-                AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(30),
-                SlidingExpiration = TimeSpan.FromMinutes(5)
-            };
+        var output = CategoryModelOutput.FromCategory(category!);
+        await _cache.SetStringAsync(CacheKey(input.Id), JsonSerializer.Serialize(output, SerializerOptions), CacheEntryOptions, cancellationToken);
 
-            var json = JsonSerializer.Serialize(produto, _jsonOptions);
-            await _cache.SetStringAsync(chaveCache, json, options, cancellationToken);
-        }
-
-        return produto;
+        return output;
     }
 }
 ```
 
----
+`IDistributedCache` é uma abstração de `Microsoft.Extensions.Caching.Abstractions`; a Application não
+depende de Valkey. O registro (`AddStackExchangeRedisCache`) fica em
+`Api/Extensions/CacheExtensions.cs`.
 
-## HttpClient Otimizado
+### Invalidação depois do commit
 
 ```csharp
-public class ServicoApiExterna
+// Application/UseCases/Categories/UpdateCategory/UpdateCategory.cs (trecho)
+await _categoryRepository.UpdateAsync(category, cancellationToken);
+await _unitOfWork.CommitAsync(cancellationToken);
+
+// Invalidate only after the commit succeeded; never cancel after persisting.
+await _cache.RemoveAsync(GetCategory.CacheKey(category.Id), CancellationToken.None);
+```
+
+Regras:
+
+- Chave com prefixo de serviço, tipo, Id e versão do formato (`catalog:category:{id}:v1`); mudar o
+  Output muda a versão.
+- Todo item tem TTL absoluto; sliding expiration só junto de um absoluto.
+- Invalidação acontece depois do commit. Se outro serviço altera o mesmo dado, invalide pelo evento
+  (consumidor do outbox), não por TTL longo.
+- Cache miss sob carga pode gerar *stampede*; em .NET 9+ avalie `HybridCache`, que serializa a
+  recomputação por chave.
+- Não cacheie respostas com dado por usuário sem incluir o usuário na chave.
+
+---
+
+## 6. HttpClient
+
+Use cliente tipado com `IHttpClientFactory` e o pipeline de resiliência de
+`Microsoft.Extensions.Http.Resilience` (Polly v8). `Microsoft.Extensions.Http.Polly` com
+`HttpPolicyExtensions` é a API antiga e não deve ser usada em código novo.
+
+```bash
+dotnet add src/ProjectName.Infra.Encoder package Microsoft.Extensions.Http.Resilience
+```
+
+```csharp
+// Application/Interfaces/IEncoderClient.cs — technical port
+public interface IEncoderClient
+{
+    Task<EncoderJobStatus?> GetJobStatusAsync(Guid jobId, CancellationToken cancellationToken);
+}
+
+// Infra.Encoder/EncoderClient.cs
+public sealed class EncoderClient : IEncoderClient
 {
     private readonly HttpClient _httpClient;
-    private readonly ILogger<ServicoApiExterna> _logger;
-    private readonly IMemoryCache _cache;
 
-    public ServicoApiExterna(HttpClient httpClient, ILogger<ServicoApiExterna> logger, IMemoryCache cache)
+    public EncoderClient(HttpClient httpClient) => _httpClient = httpClient;
+
+    public async Task<EncoderJobStatus?> GetJobStatusAsync(Guid jobId, CancellationToken cancellationToken)
     {
-        _httpClient = httpClient;
-        _logger = logger;
-        _cache = cache;
-        
-        _httpClient.Timeout = TimeSpan.FromSeconds(30);
-        _httpClient.DefaultRequestHeaders.Add("User-Agent", "MeuApp/1.0");
-        _httpClient.DefaultRequestHeaders.Add("Accept", "application/json");
+        using var response = await _httpClient.GetAsync($"v1/jobs/{jobId}", cancellationToken);
+
+        if (response.StatusCode == HttpStatusCode.NotFound)
+            return null;
+
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<EncoderJobStatus>(cancellationToken);
     }
-
-    public async Task<T?> ObterAsync<T>(string endpoint, CancellationToken cancellationToken = default)
-    {
-        var chaveCache = $"api_cache_{endpoint}";
-        
-        if (_cache.TryGetValue(chaveCache, out T? resultadoCache))
-        {
-            _logger.LogDebug("Cache hit para endpoint {Endpoint}", endpoint);
-            return resultadoCache;
-        }
-
-        try
-        {
-            var resposta = await _httpClient.GetAsync(endpoint, cancellationToken);
-            resposta.EnsureSuccessStatusCode();
-            
-            var resultado = await resposta.Content.ReadFromJsonAsync<T>(cancellationToken: cancellationToken);
-            
-            if (resultado != null)
-            {
-                _cache.Set(chaveCache, resultado, TimeSpan.FromMinutes(15));
-            }
-            
-            return resultado;
-        }
-        catch (HttpRequestException ex)
-        {
-            _logger.LogError(ex, "Requisicao HTTP falhou para endpoint {Endpoint}", endpoint);
-            return default;
-        }
-        catch (TaskCanceledException ex) when (ex.InnerException is TimeoutException)
-        {
-            _logger.LogWarning("Timeout da requisicao para endpoint {Endpoint}", endpoint);
-            return default;
-        }
-    }
-}
-
-// Registro no DI com configuracao otimizada
-builder.Services.AddHttpClient<ServicoApiExterna>(client =>
-{
-    client.BaseAddress = new Uri("https://api.externa.com/");
-    client.DefaultRequestHeaders.Add("Accept", "application/json");
-    client.Timeout = TimeSpan.FromSeconds(30);
-})
-.ConfigurePrimaryHttpMessageHandler(() =>
-{
-    return new HttpClientHandler()
-    {
-        MaxConnectionsPerServer = 20,
-        UseCookies = false
-    };
-})
-.AddPolicyHandler(GetRetryPolicy())
-.AddPolicyHandler(GetCircuitBreakerPolicy());
-
-static IAsyncPolicy<HttpResponseMessage> GetRetryPolicy()
-{
-    return HttpPolicyExtensions
-        .HandleTransientHttpError()
-        .WaitAndRetryAsync(
-            retryCount: 3,
-            sleepDurationProvider: retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)));
-}
-
-static IAsyncPolicy<HttpResponseMessage> GetCircuitBreakerPolicy()
-{
-    return HttpPolicyExtensions
-        .HandleTransientHttpError()
-        .CircuitBreakerAsync(
-            handledEventsAllowedBeforeBreaking: 5,
-            durationOfBreak: TimeSpan.FromSeconds(30));
 }
 ```
 
+```csharp
+// Api/Extensions/HttpClientsExtensions.cs
+public static class HttpClientsExtensions
+{
+    public static IServiceCollection AddHttpClientsConfiguration(this IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddHttpClient<IEncoderClient, EncoderClient>(client =>
+            {
+                client.BaseAddress = new Uri(configuration["Services:Encoder:BaseUrl"]!);
+            })
+            .AddStandardResilienceHandler(options =>
+            {
+                options.AttemptTimeout.Timeout = TimeSpan.FromSeconds(5);
+                options.TotalRequestTimeout.Timeout = TimeSpan.FromSeconds(20);
+                options.Retry.MaxRetryAttempts = 3;
+                options.Retry.DisableForUnsafeHttpMethods(); // POST/PUT/PATCH/DELETE are not retried
+            });
+
+        return services;
+    }
+}
+```
+
+- Configure `BaseAddress` e timeouts no registro, nunca no construtor do cliente tipado.
+- O handler padrão combina rate limiter, timeout total, retry com backoff e jitter, circuit breaker
+  e timeout por tentativa.
+- Retry em método não idempotente só com chave de idempotência aceita pelo servidor.
+- Não engula exceção devolvendo `default`: o chamador precisa distinguir "não existe" (`null` em
+  404) de "falhou".
+
 ---
 
-## Checklist de Performance
+## Checklist de performance
 
-### Entity Framework Core
-- [ ] AsNoTracking para consultas somente leitura
-- [ ] Projecoes (Select) ao inves de carregar entidades inteiras
-- [ ] AsSplitQuery para multiplos Includes
-- [ ] ExecuteUpdateAsync/ExecuteDeleteAsync para operacoes em lote
-- [ ] Compiled Queries para consultas frequentes
-- [ ] Paginacao eficiente implementada
-- [ ] Connection pooling otimizado (DbContextPool)
+### EF Core
+- [ ] Existe medição antes e depois.
+- [ ] Listagens usam projeção e ordenação determinística.
+- [ ] Agregados para alteração continuam vindo do repositório, rastreados.
+- [ ] `AsSplitQuery` aplicado só onde a explosão cartesiana foi medida.
+- [ ] `ExecuteUpdateAsync`/`ExecuteDeleteAsync` só em operações sem regra de domínio nem evento.
+- [ ] Índices cobrem filtro e ordenação das consultas alteradas.
+
+### Paginação
+- [ ] Contrato `_page`/`_size` com limite máximo de `_size`.
+- [ ] Keyset avaliado para volumes grandes ou páginas profundas.
 
 ### Caching
-- [ ] IMemoryCache para cache local
-- [ ] IDistributedCache/Redis para multiplas instancias
-- [ ] Invalidacao de cache em operacoes de escrita
-- [ ] Sliding e absolute expiration configurados
-- [ ] Cache dependencies quando aplicavel
+- [ ] Cache guarda Output, não agregado.
+- [ ] Chave versionada, TTL absoluto e invalidação depois do commit.
+- [ ] `IDistributedCache` (Valkey) quando há várias instâncias.
 
 ### HttpClient
-- [ ] HttpClient configurado via DI (IHttpClientFactory)
-- [ ] Retry policies com Polly implementadas
-- [ ] Circuit breaker configurado
-- [ ] Timeouts apropriados
-- [ ] Connection pooling otimizado
+- [ ] Cliente tipado via `IHttpClientFactory`, atrás de porta da Application.
+- [ ] `AddStandardResilienceHandler` com timeouts explícitos.
+- [ ] Retry desabilitado para métodos não idempotentes.
