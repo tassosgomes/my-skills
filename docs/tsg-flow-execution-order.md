@@ -34,12 +34,12 @@ Não detalhe todos os domínios antes de iniciar a primeira capacidade: comece p
 |---|---|---|
 | 6 | tsg-flow-prd-creator | Definir comportamento, escopo e critérios de aceite da capacidade/feature |
 | 7, condicional | tsg-flow-contract-creator | Criar/alterar API compartilhada. Reutilize contrato canônico já aprovado |
-| 8a, condicional | tsg-flow-techspec-creator | Há implementação backend ou trabalho técnico sem UI |
-| 8b, condicional | tsg-flow-frontend-techspec-creator | Há implementação frontend |
+| 8, condicional | tsg-flow-techspec-creator | Escopo Grande/Complexo. Declare Backend, Frontend ou Full-stack no cabeçalho — um único documento |
 | 9 | tsg-flow-task-creator | Consumir PRD e todas as specs necessárias aprovadas; gerar um único plano |
 
-Para frontend com API, o contrato antecede 8b. Para frontend sem API, declare N/A e dispense a etapa 7.
-Frontend isolado não exige 8a. Full-stack exige 8a e 8b; quando o frontend depende de decisões do
+Para frontend com API, o contrato antecede a etapa 8. Para frontend sem API, declare N/A e dispense a
+etapa 7. Escopo Pequeno/Médio dispensa a etapa 8 inteira (ver `tsg-flow-index`). Quando o frontend
+depende de decisões do
 backend, faça 8a primeiro. Serialize escritas nas ADRs e no diretório compartilhado.
 
 As etapas 3, 8a e 8b reutilizam ADRs pertinentes. Decisões arquiteturais novas ficam em
@@ -48,12 +48,14 @@ Leia o [ciclo e retenção das ADRs](tsg-flow-guide.md#adrs-sobrevivem-ao-prd).
 
 ## 4. Preparação do repositório
 
-Execute `tsg-flow-gate-creator` uma vez por repositório, antes do Orchestrator. Reexecute quando
-stack, comandos do CI ou contrato do gate mudarem. Pode acontecer durante o planejamento técnico,
-assim que a stack e os comandos reais estiverem conhecidos.
+Não existe script de gate a gerar. Cada task declara em `gate` o **comando real do projeto** — o
+mesmo que o CI executa — e o exit code do comando é o veredito.
 
-O resultado é `scripts/ai-flow/gate.sh` e seu contrato. Verifique caminho comportamental, filtro sem
-match, caminho estático e falhas de uso/ambiente. Tasks devem apontar comandos reais do gate.
+Antes de iniciar o fluxo, levante os comandos em `.github/workflows/`, `Makefile`, `package.json`
+ou no build script, e confirme que o runner **falha sozinho quando o seletor não pega nenhum
+teste** (`--minimum-expected-tests` no Microsoft.Testing.Platform, exit 5 no pytest, falha padrão
+em Jest, Vitest, Surefire e Gradle). Onde o runner sair `0` com zero testes, quantifique a
+expectativa em `gate_expect` para que a divergência reprove.
 
 ## 5. Execução — ponto de entrada único
 

@@ -61,7 +61,7 @@ flowchart LR
     end
 
     repo["Repositório alvo<br/>stack + CI"]:::input
-    gate["Gate<br/>scripts/ai-flow/gate.sh"]:::gate
+    gate["Gate da task<br/>comando do projeto"]:::gate
     adrs["docs/adr/<br/>decisões duráveis"]:::apiDoc
     architectureBaseline -.->|consulta / registra decisões| adrs
     techspec -.-> adrs
@@ -69,10 +69,10 @@ flowchart LR
 
     tasks --> orchestrator
     repo --> gate
-    gate -.->|pré-requisito do fluxo| orchestrator
-    implementer -.->|gate behavioral ou static| gate
-    focusedValidator -.->|gate behavioral ou static| gate
-    fullValidator -.->|executa gate com --all-tests| gate
+    tasks -.->|declara comando e expectativa| gate
+    implementer -.->|executa; exit code decide| gate
+    focusedValidator -.->|executa; exit code decide| gate
+    fullValidator -.->|suíte completa do projeto| gate
 
     classDef input fill:#f4f4f5,stroke:#52525b,color:#18181b
     classDef definition fill:#dbeafe,stroke:#2563eb,color:#172554

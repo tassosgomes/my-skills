@@ -69,10 +69,8 @@ continua instalando skills avulsas normalmente.
 | :star: [tsg-flow-domain-creator](skills/tsg-flow-domain-creator/) | Domain | Detalha um domínio, suas features e regras de negócio |
 | :star: [tsg-flow-prd-creator](skills/tsg-flow-prd-creator/) | PRD | Conduz discovery e cria requisitos de produto rastreáveis |
 | :star: [tsg-flow-contract-creator](skills/tsg-flow-contract-creator/) | API Contract | Define o contrato OpenAPI como fonte de verdade |
-| :star: [tsg-flow-techspec-creator](skills/tsg-flow-techspec-creator/) | TechSpec | Traduz o PRD em decisões e artefatos técnicos |
-| :star: [tsg-flow-frontend-techspec-creator](skills/tsg-flow-frontend-techspec-creator/) | Frontend TechSpec | Define a implementação frontend baseada no contrato |
+| :star: [tsg-flow-techspec-creator](skills/tsg-flow-techspec-creator/) | TechSpec | Traduz o PRD em fatias, contratos e decisões — backend, frontend ou full-stack |
 | :star: [tsg-flow-task-creator](skills/tsg-flow-task-creator/) | Tasks | Gera tasks verticais, rastreáveis e prontas para agentes |
-| :star: [tsg-flow-gate-creator](skills/tsg-flow-gate-creator/) | Gate | Gera o gate determinístico do TSG Flow |
 
 O fluxo de execução utiliza ainda `tsg-flow-orchestrator`, `tsg-flow-implementer`,
 `tsg-flow-validator` e `tsg-flow-integrator`. As skills `flow-qa-*` pertencem ao pipeline de QA

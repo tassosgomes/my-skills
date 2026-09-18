@@ -16,11 +16,11 @@ Faça uma passagem e execute a evidência declarada. Não trate recomendações 
 
 ## Verificação
 
-Behavioral exige seleção de pelo menos um teste; static exige enabling justificada, gate --static e
+Task vertical exige seleção de pelo menos um teste; enabling exige justificativa, gate estático e
 a evidência específica. Se a evidência for o próprio build/typecheck do gate, registre isso para
 não executar o mesmo comando duas vezes dentro da chamada.
 Ausência de ferramenta, serviço ou timeout deve ser reportada como infraestrutura.
-Não execute --skip-tests para concluir uma task nem altere seu tipo apenas para contornar falha.
+Não use comando de diagnóstico para concluir uma task nem altere seu `kind` para contornar falha.
 
 ## Saída
 

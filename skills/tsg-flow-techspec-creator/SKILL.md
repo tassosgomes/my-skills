@@ -1,6 +1,6 @@
 ---
 name: tsg-flow-techspec-creator
-description: Cria ou atualiza a especificação técnica de backend ou de uma feature sem API, a partir de PRD. Define fatias, artefatos e decisões arquiteturais duráveis; para UI use frontend-techspec-creator.
+description: "Cria ou atualiza a especificação técnica de uma feature a partir do PRD — backend, frontend ou full-stack em um único documento. Define fatias verticais, contratos, fronteiras e decisões duráveis. Não use para discovery de produto nem para implementar código."
 metadata:
   group: tsg-flow
   pipeline_stage: techspec
@@ -13,57 +13,125 @@ metadata:
 
 # TechSpec Creator
 
-Traduza o PRD em uma implementação verificável, respeitando a arquitetura existente.
+Traduza o PRD em um contrato de implementação verificável, respeitando a arquitetura existente.
+Um documento por feature, cobrindo backend, frontend ou ambos.
+
+## Decisões
+
+| Tema | Decisão | Motivo |
+|---|---|---|
+| Documento | Uma `techspec.md` por feature, com blocos condicionais por escopo | Uma fatia vertical full-stack cruza UI e API; separar por camada contradiz o fatiamento |
+| Conteúdo | Só o que o implementador **não deriva**: comportamento, fronteira, decisão fechada, evidência | Estrutura, assinatura e convenção vêm da skill de stack na hora da implementação |
+| Tamanho | Sem limite de extensão por seção | Comportamento ambíguo custa mais que documento longo |
+| Seção vazia | Omitida | Justificativa de não-aplicabilidade é ruído |
+| Arquivos a criar | Não são listados | Determinístico pelas skills de arquitetura da stack |
+| Coordenação front/back | O `api-contract.yaml` | Contrato coordena times; spec separada só duplica |
+| Decisão de projeto | Vive na skill de arquitetura da stack ou no baseline, não na spec | Biblioteca, estrutura e convenção não se decidem por feature |
+| Fatia sem comportamento | Habilitador, com justificativa e fatia desbloqueada | Impede "infra primeiro" disfarçada de planejamento |
 
 ## Entradas
 
-- `tasks/prd-<slug>/prd.md` aprovado ou aprovação equivalente registrada pelo usuário.
-- Quando disponíveis: `vision.md`, `context/domain-map.md`,
-  `context/architecture-baseline.md`, `domains/<dominio>/domain.md`,
-  capacidade selecionada em `backlog/capabilities.md`, contrato de API e ADRs relevantes.
+- `tasks/prd-<slug>/prd.md` aprovado, ou aprovação equivalente registrada pelo usuário.
+- Quando a feature consome ou altera uma API: contrato aprovado, normalmente `api-contract.yaml`.
+  Para UI sem integração remota, registre `API Contract: N/A — <motivo>`.
+- Quando disponíveis: `vision.md`, `context/domain-map.md`, `context/architecture-baseline.md`,
+  `domains/<dominio>/domain.md`, capacidade em `backlog/capabilities.md`, designs e ADRs.
 - Saída: `tasks/prd-<slug>/techspec.md`. Respeite caminhos já definidos pelo projeto.
 
-## Contexto e decisões
+## Escopo do documento
 
-1. Identifique a stack pelas instruções do projeto, manifests, CI, configuração e código existente.
-   Skills instaladas oferecem orientação; sua presença não comprova a stack.
-2. Selecione skills disponíveis para decisões efetivamente envolvidas. Não leia todas por rotina.
-   Sem skill específica, use as convenções verificadas do projeto e registre limitações relevantes.
-3. Leia o PRD e explore arquivos, símbolos, chamadores, testes e configurações afetados.
-   Em projeto novo, registre a ausência de código e use as restrições explícitas.
-4. Herde baseline e ADRs antes de propor arquitetura. No modo API-first, o contrato define
-   endpoints, schemas, autenticação e erros; referencie seus operationIds sem duplicar schemas.
-5. Pergunte somente por lacunas que mudam comportamento, contrato, dados ou arquitetura.
-   Resolva escolhas locais pelas convenções existentes; não imponha número mínimo de perguntas.
-6. Se contrato, baseline e PRD divergirem, apresente o conflito e resolva a decisão material antes
-   de aprovar o handoff. Não invente alternativas ou ADRs apenas para preencher uma quota.
+Determine o escopo pelo PRD e declare no cabeçalho:
 
-## Especificação e persistência
+| Escopo | Blocos presentes |
+|---|---|
+| **Backend** | Arquitetura/backend, mapeamento de contrato, entidades do domínio |
+| **Frontend** | Arquitetura/frontend, mapeamento de jornada, integração com contrato |
+| **Full-stack** | Ambos, com **um mapa de fatias único** onde cada fatia cruza as duas pontas |
 
-Leia [templates/techspec-template.md](templates/techspec-template.md) ao redigir e
-[references/delivery-contract.md](references/delivery-contract.md) para persistência e ADRs.
+Uma feature exclusivamente frontend não exige bloco backend, e vice-versa. Não produza dois
+documentos para uma feature full-stack.
 
-- Mapeie requisitos e regras para fatias verticais com entrada, processamento, saída e teste.
-- Liste artefatos concretos por fatia: código, testes, configuração, observabilidade e documentação
-  apenas quando necessários. Declare referências seletivas e skills aplicáveis.
-- Ordene fatias por dependência e valor; cada checkpoint deve compilar e provar o incremento.
-- Habilitadores horizontais são exceções justificadas, com evidência estática e fatia desbloqueada.
-- Registre decisões fechadas, liberdade de implementação e limites ainda não resolvidos.
+## Processo
+
+1. **Stack.** Identifique-a por instruções do projeto, manifests, CI, configuração e código.
+   Skills instaladas orientam; sua presença não comprova a stack.
+2. **Contexto.** Leia o PRD e explore arquivos, símbolos, chamadores, testes e configuração
+   afetados. Em projeto novo, registre a ausência de código e use as restrições explícitas.
+3. **Herança.** Absorva baseline, contrato e ADRs antes de propor arquitetura. No modo API-First,
+   o contrato define endpoints, schemas, autenticação e erros: referencie `operationId`s sem
+   duplicar schema.
+4. **Decisões ativas.** Leia `docs/adr/index.md` e as ADRs pertinentes. Uma decisão `Accepted`
+   conflitante tem exatamente duas saídas, e ambas são explícitas:
+   **conformar** com a restrição, ou **substituir** criando nova ADR e marcando a anterior
+   `Superseded by ADR-NNN`. Ignorar em silêncio não é opção — cria inconsistência invisível.
+5. **Lacunas.** Pergunte somente o que muda comportamento, contrato, dados ou arquitetura.
+   Resolva escolhas locais pelas convenções existentes. Sem quota de perguntas.
+6. **Conflitos.** Se contrato, baseline e PRD divergirem, apresente o conflito e resolva antes do
+   handoff. Não invente alternativas nem ADRs para preencher cota.
+7. **Redação.** Leia [templates/techspec-template.md](templates/techspec-template.md) e
+   [references/delivery-contract.md](references/delivery-contract.md).
+
+## Cadeia de verificação de conhecimento
+
+Ao pesquisar ou decidir, siga nesta ordem e não pule etapas:
+
+```
+1. Código existente  →  2. Docs do projeto (README, docs/, baseline, ADRs)
+→  3. Context7 MCP  →  4. Busca web  →  5. Sinalizar como incerto
+```
+
+O passo 5 é **sempre** apresentado como incerteza, nunca como fato. **Nunca presuma nem invente.**
+Se não encontrar, escreva "não sei" ou "não encontrei documentação para isto". API, padrão ou
+comportamento inventado propaga em cascata para tasks e implementação — incerteza é sempre
+preferível a fabricação.
+
+## Regras não negociáveis
+
+1. Toda fatia entrega comportamento observável de ponta a ponta e declara entrada, processamento,
+   saída, evidência e bloqueio. Numa feature full-stack, uma fatia cruza UI e API: é uma linha só.
+2. Trabalho sem comportamento observável é habilitador, com justificativa, menor escopo e a
+   primeira fatia que desbloqueia.
+3. Não liste arquivos a criar. Liste os a **modificar** e os a **referenciar**.
+4. Não copie convenção, estrutura de pastas, assinatura interna ou estratégia de teste das skills
+   de stack. Referencie a skill quando precisar nomear a fonte.
+5. Não registre escolha de biblioteca, estrutura de pastas ou convenção como decisão de feature —
+   são decisões de projeto e vivem na skill de arquitetura da stack ou no baseline.
+   Aqui entra só o desvio justificado do padrão.
+6. Preencha **Riscos e Preocupações** enquanto lê o código, com `arquivo:linha` e mitigação.
+   `Nenhuma encontrada` é válido; preocupação sem mitigação não é.
+7. Interface só entra no documento quando é contrato entre fatias, times ou repositórios.
+8. Apresente 2–3 abordagens com trade-offs **apenas** quando houver escolha arquitetural material
+   ainda não decidida. Lidere pela recomendação. Direção já aprovada não se reabre.
+9. Ambiguidade que bloqueia implementação é resolvida antes do status `Aprovado`.
+   Pendência não bloqueante fica explícita com responsável.
+10. Sem limite de extensão. Corte seção supérflua, nunca detalhe que remove ambiguidade.
+
+## Persistência e ADRs
+
 - Grave `techspec.draft.md` com status `Em Revisão`; releia e apresente resumo e link.
-- Reutilize autorização explícita para decisões já aprovadas. Quando houver decisão nova material,
-  obtenha sua aprovação sobre o draft antes de promover `techspec.md` com status `Aprovado`.
-- Preserve a especificação canônica durante atualizações e altere apenas o escopo solicitado.
+- Reutilize autorização já concedida para o mesmo escopo. Havendo decisão nova material, obtenha
+  aprovação sobre o draft antes de promover para `techspec.md` com status `Aprovado`.
+- Preserve a especificação canônica durante updates; altere apenas o escopo solicitado.
+- Crie ADR apenas para decisão arquitetural nova ou mudança significativa de decisão existente.
+  Use [templates/adr-template.md](templates/adr-template.md); numeração global compartilhada entre
+  features e entre frontend/backend. O ciclo completo está no
+  [contrato de entrega](references/delivery-contract.md).
 
-## ADRs duráveis
+## Checklist antes do handoff
 
-Consulte `docs/adr/index.md` e leia somente ADRs relacionadas. Crie uma ADR apenas para decisão
-arquitetural nova ou alteração significativa de decisão existente; referências herdadas podem bastar.
-Use [templates/adr-template.md](templates/adr-template.md) e o ciclo descrito no contrato de entrega.
-ADRs ficam em `docs/adr/adr-NNN.md`, com numeração global compartilhada entre features e frontend/backend.
-Seu contexto e racional devem sobreviver à remoção do PRD.
+- [ ] Escopo declarado no cabeçalho e blocos não aplicáveis **omitidos**, não preenchidos com N/A.
+- [ ] Toda fatia tem comportamento observável, evidência e bloqueio declarados.
+- [ ] Numa feature full-stack, nenhuma fatia foi dividida por camada.
+- [ ] Todo habilitador justifica por que não cabe numa fatia e aponta a fatia desbloqueada.
+- [ ] Todo RF e RN do PRD aparece em ao menos uma fatia.
+- [ ] Nenhuma convenção de stack foi copiada das skills para o documento.
+- [ ] Nenhum arquivo "a criar" foi listado.
+- [ ] Riscos trazem `arquivo:linha` e mitigação, ou a seção declara `Nenhuma encontrada`.
+- [ ] ADR ativa conflitante foi conformada ou substituída — nunca ignorada.
+- [ ] Nada foi inventado: o que não foi encontrado está marcado como incerto.
 
 ## Entrega
 
-Informe caminhos, decisões novas/herdadas, ADRs afetadas, mapa de fatias e pendências.
-Não repita arquivos completos. O Task Creator consome esta TechSpec e, quando aplicável,
-`frontend-techspec.md`, gerando um único plano para a feature.
+Informe caminhos, escopo, decisões novas e herdadas, ADRs afetadas, mapa de fatias e pendências.
+Não repita o documento no chat. O `tsg-flow-task-creator` consome esta TechSpec para gerar um
+plano único da feature.

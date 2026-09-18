@@ -1,132 +1,53 @@
-# Resumo de Tarefas de Implementacao de [Funcionalidade]
+# Plano de Implementação — [Funcionalidade]
 
-> **TechSpecs de origem:** [links para techspec.md e/ou frontend-techspec.md, com revisao aprovada]
-> **ADRs pertinentes:** [links relativos para docs/adr/adr-NNN.md; nao copiar o catalogo]
-> **Status do plano:** [Em revisao | Confirmado para implementacao]
-> **Regra de entrega:** cada task de comportamento e uma fatia vertical validavel isoladamente
+> **TechSpec de origem:** [link para `techspec.md`, com revisão aprovada]
+> **Escopo:** [Backend | Frontend | Full-stack]
+> **ADRs pertinentes:** [links relativos para `docs/adr/adr-NNN.md`; não copiar o catálogo]
+> **Status do plano:** [Em revisão | Confirmado para implementação]
 
-## Visao Geral
+## Visão Geral
 
-[Breve descricao da funcionalidade e objetivo do conjunto de tarefas]
+Objetivo do conjunto de tasks e o comportamento que a feature entrega ao final.
 
-## Skills de Stack Consultadas
+## Fases
 
-| Skill | Caminho | Influencia |
-|-------|---------|------------|
-| [stack]-architecture | `[caminho]` | Estrutura de pastas, camadas |
-| [stack]-testing | `[caminho]` | Padroes de teste, frameworks |
-| [stack]-code-quality | `[caminho]` | Convencoes nos criterios de sucesso |
-| ... | ... | ... |
+Fases agrupam uma sequência de comportamento e feedback — não uma camada arquitetural.
 
-## Fases de Implementacao
+### Fase 1 — [nome]
 
-As fases agrupam uma sequencia de comportamento e feedback, nao uma camada arquitetural.
+[Qual comportamento é demonstrado ao final da fase e qual checkpoint prova isso.]
 
-### Fase 1 - [Nome da fatia ou grupo de fatias]
-[Qual comportamento sera demonstrado e qual checkpoint sera executado]
+### Fase 2 — [nome]
 
-### Fase 2 - [Nome da fatia ou grupo de fatias]
-[Qual comportamento sera demonstrado e qual checkpoint sera executado]
+[Idem.]
 
-## Mapa de Entrega e Feedback
+## Mapa de Entrega
 
-| Slice | Task | Comportamento observavel | Gate executavel | Seletor focalizado | Bloqueado por |
-|-------|------|--------------------------|-----------------|---------------------|---------------|
-| V-01 | 1.0 | [resultado ponta a ponta] | [comando + saida esperada] | [classe+metodo/tag/filtro] | [Nenhum/IDs] |
+Uma linha por task. A fatia vem da TechSpec; numa feature full-stack ela cruza UI e API.
 
-### Habilitadores inevitaveis
+| Fatia | Task | Comportamento observável | Gate | Bloqueado por |
+|---|---|---|---|---|
+| V-01 | 1.0 | [resultado ponta a ponta] | `[comando]` | [Nenhum/IDs] |
 
-| Enabler | Task | Justificativa de horizontalidade | Menor validacao | Desbloqueia |
-|---------|------|----------------------------------|------------------|-------------|
-| EN-01 | [X.0] | [por que nao pode estar em uma fatia] | [evidencia] | [V-XX] |
+### Habilitadores
 
-## Tarefas
+| Enabler | Task | Por que não cabe numa fatia | Desbloqueia |
+|---|---|---|---|
+| EN-01 | [X.0] | [justificativa concreta] | [V-XX] |
 
-- [ ] 1.0 Titulo da Tarefa Principal
-- [ ] 2.0 Titulo da Tarefa Principal
-- [ ] 3.0 Titulo da Tarefa Principal
+## Tasks
 
-## Rastreabilidade US -> Tasks
+- [ ] 1.0 [Título]
+- [ ] 2.0 [Título]
 
-| User Story | Tasks Relacionadas | Tipo de Cobertura |
-|------------|--------------------|-------------------|
-| US-01 | 1.0, 2.0 | Direta|Suporte |
+## Cobertura
 
-## Validacao de Cobertura
+Toda linha do PRD precisa aparecer aqui. Lacuna é bloqueio de handoff, não observação.
 
-### Requisitos Funcionais
+| Requisito | Task(s) |
+|---|---|
+| RF-01 | 1.0, 2.0 |
+| RN-04 | 2.0 |
+| US-01 | 1.0 |
 
-| Requisito | Task(s) | Status |
-|-----------|---------|--------|
-| RF-01     | X.0     | ✅ Coberto |
-| RF-02     | Y.0     | ✅ Coberto |
-
-### Artefatos da TechSpec
-
-| Artefato | Task | Status |
-|----------|------|--------|
-| `src/services/example.service.ts` | X.0 | ✅ |
-| `src/middleware/example.middleware.ts` | Y.0 | ✅ |
-
-### Categorias Obrigatorias
-
-| # | Categoria | Task(s) / N/A | Skill Relacionada | Status |
-|---|-----------|---------------|-------------------|--------|
-| 1 | Setup / Configuracao | X.0 | [stack]-dependency-config | ✅ |
-| 2 | Modelos de Dados | Y.0 | [stack]-architecture | ✅ |
-| 3 | Logica de Negocio | X.0, Z.0 | [stack]-architecture | ✅ |
-| 4 | Endpoints / Interfaces | W.0 | restful-api | ✅ |
-| 5 | Integracoes Externas | N/A — sem integracoes | [stack]-dependency-config | ✅ |
-| 6 | Validacoes e Erros | X.0 (subtarefa X.3) | [stack]-code-quality | ✅ |
-| 7 | Testes | subtarefas em cada task | [stack]-testing | ✅ |
-| 8 | Observabilidade | W.0 | [stack]-observability | ✅ |
-| 9 | Documentacao | V.0 | — | ✅ |
-| 10 | Seguranca | U.0 | [stack]-production-readiness | ✅ |
-
-### Coesao e Faixa de Tamanho
-
-| Task | slice_type | Criar | Modificar | Subtarefas | Fatias | Faixa | Justificativa |
-|------|------------|-------|-----------|------------|--------|-------|---------------|
-| 1.0 | vertical | 7 | 2 | 5 | 1 | ✅ | Dentro da faixa budget |
-
-Tasks `vertical` devem ter exatamente uma fatia. Tasks `enabling` exigem justificativa na seção
-"Habilitadores inevitaveis" e não podem virar agrupamentos horizontais por conveniência. Fora da
-faixa exige justificativa de coesao; nao exige quebra quando isso destruir o gate.
-
-### Integridade dos Gates
-
-| Task | Gate | Teste/fixture disponivel | Filtro isolado | Repo compilavel | Dependencia futura | Status |
-|------|------|--------------------------|-----------------|-----------------|--------------------|--------|
-| 1.0 | `[comando]` | [criado/modificado/preexistente] | Sim | Sim | Nao | ✅ |
-
-### Ciclo de Vida de Artefatos Compartilhados
-
-| Artefato | Primeira task produtora | Tasks consumidoras | Dependencias consistentes | Status |
-|----------|-------------------------|--------------------|---------------------------|--------|
-| `[teste/fixture/arquivo]` | X.0 | Y.0, Z.0 | Sim | ✅ |
-
-Nenhuma task pode validar com teste/fixture futuro ou depender de arquivo produzido depois.
-Tasks behavioral precisam de seletor proprio. Em static, registre N/A para filtro com justificativa.
-
-## Analise de Paralelizacao
-
-Preencha somente quando houver oportunidade concreta. O executor standard continua sequencial;
-lanes sao informacao de planejamento, nao autorizacao para workers escreverem simultaneamente.
-
-### Lanes de Execucao Paralela
-
-| Lane | Tarefas | Descricao |
-|------|---------|-----------|
-| Lane A | X.0, Y.0 | [Descricao] |
-| Lane B | W.0, Z.0 | [Descricao] |
-
-### Caminho Critico
-
-[Sequencia de fatias e habilitadores que determina o tempo minimo de conclusao. Cada fatia deve
-liberar feedback antes da proxima etapa; nao aguarde todas as camadas.]
-
-### Diagrama de Dependencias
-
-```
-[Representacao visual das dependencias]
-```
+> Verificado por `python3 scripts/validate_plan.py tasks/prd-<slug>/` antes do handoff.

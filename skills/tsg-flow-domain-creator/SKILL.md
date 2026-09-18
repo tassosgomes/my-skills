@@ -106,7 +106,8 @@ Diretrizes obrigatórias:
 - **Regras de negócio numeradas** — use RN-01, RN-02... para referenciar nos critérios de aceitação dos PRDs
 - **Eventos no formato `dominio.evento`** — ex: `pagamento.realizado`
 - **Consistência upstream** — nomes e fronteiras vêm do Domain Map; escopo e perfis vêm da visão.
-- **Manter entre ~600 e 1.200 palavras** no corpo principal (excluindo tabelas)
+- **Sem limite de extensão** — regra de negócio e fronteira recebem o espaço necessário para
+  ficar inequívocas; corte seção supérflua, nunca detalhe que remove ambiguidade
 
 ### 5. Validação Interna
 
