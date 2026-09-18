@@ -140,13 +140,7 @@ e permanecem com esse namespace nesta etapa.
 
 | Skill | Tipo | Propósito |
 |-------|------|-----------|
-| :star: [react-architecture](#react-architecture) | Normativo | Estrutura de pastas (flat/feature-based), path aliases `@/`, public API via `index.ts` |
-| :star: [react-code-quality](#react-code-quality) | Transversal | Naming em inglês, componentes ~300 linhas, TypeScript strict, hooks patterns, props tipadas |
-| :star: [react-observability](#react-observability) | Normativo | OpenTelemetry Web, propagação W3C Trace Context, `useTracing` hook, erros globais |
-| :star: [react-production-readiness](#react-production-readiness) | Checklist | Agregadora: telemetria, runtime config, erros, CI pipeline, Dockerfile |
-| :star: [react-runtime-config](#react-runtime-config) | Normativo | 12-factor runtime config, `window.RUNTIME_ENV`, Dockerfile multi-stage, `envsubst` |
-| :star: [react-subpath-deploy](#react-subpath-deploy) | Normativo | Deploy em subpath Kubernetes: Vite base path, React Router basename, Nginx SPA fallback |
-| :star: [react-testing](#react-testing) | Normativo | Vitest + React Testing Library + MSW, `renderHook`, `userEvent`, queries semânticas, 70%+ |
+| :star: [react](#react) | Normativo | Padrao unico: estrutura e fronteiras de feature (via ESLint), camada de API, estado, formularios, erros, qualidade, testes, runtime config 12-factor, container, subpath e telemetria |
 
 ---
 
@@ -525,111 +519,36 @@ security-audit-workflow/
 
 ---
 
-## react-architecture
+## react
 
-**Papel:** Define padrões obrigatórios de estrutura de projeto para React + Vite + TypeScript.
+**Papel:** Padrao unico de React + Vite + TypeScript. Consolida as sete skills anteriores
+(`react-architecture`, `react-code-quality`, `react-observability`, `react-production-readiness`,
+`react-runtime-config`, `react-subpath-deploy`, `react-testing`).
 
-**Modelo de organização:** três modos que evoluem com o projeto — flat (pequeno), intermediário (médio) e feature-based (grande). Separação clara entre `shared/` (UI reutilizável) e `features/` (lógica de domínio).
+**Forma:** declara a decisao, nao ensina a implementar. O modelo ja sabe escrever o codigo; a skill
+diz qual das alternativas equivalentes este projeto usa e onde cada coisa mora.
 
-**Pilares normativos:**
-- **Path aliases** com `@/` configurados no `vite.config.ts` e `tsconfig.json`; imports absolutos obrigatórios.
-- **Convenções:** pastas em `kebab-case`, arquivos de componente em `PascalCase.tsx`.
-- **Public API via `index.ts`** — cada feature/módulo exporta apenas o que é público; imports internos proibidos de fora.
-- **Agrupamento por domínio** dentro de `features/`; componentes de UI genéricos ficam em `shared/ui/`.
-
-**Quando acionar:** criar projeto React novo, criar feature, refatorar estrutura, revisar PR com mudanças de imports.
-
----
-
-## react-code-quality
-
-**Papel:** Skill transversal aplicada após qualquer geração de código React + TypeScript. Define HARD RULES e guidelines.
-
-**Categorias cobertas:**
-- **Global:** código em inglês, TypeScript strict (`strict: true`), proibido `any` em produção (usar `unknown` + narrowing).
-- **Componentes:** máx ~300 linhas; responsabilidade única; nomes em PascalCase; props tipadas com `interface` (não `type` para props de componente).
-- **Hooks:** `useState` tipado explicitamente; `useEffect` com cleanup obrigatório; `useCallback`/`useMemo` apenas com justificativa documentada.
-- **Imports:** organizados por grupos (externos → internos → relativos); aliases `@/` obrigatórios.
-- **Renderização condicional:** sem `&&` com não-booleanos (usar ternário ou componente dedicado).
-
-**Quando aplicar:** após gerar TSX, em revisão de PR, ao padronizar naming.
-
----
-
-## react-observability
-
-**Papel:** Skill normativa de telemetria e observabilidade para frontend React + TypeScript.
+**Arquitetura:** derivada do [bulletproof-react](https://github.com/alan2207/bulletproof-react), com
+dois desvios deliberados e declarados — config de runtime por `window.RUNTIME_ENV` em vez de
+`import.meta.env` (12-factor, imagem imutavel) e zonas de ESLint geradas a partir de `src/features`
+em vez de escritas a mao.
 
 **Pilares:**
-- **OpenTelemetry Web:** `WebTracerProvider` com `BatchSpanProcessor` e exporter OTLP HTTP; inicializado apenas em produção (`import.meta.env.PROD`).
-- **Propagação W3C Trace Context** para APIs via interceptors de `fetch`/`axios` — correlação E2E com o backend.
-- **`useTracing` hook** para spans customizados em componentes e fluxos críticos.
-- **Erros globais:** captura automática de `error` e `unhandledrejection`; sanitização de dados sensíveis (LGPD/PCI-DSS) — nunca logar CPF, tokens, cartões.
+- **Estrutura unica** (sem niveis "pequeno/medio/grande"): `app/`, `components/`, `config/`,
+  `features/`, `hooks/`, `lib/`, `stores/`, `testing/`, `types/`, `utils/`.
+- **Tres fronteiras executaveis**, nao convencionais: fluxo unidirecional
+  (compartilhado -> features -> app), sem import entre features e sem barrel — todas garantidas por
+  `assets/eslint.config.js`.
+- **Camada de API:** um arquivo por endpoint em `features/*/api/`, exportando schema Zod, fetcher e
+  hook React Query.
+- **Estado por natureza do dado:** componente, aplicacao, cache de servidor, formulario e URL — dado
+  de servidor nunca em store global.
+- **Testes:** integracao como centro de gravidade; MSW como unica fronteira de mock.
+- **Runtime e deploy:** uma imagem para todos os ambientes; subpath como propriedade da aplicacao.
 
-**Quando acionar:** bootstrapping do projeto, instrumentar fluxos críticos, diagnóstico de UX/performance, checklist de prod readiness.
+**Assets verificados:** `eslint.config.js` (testado contra violacoes reais e contra falso positivo),
+`tsconfig.json` (compila em TypeScript 7, sem `baseUrl`), `Dockerfile`, `nginx.conf.template`,
+`docker/40-runtime-env.sh` e `ingress.yaml` (validados em container, incluindo deep link em subpath).
 
----
-
-## react-production-readiness
-
-**Papel:** Skill agregadora de validação pré-produção para React + Vite + TypeScript — consolida verificações de todos os módulos React em um checklist único.
-
-**Verifica:**
-- Telemetria OpenTelemetry inicializada apenas em prod, `service.name` configurado, propagação W3C ativa.
-- Runtime config via `window.RUNTIME_ENV` (não `import.meta.env` para configs entre ambientes).
-- Tratamento global de erros e sanitização de dados sensíveis.
-- CI pipeline completo: type-check → lint → test → build.
-- Dockerfile multi-stage otimizado.
-- Cobertura de testes ≥ 70%.
-
-**Quando acionar:** antes de merge, antes de deploy, auditoria de repositório frontend.
-
----
-
-## react-runtime-config
-
-**Papel:** Define o padrão 12-factor para configuração em runtime e containerização de frontends React + Vite.
-
-**Princípio fundamental:** uma única imagem Docker para todos os ambientes; diferenças entre dev/staging/prod apenas em variáveis de ambiente aplicadas em tempo de execução — sem rebuild da imagem.
-
-**Pilares normativos:**
-- **`runtime-env.template.js`** com `envsubst` gerando `runtime-env.js` no start do container.
-- **`window.RUNTIME_ENV`** como single source of truth; `runtimeConfig.ts` tipado consumindo essa variável.
-- **Proibido** usar `import.meta.env` para configs que variam entre ambientes.
-- **Dockerfile multi-stage:** stage Node para build + stage nginx para runtime; script `entrypoint 40-runtime-env.sh` com validação que falha cedo se variável obrigatória estiver ausente.
-
-**Quando acionar:** criar/atualizar Dockerfile, padronizar variáveis por ambiente, onboarding de novo frontend, PR review de infra.
-
----
-
-## react-subpath-deploy
-
-**Papel:** Configura projetos React + Vite para deploy em subpath no Kubernetes — resolve os três problemas clássicos de SPAs em subpath.
-
-**Problemas resolvidos:**
-- **Referência de assets** — `base` no `vite.config.ts` dinâmico via variável de ambiente.
-- **Roteamento client-side** — `basename` no React Router configurado para o subpath.
-- **Nginx SPA fallback** — `try_files` correto para history API em subpath.
-
-**Artefatos gerados:** `vite.config.ts` atualizado, `nginx.conf.template` com subpath, `Ingress` Kubernetes com múltiplos paths.
-
-**Caso de uso típico:** múltiplas POCs ou serviços compartilhando um único host (`host/poc-01`, `host/poc-02`).
-
-**Quando acionar:** deploy de SPA em subpath, compartilhar host entre projetos, "rodar frontend em `/meu-path`".
-
----
-
-## react-testing
-
-**Papel:** Define a estratégia de testes obrigatória para React + Vite + TypeScript — pode bloquear geração de código sem teste.
-
-**Stack:** Vitest + React Testing Library + `jest-dom` + MSW.
-
-**Pilares:**
-- **Testes de componentes:** padrão AAA; queries semânticas (`getByRole`, `getByLabelText`) — proibido `getByTestId` como primeira opção; `userEvent` para interações (não `fireEvent`).
-- **Testes de hooks:** `renderHook` + `act` para hooks com efeitos assíncronos.
-- **Mock de API com MSW:** `server/handlers` por feature, reset entre testes (`server.resetHandlers()`); nunca mockar `fetch` diretamente.
-- **Formulários** com `react-hook-form`: testar submit, validação e mensagens de erro.
-- Cobertura mínima 70%; checklist de CI: lint → type-check → test → build.
-
-**Quando acionar:** criar testes, revisar cobertura, configurar MSW, corrigir bug com teste regressivo.
+**Quando acionar:** qualquer trabalho React — criar projeto ou feature, revisar diff, escrever teste,
+containerizar, servir em subpath ou instrumentar.

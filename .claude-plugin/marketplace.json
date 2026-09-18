@@ -64,15 +64,9 @@
     },
     {
       "name": "react",
-      "description": "Suite React / Vite / TypeScript: arquitetura, qualidade, observabilidade, production readiness, runtime config, subpath deploy e testes.",
+      "description": "Padrao React / Vite / TypeScript: estrutura e fronteiras de feature, camada de API, estado, formularios, erros, qualidade, testes, runtime config 12-factor, container, subpath e telemetria.",
       "skills": [
-        "./skills/react-architecture",
-        "./skills/react-code-quality",
-        "./skills/react-observability",
-        "./skills/react-production-readiness",
-        "./skills/react-runtime-config",
-        "./skills/react-subpath-deploy",
-        "./skills/react-testing"
+        "./skills/react"
       ]
     }
   ]

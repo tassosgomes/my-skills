@@ -1,0 +1,28 @@
+# Várias aplicações compartilhando um host, cada uma no seu subpath.
+# O BASE_PATH da imagem precisa bater com o path daqui.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: pocs
+  # NetScaler CPX exige esta annotation; com Nginx Ingress, remova.
+  # annotations:
+  #   ingress.citrix.com/insecure-termination: "allow"
+spec:
+  rules:
+    - host: pocs.example.com
+      http:
+        paths:
+          - path: /poc-01
+            pathType: Prefix
+            backend:
+              service:
+                name: poc-01-svc
+                port:
+                  number: 80
+          - path: /poc-02
+            pathType: Prefix
+            backend:
+              service:
+                name: poc-02-svc
+                port:
+                  number: 80

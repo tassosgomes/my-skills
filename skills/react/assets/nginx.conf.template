@@ -1,0 +1,35 @@
+server {
+    listen      80;
+    server_name _;
+
+    # alias SUBSTITUI o prefixo; root CONCATENA. Com root e location /poc-01/,
+    # o Nginx procuraria em /usr/share/nginx/html/poc-01/, que não existe.
+    location ${BASE_PATH} {
+        alias /usr/share/nginx/html/;
+        try_files $uri $uri/ ${BASE_PATH}index.html;
+    }
+
+    # Config de runtime e index nunca em cache: a mesma imagem serve valores
+    # diferentes a cada start, e um index cacheado aponta para assets antigos.
+    location = ${BASE_PATH}runtime-env.js {
+        alias /usr/share/nginx/html/runtime-env.js;
+        add_header Cache-Control "no-store";
+    }
+
+    location = ${BASE_PATH}index.html {
+        alias /usr/share/nginx/html/index.html;
+        add_header Cache-Control "no-store";
+    }
+
+    # Assets têm hash no nome: cache longo é seguro.
+    location ${BASE_PATH}assets/ {
+        alias /usr/share/nginx/html/assets/;
+        add_header Cache-Control "public, max-age=31536000, immutable";
+    }
+
+    location /healthz {
+        access_log off;
+        return 200 'ok';
+        add_header Content-Type text/plain;
+    }
+}
