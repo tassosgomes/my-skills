@@ -92,6 +92,10 @@ Use uma delegação por vez; workers compartilham working tree e branch.
   Se o runtime não permitir revisão independente, informe a limitação; não a declare independente.
 - **herdr:** leia [references/transport.md](references/transport.md) antes de usar
   `scripts/tsg-delegate.sh`. Cada chamada usa pane/agente novo e resultado JSON por run_id.
+  Omita `--kind` para deixar a política de roteamento escolher agente, modelo e esforço de
+  raciocínio por papel, modo e `task_kind` da task, com escalonamento por tentativa e anti-afinidade
+  entre implementer e validator.
+  Informe `--kind` apenas para impor um agente; isso desliga a política naquela chamada.
   Kind diferente pode oferecer diversidade de revisão, mas não garante ausência de pontos cegos.
   Use modelos configurados/autorizados, sem substituir escolhas explícitas.
 - Não execute localmente etapas delegadas. Para runtime sem workers, resolva a limitação de

@@ -7,7 +7,7 @@ status: pending
 
 # vertical  -> entrega comportamento observável; gate obrigatoriamente com --filter
 # enabling  -> exceção justificada, sem comportamento observável; gate estático (build/lint)
-kind: vertical
+task_kind: vertical
 
 blocked_by: []
 

@@ -95,6 +95,8 @@ Task Creator consome PRD e a `techspec.md` aprovada, qualquer que seja seu escop
 (Backend, Frontend ou Full-stack). Planos legados com `frontend-techspec.md` continuam aceitos.
 Produz um único tasks.md e arquivos individuais. IDs de capacidade, feature, RF, RN e ADR são
 mantidos para rastreabilidade.
+O frontmatter de cada task usa o campo canônico `task_kind: vertical|enabling`; `kind` fica
+reservado para o agente de execução.
 
 | Task | Verificação | `gate` declarado na task |
 |---|---|---|

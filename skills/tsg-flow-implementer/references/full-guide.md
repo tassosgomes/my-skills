@@ -20,7 +20,7 @@ Task vertical exige seleção de pelo menos um teste; enabling exige justificati
 a evidência específica. Se a evidência for o próprio build/typecheck do gate, registre isso para
 não executar o mesmo comando duas vezes dentro da chamada.
 Ausência de ferramenta, serviço ou timeout deve ser reportada como infraestrutura.
-Não use comando de diagnóstico para concluir uma task nem altere seu `kind` para contornar falha.
+Não use comando de diagnóstico para concluir uma task nem altere seu `task_kind` para contornar falha.
 
 ## Saída
 

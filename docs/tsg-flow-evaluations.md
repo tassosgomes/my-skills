@@ -22,16 +22,25 @@ Para cada execução, registre o prompt, revisão das skills, modelo/runtime, ar
 decisões incorretas, perguntas desnecessárias, tentativas e duração. Use tokens reportados pelo runtime
 quando disponíveis; compare por entrega aprovada e considere erros/retrabalho, não só tamanho do prompt.
 
+No transporte Herdr, kind, modelo, esforço, tentativa, outcome, gate e duração de cada delegação
+já ficam em `.tsg-flow/delegate-logs/runs.jsonl`. Use esse ledger como fonte ao comparar provedores, em vez de
+anotar à mão; o [guia de transporte](../skills/tsg-flow-orchestrator/references/transport.md#ledger)
+traz as consultas. O que o ledger não cobre — qualidade do plano, perguntas desnecessárias,
+retrabalho detectado só na revisão full — continua sendo registro manual por execução.
+
 ## Testes determinísticos locais
 
 ```bash
 rtk proxy node --test tests/tsg-flow.test.mjs
 ```
 
-As fixtures usam Git temporário e substitutos de Herdr/.NET, sem modelos ou serviços reais.
+As fixtures usam Git temporário e um substituto de Herdr, sem modelos ou serviços reais.
 Cobrem resultados finais, identidade de chamada, rejeição, erro de infraestrutura, relatório antigo,
-timeout com arquivo presente, todos os modos Git, seleção explícita de gate, filtro sem testes,
-arquivo deletado, caminho com espaços, modo estático e saída limitada.
+timeout com arquivo presente, todos os modos Git, caminho com espaços, roteamento por papel/modo/
+`task_kind` da task, escada de escalonamento com clamp, anti-afinidade entre implementer e validator,
+grafia das flags de modelo e esforço por kind, esforço composto dentro do nome do modelo,
+esforço descartado por kind que não o expõe,
+política inválida e linha de ledger por chamada.
 
 Esses testes validam os contratos executáveis; não comprovam aderência semântica de um modelo ao fluxo.
 Builds/testes pesados de projetos consumidores devem usar compute, e serviços compartilhados infra,

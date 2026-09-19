@@ -24,7 +24,7 @@ Não implemente código nesta skill.
 | Conteúdo da task | Comportamento, fronteira, decisão fechada e gate — nada de "como implementar" | A skill de stack entrega convenção e estrutura na hora da implementação |
 | Gate | O **comando real do projeto**, declarado na task; sem script intermediário | Runner moderno já falha sozinho em filtro vazio; embrulhar só adiciona parse frágil |
 | Veredito | O exit code do comando | Contrato estável da ferramenta, imune a mudança de formato de saída |
-| Metadado | Só o que alguma skill lê: `status`, `kind`, `blocked_by`, `gate`, `gate_expect` | Campo que ninguém consome é custo sem retorno |
+| Metadado | Só o que alguma skill lê: `status`, `task_kind`, `blocked_by`, `gate`, `gate_expect` | Campo que ninguém consome é custo sem retorno |
 | Invariante de plano | Verificado por `scripts/validate_plan.py`, não por checkbox na task | Regra em script não degrada quando o modelo esquece |
 | Tamanho | Sem limite na seção **Comportamento** | É o "o quê" — a parte que não pode ficar ambígua |
 | Fatia full-stack | Uma task cruza UI e API | Dividir por camada contradiz o fatiamento vertical |
@@ -63,7 +63,7 @@ Frontmatter mínimo, e nada além dele:
 
 ```yaml
 status: pending            # pending | in_progress | validating | blocked | done
-kind: vertical             # vertical | enabling
+task_kind: vertical        # vertical | enabling
 blocked_by: []
 gate: "<comando real do projeto>"
 gate_expect: "<resultado determinístico>"
@@ -73,7 +73,7 @@ gate_expect: "<resultado determinístico>"
 Não existe script intermediário: o exit code do comando é o veredito. `0` aprova, qualquer outro
 reprova.
 
-| `kind` | Gate | `gate_expect` |
+| `task_kind` | Gate | `gate_expect` |
 |---|---|---|
 | `vertical` | Comando de teste **com seletor** da fatia | Quantifica: `"3 testes passam"` — número obrigatório |
 | `enabling` | Build, lint, typecheck ou verificação estática | Descreve a evidência: `"build sem erros, 0 warnings"` |

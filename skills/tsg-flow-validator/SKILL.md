@@ -18,7 +18,7 @@ separados. Somente falhas essenciais e bloqueantes reprovam.
 
 ## Gate antes da revisão
 
-Leia apenas o frontmatter da task para obter `kind`, `gate` e `gate_expect`. Rode o gate antes de
+Leia apenas o frontmatter da task para obter `task_kind`, `gate` e `gate_expect`. Rode o gate antes de
 carregar material semântico:
 
 - **task:** execute o `gate` declarado, sem alterá-lo, e compare a saída com `gate_expect`.

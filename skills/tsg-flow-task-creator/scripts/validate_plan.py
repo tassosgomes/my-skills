@@ -20,7 +20,7 @@ from pathlib import Path
 
 STATUS_VALIDOS = {"pending", "in_progress", "validating", "blocked", "done"}
 KINDS_VALIDOS = {"vertical", "enabling"}
-CAMPOS_OBRIGATORIOS = ("status", "kind", "blocked_by", "gate", "gate_expect")
+CAMPOS_OBRIGATORIOS = ("status", "task_kind", "blocked_by", "gate", "gate_expect")
 PLACEHOLDER = re.compile(r"\[(?:seletor|comando|caminho|resultado|título|titulo|N|V-XX|X\.0|"
                          r"RF-XX|ADR-NNN|nome|idem|o que muda|justificativa concreta)[^\]]*\]",
                          re.IGNORECASE)
@@ -129,9 +129,12 @@ def checar(prd_dir):
         if fm.get("status") not in STATUS_VALIDOS:
             erros.append(f"{rotulo}: status '{fm.get('status')}' inválido")
 
-        kind = fm.get("kind")
-        if kind not in KINDS_VALIDOS:
-            erros.append(f"{rotulo}: kind '{kind}' inválido (vertical|enabling)")
+        if "kind" in fm:
+            erros.append(f"{rotulo}: use task_kind; kind é reservado para o agente")
+
+        task_kind = fm.get("task_kind")
+        if task_kind not in KINDS_VALIDOS:
+            erros.append(f"{rotulo}: task_kind '{task_kind}' inválido (vertical|enabling)")
 
         gate = fm.get("gate", "")
         gate_expect = fm.get("gate_expect", "")
@@ -141,13 +144,13 @@ def checar(prd_dir):
 
         if not gate_expect.strip() or PLACEHOLDER.search(gate_expect):
             erros.append(f"{rotulo}: gate_expect vazio ou placeholder")
-        elif kind == "vertical" and not QUANTIDADE.search(gate_expect):
+        elif task_kind == "vertical" and not QUANTIDADE.search(gate_expect):
             # Uma expectativa sem numero nao distingue "3 testes passam" de "0 testes rodaram".
             # Quantificar e o que substitui o parse de saida do gate antigo.
             erros.append(f"{rotulo}: gate_expect de fatia vertical precisa quantificar os testes "
                          f"(ex.: \"3 testes passam\"): {gate_expect!r}")
 
-        if gate.strip() and kind == "vertical" and not COMANDO_DE_TESTE.search(gate):
+        if gate.strip() and task_kind == "vertical" and not COMANDO_DE_TESTE.search(gate):
             avisos.append(f"{rotulo}: gate da fatia vertical não parece rodar testes — "
                           f"confirme que o comando executa a suíte focalizada: {gate!r}")
 

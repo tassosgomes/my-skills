@@ -21,8 +21,8 @@ Implemente uma task por chamada, na branch do PRD. Não crie branch, commit, mer
 Leia a task, suas referências pertinentes e skills nomeadas que se aplicam ao trabalho.
 Confirme objetivo, escopo, contratos, dependências concluídas, critérios, decisões e evidência.
 
-- `kind: vertical` exige teste focalizado; o gate é um comando de teste com seletor.
-- `kind: enabling` usa build, lint ou typecheck, com a evidência declarada em `gate_expect`.
+- `task_kind: vertical` exige teste focalizado; o gate é um comando de teste com seletor.
+- `task_kind: enabling` usa build, lint ou typecheck, com a evidência declarada em `gate_expect`.
 - Task legada com `slice_type`/`verification_type`/`gate_command` continua válida: leia os campos
   equivalentes. Se não declarar tipo, reconcilie com o planejamento antes de executar.
 - Abra trechos de PRD, TechSpecs (backend e/ou frontend), baseline ou ADRs apenas para lacunas.

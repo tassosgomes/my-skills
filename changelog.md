@@ -1,5 +1,18 @@
 # Changelog das skills TSG Flow
 
+## 2026-09-19 — `tsg-flow-index` removida
+
+A skill roteava por uma tabela que apenas restatava a `description` de cada skill do fluxo, e sua
+própria description colidia com a do `tsg-flow-prd-creator` ao disparar em "iniciar uma feature".
+Os sete princípios que ela listava já estão operacionalizados dentro de cada skill criadora e
+registrados na entrada de 2026-09-17 deste changelog.
+
+O que era exclusivo dela virou orientação para humanos na seção 1 de
+[docs/tsg-flow-execution-order.md](docs/tsg-flow-execution-order.md): a tabela de dimensionamento
+Pequeno/Médio/Grande/Complexo, as cinco regras de quais artefatos cada escopo exige e a válvula de
+segurança (mais de 5 passos atômicos ou dependência não trivial exige `tasks.md`). De 14 para
+13 skills.
+
 ## 2026-09-17 — TSG Flow enxuto: do PRD à execução
 
 ### Objetivo

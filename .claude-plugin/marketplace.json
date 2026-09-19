@@ -18,7 +18,6 @@
         "./skills/tsg-flow-techspec-creator",
         "./skills/tsg-flow-task-creator",
         "./skills/tsg-flow-orchestrator",
-        "./skills/tsg-flow-index",
         "./skills/tsg-flow-implementer",
         "./skills/tsg-flow-validator",
         "./skills/tsg-flow-integrator"
