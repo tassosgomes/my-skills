@@ -103,12 +103,6 @@ e permanecem com esse namespace nesta etapa.
 |-------|------|-----------|
 | :star: [security-audit-workflow](#security-audit-workflow) | Workflow | Auditoria de segurança stack-agnóstica via sub-agents e Docker |
 
-### APIs
-
-| Skill | Tipo | Propósito |
-|-------|------|-----------|
-| :star: [restful-api](#restful-api) | Normativo | Padrões REST/HTTP agnósticos de stack: URLs, versionamento, paginação, RFC 9457, OpenAPI 3 |
-
 ### Java / Spring Boot
 
 | Skill | Tipo | Propósito |
@@ -372,22 +366,6 @@ security-audit-workflow/
 **Fluxo em dois passos:** resolve o nome da biblioteca para um ID Context7 → consulta a documentação com esse ID.
 
 **Quando usar:** qualquer pergunta sobre sintaxe de API, opções de configuração, migração de versão, debugging de comportamento específico de biblioteca ou setup de CLI — mesmo para libs conhecidas como React, Next.js, Prisma ou Spring Boot, pois o training data pode estar desatualizado.
-
----
-
-## restful-api
-
-**Papel:** Normativo transversal para design de APIs REST/HTTP — agnóstico de linguagem e framework (aplica-se igualmente a .NET, Java, Node.js, Python, Go, etc.).
-
-**Pilares:**
-- **Roteamento:** URLs em inglês e plural, navegabilidade em recursos aninhados (`/customers/{id}/invoices`), kebab-case.
-- **Versionamento:** via path (`/v1/`, `/v2/`) com política de deprecação explícita.
-- **Paginação:** padrão cursor ou offset com envelope JSON padronizado (`data`, `meta`, `links`).
-- **Erros:** RFC 9457 Problem Details — `type`, `title`, `status`, `detail`, `instance`; nunca expor stacktrace.
-- **Contrato:** design-first com OpenAPI 3; validação de contrato com Spectral linter.
-- **Status codes:** semântica correta (201 Created, 204 No Content, 422 Unprocessable Entity, 409 Conflict).
-
-**Quando acionar:** criar ou revisar endpoints, padronizar contratos entre times, configurar OpenAPI, validar consistência de API.
 
 ---
 

@@ -181,17 +181,21 @@
 
 ### Formato Padrão de Erro
 
+RFC 9457, com `Content-Type: application/problem+json`. `type`, `title` e `status` são
+obrigatórios pela RFC; `code`, `traceId` e `errors` são as extensões deste repositório.
+
 ```json
 {
+  "type": "about:blank",
+  "title": "Requisição inválida",
+  "status": 400,
+  "detail": "Um ou mais campos não passaram na validação.",
+  "instance": "/api/v1/usuarios",
   "code": "VALIDATION_ERROR",
-  "message": "Dados inválidos na requisição",
-  "details": [
-    {
-      "field": "email",
-      "message": "Formato de e-mail inválido"
-    }
-  ],
-  "traceId": null
+  "traceId": "00-3f2b5d6c4e7a8b90123456789abcdef0-0123456789abcdef-01",
+  "errors": {
+    "email": ["Formato de e-mail inválido."]
+  }
 }
 ```
 

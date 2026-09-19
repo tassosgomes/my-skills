@@ -93,7 +93,8 @@ public static WebApplication UseApplicationPipeline(this WebApplication app)
 - Esquema JWT declarado por `IOpenApiDocumentTransformer` (`BearerSecuritySchemeTransformer`).
 - Swashbuckle e NSwag não são usados.
 - Para versionar o contrato gerado, `Microsoft.Extensions.ApiDescription.Server` grava o documento
-  no build; Spectral valida na CI (`restful-api`).
+  no build; Spectral valida na CI com o ruleset único em
+  `tsg-flow-contract-creator/rulesets/openapi.yaml`.
 
 ## Referência
 

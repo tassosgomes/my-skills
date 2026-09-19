@@ -54,7 +54,12 @@ no local durável do projeto (por exemplo, `docs/api/`) e atualize os consumidor
 
 ### 2. Esclarecer Dúvidas de Contrato (Obrigatório — não pule)
 
-Antes de gerar qualquer endpoint, pergunte sobre pontos críticos não cobertos pelo PRD:
+As convenções HTTP deste repositório — URLs, versionamento, status, RFC 9457, paginação — são
+normativas e estão em [references/http-conventions.md](references/http-conventions.md). Leia-as
+antes de perguntar: a maioria das dúvidas abaixo já tem resposta padrão lá, e só vira pergunta
+quando o projeto precisa **divergir** da norma.
+
+Pergunte sobre os pontos críticos que a norma não decide por você e o PRD não cobre:
 
 **Autenticação e Autorização**
 - Qual mecanismo? (JWT Bearer, API Key, OAuth2, sessão)
@@ -105,9 +110,9 @@ Evite endpoints procedurais (`/criarPedido`) — prefira recursos + verbos HTTP 
 
 ### 4. Gerar o Contrato OpenAPI 3.1
 
-Leia o template em `templates/openapi-template.yaml` e o ruleset em
-`rulesets/openapi.yaml` (empacotados nesta skill) e gere o `api-contract.yaml` seguindo
-estas diretrizes:
+Leia a norma em [references/http-conventions.md](references/http-conventions.md), o template em
+`templates/openapi-template.yaml` e o ruleset em `rulesets/openapi.yaml` (empacotados nesta skill)
+e gere o `api-contract.yaml` seguindo estas diretrizes:
 
 **Estrutura obrigatória por endpoint:**
 - `summary` — descrição curta (máx 10 palavras)
@@ -220,6 +225,7 @@ Após o contrato gerado e aprovado:
 
 - [ ] PRD lido e user stories mapeadas para endpoints
 - [ ] Dúvidas críticas esclarecidas ou premissas documentadas
+- [ ] `references/http-conventions.md` aplicada, ou cada divergência registrada nas premissas
 - [ ] Contrato YAML válido e completo
 - [ ] Versão Markdown gerada e legível
 - [ ] Lint Spectral executado com `rulesets/openapi.yaml` e sem erros
