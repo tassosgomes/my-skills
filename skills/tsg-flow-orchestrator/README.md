@@ -242,10 +242,12 @@ Liste o catálogo instalado com `opencode models` e os provedores autenticados c
 
 ### cursor — modelos mapeados, esforço a confirmar
 
-Binário `cursor-agent`; o Herdr reconhece o kind `cursor` e traz `cursor-agent` como alias no
-manifesto de detecção. `--model` por extenso.
+**O executável é `cursor-agent`**, não `cursor` — o kind do Herdr se chama `cursor` e o manifesto
+de detecção traz `cursor-agent` como alias. Atenção em WSL: `cursor` no PATH costuma ser o launcher
+do Cursor IDE do Windows (`/mnt/c/.../cursor`), que não é agente nenhum. Confira com
+`command -v cursor-agent` antes da primeira delegação. `--model` por extenso.
 
-O vocabulário é o mais rico dos quatro — 227 modelos, com o esforço **embutido no nome**:
+O vocabulário é o mais rico dos cinco — 227 modelos, com o esforço **embutido no nome**:
 
 | Exemplo | Leitura |
 |---|---|
