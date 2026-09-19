@@ -1,0 +1,23 @@
+# Verified against .NET 10 / EF Core 10: every entry below resolves and fails the build (RS0030).
+# An entry whose signature does not resolve is silently ignored, so add one only after proving it fires.
+
+# Identifiers: the domain generates UUIDv7 before the insert.
+M:System.Guid.NewGuid;Use Guid.CreateVersion7() (UUIDv7)
+
+# Dates are always UTC.
+P:System.DateTime.Now;Use DateTime.UtcNow
+P:System.DateTime.Today;Use DateTime.UtcNow.Date
+P:System.DateTimeOffset.Now;Use DateTimeOffset.UtcNow
+
+# Minimal API only: controllers are not used in this standard.
+M:Microsoft.Extensions.DependencyInjection.MvcServiceCollectionExtensions.AddControllers(Microsoft.Extensions.DependencyInjection.IServiceCollection);Use Minimal API endpoints ({Aggregate}Endpoints with MapGroup)
+M:Microsoft.AspNetCore.Builder.ControllerEndpointRouteBuilderExtensions.MapControllers(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder);Use MapApiEndpoints() with Minimal API endpoints
+
+# Migrations are a deploy step, never applied at boot. MigrateAsync stays allowed: tests build the
+# schema with Database.MigrateAsync() against Testcontainers.
+M:Microsoft.EntityFrameworkCore.RelationalDatabaseFacadeExtensions.Migrate(Microsoft.EntityFrameworkCore.Infrastructure.DatabaseFacade);Run migrations as a deploy step (dotnet ef database update, or an --idempotent script)
+M:Microsoft.EntityFrameworkCore.RelationalDatabaseFacadeExtensions.Migrate(Microsoft.EntityFrameworkCore.Infrastructure.DatabaseFacade,System.String);Run migrations as a deploy step (dotnet ef database update, or an --idempotent script)
+
+# Tests run against the real schema, produced by the real migrations.
+M:Microsoft.EntityFrameworkCore.Infrastructure.DatabaseFacade.EnsureCreated;Use Database.MigrateAsync() so tests exercise the real migrations
+M:Microsoft.EntityFrameworkCore.Infrastructure.DatabaseFacade.EnsureCreatedAsync(System.Threading.CancellationToken);Use Database.MigrateAsync() so tests exercise the real migrations
