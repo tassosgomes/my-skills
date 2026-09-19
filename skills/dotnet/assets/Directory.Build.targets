@@ -1,0 +1,34 @@
+<Project>
+
+  <!--
+    Deterministic gate for the forbidden-package list: a PackageReference to any of these
+    fails the build with its reason, instead of relying on review.
+    Ban a package here the same commit you ban it in SKILL.md; the two must not drift.
+  -->
+  <ItemGroup>
+    <TsgBannedPackage Include="AutoMapper" Reason="Commercial licence. Map manually with a static From{Entity} on the Output." />
+    <TsgBannedPackage Include="MediatR" Reason="Commercial licence. One class per use case, injected by its own interface." />
+    <TsgBannedPackage Include="FluentAssertions" Reason="Commercial licence from v8. Use AwesomeAssertions." />
+    <TsgBannedPackage Include="Microsoft.Extensions.Http.Polly" Reason="Superseded. Use Microsoft.Extensions.Http.Resilience (AddStandardResilienceHandler)." />
+    <TsgBannedPackage Include="MassTransit" Reason="No broker wrapper. Use RabbitMQ.Client 7 directly with the outbox." />
+    <TsgBannedPackage Include="Swashbuckle.AspNetCore" Reason="Use native Microsoft.AspNetCore.OpenApi with Scalar.AspNetCore." />
+    <TsgBannedPackage Include="NSwag.AspNetCore" Reason="Use native Microsoft.AspNetCore.OpenApi with Scalar.AspNetCore." />
+    <TsgBannedPackage Include="Serilog.AspNetCore" Reason="New services use OpenTelemetry with UseOtlpExporter()." />
+  </ItemGroup>
+
+  <!-- Matches the package itself and its satellites (AutoMapper.Extensions.*), never a longer
+       unrelated name (Microsoft.Extensions.Http is not Microsoft.Extensions.Http.Polly). -->
+  <Target Name="TsgCheckBannedPackages" BeforeTargets="Build;CollectPackageReferences">
+    <PropertyGroup>
+      <_TsgPkgList>;@(PackageReference);</_TsgPkgList>
+    </PropertyGroup>
+    <ItemGroup>
+      <_TsgBannedHit Include="@(TsgBannedPackage)"
+                     Condition="$(_TsgPkgList.Contains(';%(Identity);')) Or $(_TsgPkgList.Contains(';%(Identity).'))" />
+    </ItemGroup>
+    <Error Condition="'@(_TsgBannedHit)' != ''"
+           Code="TSG0001"
+           Text="Banned package(s): @(_TsgBannedHit->'%(Identity) - %(Reason)', ' | ')" />
+  </Target>
+
+</Project>

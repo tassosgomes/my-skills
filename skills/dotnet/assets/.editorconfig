@@ -1,0 +1,27 @@
+# Style rules that must fail the build, not the review.
+# Requires EnforceCodeStyleInBuild + TreatWarningsAsErrors (Directory.Build.props).
+root = true
+
+[*.cs]
+indent_style = space
+indent_size = 4
+insert_final_newline = true
+charset = utf-8
+
+# Folder is a namespace segment. PascalCase folders; never kebab-case in a .NET project.
+dotnet_diagnostic.IDE0130.severity = error
+
+# File-scoped namespace.
+csharp_style_namespace_declarations = file_scoped:error
+dotnet_diagnostic.IDE0161.severity = error
+
+# catch only with a specific type and a concrete action.
+dotnet_diagnostic.CA1031.severity = error
+
+# Seal what is not meant to be inherited. CA1852 reaches internal types only;
+# the public surface is covered by ConventionTest in ArchitectureTests.
+dotnet_diagnostic.CA1852.severity = error
+
+[*.{csproj,props,targets,json,yml,yaml}]
+indent_style = space
+indent_size = 2
