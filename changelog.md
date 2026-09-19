@@ -1,5 +1,101 @@
 # Changelog das skills TSG Flow
 
+## 2026-09-19 — `tsg-flow-index` removida
+
+A skill roteava por uma tabela que apenas restatava a `description` de cada skill do fluxo, e sua
+própria description colidia com a do `tsg-flow-prd-creator` ao disparar em "iniciar uma feature".
+Os sete princípios que ela listava já estão operacionalizados dentro de cada skill criadora e
+registrados na entrada de 2026-09-17 deste changelog.
+
+O que era exclusivo dela virou orientação para humanos na seção 1 de
+[docs/tsg-flow-execution-order.md](docs/tsg-flow-execution-order.md): a tabela de dimensionamento
+Pequeno/Médio/Grande/Complexo, as cinco regras de quais artefatos cada escopo exige e a válvula de
+segurança (mais de 5 passos atômicos ou dependência não trivial exige `tasks.md`). De 14 para
+13 skills.
+
+## 2026-09-17 — TSG Flow enxuto: do PRD à execução
+
+### Objetivo
+
+Reduzir a burocracia entre PRD e execução sem perder garantia de implementação. Os artefatos
+passam a carregar só o que o modelo não deriva — comportamento, fronteira, decisão fechada e
+evidência —, deixando estrutura, convenção e assinatura para as skills de stack no momento da
+implementação. De 16 para 14 skills; 1.863 linhas removidas e 888 adicionadas.
+
+### Princípios adotados
+
+- **Um fato, um lar.** Cada informação vive em um documento; downstream referencia por ID ou
+  âncora, nunca copia.
+- **Seção sem conteúdo material é omitida**, não preenchida com "N/A" nem justificada.
+- **Sem limite de extensão.** O documento encolhe cortando seção supérflua, nunca detalhe que
+  remove ambiguidade. Removidos os limites de 1–2 parágrafos, 20 linhas, "1 linha" e 600–1.200
+  palavras.
+- **Regra estrutural vira verificação executável**, não checkbox.
+- **Skills de fluxo são agnósticas a tecnologia.** Nenhuma referência a stack específica.
+
+### Auto-sizing
+
+Nova skill `tsg-flow-index`: dimensiona o fluxo em Pequeno, Médio, Grande e Complexo antes de
+iniciar a feature. Médio dispensa TechSpec e tasks formais. Válvula de segurança: se a execução
+listar mais de 5 passos atômicos, o dimensionamento errou — pare e crie `tasks.md`.
+
+### TechSpec unificada
+
+`tsg-flow-frontend-techspec-creator` foi removida. Passa a existir uma `techspec.md` por feature,
+com escopo Backend, Frontend ou Full-stack declarado no cabeçalho e blocos condicionais. Motivo:
+uma fatia vertical full-stack cruza UI e API — separar a spec por camada contradiz o fatiamento.
+As duas specs tinham 10 seções idênticas por nome e o `adr-template.md` duplicado byte a byte.
+
+Cortadas: Skills de Referência, Conformidade com Skills, Interfaces em código, Modelos de Dados em
+código, Arquivos a Criar, Build Order, observabilidade genérica, estratégia de testes genérica e
+Próximos Passos. Adicionadas: Riscos e Preocupações com `arquivo:linha` e mitigação obrigatória, e
+a cadeia de verificação de conhecimento com cláusula anti-fabricação.
+
+Template de 759 linhas (327 backend + 432 frontend) para 226, cobrindo os dois escopos.
+
+### Tasks enxutas
+
+Frontmatter de 16 campos para 5: `status`, `kind`, `blocked_by`, `gate`, `gate_expect`. Removidos
+os campos que nenhuma skill lia (`<domain>`, `<scope>`, `<type>`, `complexity`,
+`feedback_checkpoint`, `unblocks`, `static_evidence`, `parallelizable`), o `gate_test_selector`
+que duplicava substring do comando e o `verification_type` derivável do gate.
+
+Removidas do corpo as seções "Convenções da stack" e "Detalhes de Implementação" — copiavam a
+skill de stack e a TechSpec para dentro da task. Template de 124 para 59 linhas.
+
+### Gate: o comando do projeto, sem wrapper
+
+`tsg-flow-gate-creator` foi removida, com `scripts/ai-flow/gate.sh`, seu contrato, o skeleton e a
+referência .NET. A task passa a declarar o comando real do projeto — o mesmo que o CI roda — e o
+exit code é o veredito.
+
+Motivo: o gate existia principalmente para detectar filtro sem match parseando a saída do VSTest.
+O Microsoft.Testing.Platform, exigido por `dotnet-testing`, já devolve exit 8 para zero testes e
+exit 9 para `--minimum-expected-tests` violado. Jest, Vitest, Surefire, Gradle e pytest também já
+falham por padrão. O wrapper reimplementava, com parse dependente de locale, uma garantia nativa.
+
+A tabela de runners sobreviveu invertida: em vez de ensinar a contornar cada runner, aponta a
+garantia nativa de cada um.
+
+### Verificação
+
+- Novo `tsg-flow-task-creator/scripts/validate_plan.py`: gate estrutural do plano em stdlib pura.
+  Verifica frontmatter, contrato de gate, dependência futura, ciclo, paridade `tasks.md` ↔
+  arquivos e cobertura de requisitos. Absorve os checkboxes de invariante que viviam em cada task.
+  Fatia vertical exige `gate_expect` quantificado — é o que substitui o parse de saída do gate.
+- `tsg-flow-validator` ganha **sensor de discriminação** no modo full: injeta falhas de
+  comportamento em worktree isolada (nunca `git stash`), confirma que os testes as detectam e
+  verifica que a árvore voltou à linha de base. Mutante sobrevivente é bloqueante e vira task.
+
+### Notas de migração
+
+- Planos com `frontend-techspec.md` continuam aceitos pelo Task Creator.
+- Tasks legadas com `slice_type`, `verification_type`, `gate_command` e `gate_test_selector`
+  continuam legíveis por implementer e validator.
+- **Format escopado no diff** saiu junto com o gate e não tem substituto no fluxo. Projetos que
+  dependiam dele precisam de `lint-staged`, hook de pre-commit ou `ratchetFrom` do Spotless, sob
+  pena de falso positivo por débito pré-existente.
+
 ## 2026-09-17 — Skills .NET como guia de decisões, Minimal API, UUIDv7 e ArchUnitNET
 
 ### Objetivo

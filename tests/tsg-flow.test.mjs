@@ -8,8 +8,6 @@ import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const delegate = join(root, 'skills/tsg-flow-orchestrator/scripts/tsg-delegate.sh');
-const dotnetGate = join(root, 'skills/tsg-flow-gate-creator/reference/gate.dotnet.sh');
-const skeleton = join(root, 'skills/tsg-flow-gate-creator/templates/gate.skeleton.sh');
 
 function command(bin, args, cwd, env = {}) {
   return spawnSync(bin, args, {
@@ -41,7 +39,7 @@ function fixture(t) {
 const mockHerdr = `#!/usr/bin/env node
 import { appendFileSync, writeFileSync } from 'node:fs';
 const args = process.argv.slice(2);
-appendFileSync(process.env.MOCK_CALLS, JSON.stringify(args.slice(0, 3)) + '\\n');
+appendFileSync(process.env.MOCK_CALLS, JSON.stringify(args) + '\\n');
 if (args[0] === 'pane' && args[1] === 'split') {
   console.log(JSON.stringify({result:{pane:{pane_id:'pane-test'}}}));
 } else if (args[0] === 'agent' && args[1] === 'prompt') {
@@ -96,25 +94,52 @@ if (args[0] === 'pane' && args[1] === 'split') {
 }
 `;
 
-function runDelegate(t, { role = 'implementer', mode = 'implement', scenario = 'ok' } = {}) {
-  const f = fixture(t);
+function runDelegate(t, {
+  role = 'implementer', mode = 'implement', scenario = 'ok', kind = 'codex',
+  attempt = '1/3', taskKind = null, taskKindField = 'task_kind', routing = null, fix = null, model = null,
+  effort = null, allowNoCalls = false,
+} = {}) {
+  const f = fix ?? fixture(t);
   const mock = join(f.bin, 'herdr');
   writeFileSync(mock, mockHerdr, { mode: 0o755 });
+  if (taskKind) {
+    writeFileSync(join(f.prd, '1.0_task.md'),
+      `---\nstatus: pending\n${taskKindField}: ${taskKind}\nblocked_by: []\n---\n\n# 1.0 Fixture\n`);
+  }
   const calls = join(f.dir, 'calls.jsonl');
-  const args = [delegate, '--role=' + role, '--kind=codex', '--prd-dir=' + f.prd,
-    '--mode=' + mode, '--attempt=1/3'];
+  const args = [delegate, '--role=' + role, '--prd-dir=' + f.prd,
+    '--mode=' + mode, '--attempt=' + attempt];
+  if (kind) args.push('--kind=' + kind);
+  if (model) args.push('--model=' + model);
+  if (effort) args.push('--effort=' + effort);
   if (mode === 'full') args.push('--base-ref=' + f.sha);
   else if (role !== 'integrator' || ['checkpoint-task', 'reopen-task'].includes(mode)) {
     args.push('--task=1.0');
   }
+  const logs = join(f.dir, 'logs');
   const result = command('bash', args, f.repo, {
     HERDR_BIN_PATH: mock, MOCK_SCENARIO: scenario, MOCK_CALLS: calls,
-    MOCK_SHA: f.sha, MOCK_TREE: f.tree, TSG_DELEGATE_LOG_DIR: join(f.dir, 'logs'),
+    MOCK_SHA: f.sha, MOCK_TREE: f.tree, TSG_DELEGATE_LOG_DIR: logs,
+    ...(routing ? { TSG_ROUTING_FILE: routing } : {}),
   });
-  const recorded = readFileSync(calls, 'utf8').trim().split('\n').map(JSON.parse);
-  assert.equal(recorded.filter(a => a[1] === 'read').length, 1, 'single transcript read');
-  assert.equal(recorded.filter(a => a[1] === 'close').length, 1, 'pane cleanup');
+  const recorded = existsSync(calls)
+    ? readFileSync(calls, 'utf8').trim().split('\n').filter(Boolean).map(JSON.parse)
+    : [];
+  if (!allowNoCalls) {
+    assert.equal(recorded.filter(a => a[1] === 'read').length, 1, 'single transcript read');
+    assert.equal(recorded.filter(a => a[1] === 'close').length, 1, 'pane cleanup');
+  }
+  rmSync(calls, { force: true });
+  result.fixture = f;
+  result.start = recorded.find(a => a[0] === 'agent' && a[1] === 'start') ?? [];
+  const ledger = join(logs, 'runs.jsonl');
+  result.ledger = existsSync(ledger)
+    ? readFileSync(ledger, 'utf8').trim().split('\n').map(JSON.parse) : [];
   return result;
+}
+
+function startedKind(result) {
+  return result.start[result.start.indexOf('--kind') + 1];
 }
 
 for (const [role, mode] of [
@@ -160,95 +185,267 @@ test('integrator can return a concrete operational blocker', t => {
   assert.match(r.stdout, /VERDICT: integration_blocked/);
 });
 
-const mockDotnet = `#!/usr/bin/env node
-import { appendFileSync } from 'node:fs';
-const args = process.argv.slice(2);
-appendFileSync(process.env.MOCK_CALLS, JSON.stringify(args) + '\\n');
-if (process.env.MOCK_TIMEOUT === '1') process.exit(124);
-if (args[0] === 'format' && process.env.MOCK_FORMAT_FAIL === '1') {
-  for (let n = 0; n < 100; n++) console.log('format-error-' + n);
-  process.exit(1);
-}
-if (args[0] === 'test') {
-  console.log('Passed! - Failed: 0, Passed: ' + (args.includes('missing') ? 0 : 2) + ', Skipped: 0');
-}
-`;
+// --- Roteamento por politica e telemetria por chamada ---
 
-function runGate(t, args, options = {}) {
+test('policy routes a vertical task to the generative kind', t => {
+  const r = runDelegate(t, { kind: null, taskKind: 'vertical' });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.equal(startedKind(r), 'codex');
+  assert.match(r.stdout, /ROUTE: kind=codex .*source=policy/);
+});
+
+test('policy routes an enabling task to the cheap kind', t => {
+  const r = runDelegate(t, { kind: null, taskKind: 'enabling' });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.equal(startedKind(r), 'opencode');
+});
+
+test('task routing rejects the ambiguous legacy kind metadata', t => {
+  const r = runDelegate(t, {
+    kind: null, taskKind: 'vertical', taskKindField: 'kind', allowNoCalls: true,
+  });
+  assert.equal(r.status, 3);
+  assert.match(r.stderr, /task_kind ausente ou invalido/);
+});
+
+test('policy routes the integrator to the cheap kind', t => {
+  const r = runDelegate(t, { role: 'integrator', mode: 'checkpoint-task', kind: null });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.equal(startedKind(r), 'opencode');
+});
+
+test('policy routes full validation to the strongest kind', t => {
+  const r = runDelegate(t, { role: 'validator', mode: 'full', kind: null });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.equal(startedKind(r), 'claude');
+});
+
+test('explicit kind overrides the policy entirely', t => {
+  const r = runDelegate(t, { kind: 'agy', taskKind: 'enabling' });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.equal(startedKind(r), 'agy');
+  assert.match(r.stdout, /source=explicit/);
+});
+
+test('a second attempt escalates instead of repeating the same kind', t => {
+  const first = runDelegate(t, { kind: null, taskKind: 'vertical', attempt: '1/3' });
+  const second = runDelegate(t, {
+    kind: null, taskKind: 'vertical', attempt: '2/3', fix: first.fixture,
+  });
+  assert.equal(startedKind(first), 'codex');
+  assert.equal(startedKind(second), 'claude');
+  assert.match(second.stdout, /note=escalonado/);
+});
+
+test('review does not reuse the kind that implemented the task', t => {
+  const impl = runDelegate(t, { kind: 'claude', taskKind: 'vertical' });
+  const review = runDelegate(t, {
+    role: 'validator', mode: 'focused', kind: null, fix: impl.fixture,
+  });
+  assert.equal(review.status, 0, review.stdout + review.stderr);
+  assert.equal(startedKind(review), 'codex');
+  assert.match(review.stdout, /anti-afinidade/);
+});
+
+test('the ledger records route, kind and outcome per call', t => {
+  const r = runDelegate(t, { kind: null, taskKind: 'vertical' });
+  assert.equal(r.ledger.length, 1);
+  const [entry] = r.ledger;
+  assert.equal(entry.role, 'implementer');
+  assert.equal(entry.kind, 'codex');
+  assert.equal(entry.task_kind, 'vertical');
+  assert.equal(entry.route, 'policy');
+  assert.equal(entry.outcome, 'implementation_complete');
+  assert.equal(entry.gate, 'passed');
+  assert.equal(entry.result, 'ok');
+  assert.equal(typeof entry.elapsed_s, 'number');
+});
+
+test('the ledger also records transport failures with their reason', t => {
+  const r = runDelegate(t, { scenario: 'no_result' });
+  assert.equal(r.status, 2, r.stdout + r.stderr);
+  assert.equal(r.ledger.length, 1);
+  assert.equal(r.ledger[0].result, 'transport_failure');
+  assert.equal(r.ledger[0].reason, 'result_missing');
+});
+
+test('the model flag spelling comes from the policy, not a hardcoded -m', t => {
   const f = fixture(t);
-  writeFileSync(join(f.repo, 'App.sln'), 'fixture\n');
-  writeFileSync(join(f.repo, 'Removed.cs'), 'fixture\n');
-  command('git', ['add', 'Removed.cs'], f.repo);
-  const commit = command('git', ['-c', 'user.name=Fixture', '-c',
-    'user.email=fixture@example.invalid', 'commit', '-qm', 'tracked source'], f.repo);
-  assert.equal(commit.status, 0, commit.stderr);
-  rmSync(join(f.repo, 'Removed.cs'));
-  if (options.source) writeFileSync(join(f.repo, 'Source with spaces.cs'), 'fixture\n');
-  writeFileSync(join(f.bin, 'dotnet'), mockDotnet, { mode: 0o755 });
-  const calls = join(f.dir, 'gate-calls.jsonl');
-  let script = dotnetGate;
-  if (options.skeleton) {
-    script = join(f.dir, 'generated-gate.sh');
-    const generated = readFileSync(skeleton, 'utf8')
-      .replace("SOURCE_EXT_REGEX='\\.EXT$'", () => "SOURCE_EXT_REGEX='\\.cs$'")
-      .replaceAll('FORMAT_TOOL', 'dotnet format')
-      .replaceAll('BUILD_TOOL', 'dotnet build')
-      .replaceAll('ALL_TESTS_TOOL', 'dotnet test')
-      .replaceAll('TEST_TOOL', 'dotnet test')
-      .replaceAll('PASSED_PATTERN', 'Passed:');
-    writeFileSync(script, generated);
-  }
-  const result = command('bash', [script, ...args], f.repo, {
-    PATH: f.bin + ':' + process.env.PATH,
-    MOCK_CALLS: calls,
-    MOCK_TIMEOUT: options.timeout ? '1' : '0',
-    MOCK_FORMAT_FAIL: options.formatFail ? '1' : '0',
-  });
-  return {
-    result,
-    calls: existsSync(calls) ? readFileSync(calls, 'utf8').trim().split('\n').map(JSON.parse) : [],
-  };
-}
+  const routing = join(f.dir, 'routing.json');
+  writeFileSync(routing, JSON.stringify({
+    schema_version: 1,
+    kinds: { codex: { model_flag: '-m', model: 'cheap-model' } },
+    routes: [{ role: 'implementer', kind: 'codex' }],
+  }));
+  const r = runDelegate(t, { kind: null, fix: f, routing });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.deepEqual(r.start.slice(r.start.indexOf('--')), ['--', '-m', 'cheap-model']);
+  assert.equal(r.ledger[0].model, 'cheap-model');
+});
 
-for (const skeleton of [false, true]) {
-  const label = skeleton ? 'generated skeleton' : 'dotnet reference';
-  for (const args of [[], ['--filter='], ['--filter=   '], ['--static', '--all-tests'],
-    ['--static', '--filter=exists'], ['--all-tests', '--skip-tests'],
-    ['--static', '--base=missing-ref']]) {
-    test(label + ' rejects invalid selection before build: ' + JSON.stringify(args), t => {
-      const { result, calls } = runGate(t, args, { skeleton });
-      assert.equal(result.status, 2, result.stdout + result.stderr);
-      assert.equal(calls.length, 0);
-    });
-  }
-  test(label + ' static evidence excludes deleted files and does not run tests', t => {
-    const { result, calls } = runGate(t, ['--static'], { skeleton, source: true });
-    assert.equal(result.status, 0, result.stdout + result.stderr);
-    assert.equal(calls.filter(a => a[0] === 'test').length, 0);
-    const format = calls.find(a => a[0] === 'format');
-    assert.ok(format.includes('Source with spaces.cs'));
-    assert.ok(!format.includes('Removed.cs'));
+test('claude never receives the short model flag it does not support', t => {
+  const r = runDelegate(t, {
+    role: 'validator', mode: 'full', kind: null, model: 'some-model',
   });
-  for (const [selector, expected] of [['exists', 0], ['missing', 1]]) {
-    test(label + ' behavioral selector: ' + selector, t => {
-      const { result } = runGate(t, ['--filter=' + selector], { skeleton });
-      assert.equal(result.status, expected, result.stdout + result.stderr);
-    });
-  }
-  test(label + ' full explicitly runs all tests', t => {
-    const { result, calls } = runGate(t, ['--all-tests'], { skeleton });
-    assert.equal(result.status, 0, result.stdout + result.stderr);
-    assert.equal(calls.filter(a => a[0] === 'test').length, 1);
-    assert.ok(!calls.find(a => a[0] === 'test').includes('--filter'));
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.equal(startedKind(r), 'claude');
+  assert.deepEqual(r.start.slice(r.start.indexOf('--')),
+    ['--', '--model', 'some-model', '--effort', 'max']);
+});
+
+test('an invalid routing policy stops the call instead of guessing a kind', t => {
+  const f = fixture(t);
+  const mock = join(f.bin, 'herdr');
+  writeFileSync(mock, mockHerdr, { mode: 0o755 });
+  const routing = join(f.dir, 'routing.json');
+  writeFileSync(routing, JSON.stringify({ schema_version: 2 }));
+  const r = command('bash', [delegate, '--role=implementer', '--prd-dir=' + f.prd,
+    '--mode=implement', '--task=1.0', '--attempt=1/3'], f.repo, {
+    HERDR_BIN_PATH: mock, TSG_ROUTING_FILE: routing, MOCK_SCENARIO: 'ok',
+    MOCK_CALLS: join(f.dir, 'calls.jsonl'), MOCK_SHA: f.sha, MOCK_TREE: f.tree,
+    TSG_DELEGATE_LOG_DIR: join(f.dir, 'logs'),
   });
-  test(label + ' timeout is infrastructure, not convergence failure', t => {
-    const { result } = runGate(t, ['--static'], { skeleton, timeout: true });
-    assert.equal(result.status, 2, result.stdout + result.stderr);
+  assert.equal(r.status, 3, r.stdout + r.stderr);
+  assert.match(r.stderr, /politica de roteamento invalida/);
+});
+
+test('the escalation ladder walks and then clamps to its last kind', t => {
+  const f = fixture(t);
+  const steps = ['1/3', '2/3', '3/3', '9/9'].map(attempt =>
+    startedKind(runDelegate(t, { kind: null, taskKind: 'enabling', attempt, fix: f })));
+  assert.deepEqual(steps, ['opencode', 'codex', 'claude', 'claude']);
+});
+
+test('a route model wins over the kind default', t => {
+  const r = runDelegate(t, { role: 'validator', mode: 'full', kind: null });
+  assert.equal(startedKind(r), 'claude');
+  assert.deepEqual(r.start.slice(r.start.indexOf('--')),
+    ['--', '--model', 'claude-opus-5', '--effort', 'max']);
+  assert.equal(r.ledger[0].model, 'claude-opus-5');
+});
+
+test('the kind default applies when the route declares no model', t => {
+  const r = runDelegate(t, { role: 'validator', mode: 'focused', kind: 'claude' });
+  assert.deepEqual(r.start.slice(r.start.indexOf('--')),
+    ['--', '--model', 'claude-sonnet-5', '--effort', 'high']);
+});
+
+test('an explicit model wins over the route', t => {
+  const r = runDelegate(t, {
+    role: 'validator', mode: 'full', kind: null, model: 'claude-haiku-4-5',
   });
-  test(label + ' failure output stays bounded', t => {
-    const { result } = runGate(t, ['--static'], { skeleton, source: true, formatFail: true });
-    assert.equal(result.status, 1, result.stdout + result.stderr);
-    assert.ok(result.stdout.trim().split('\n').length <= 45);
-    assert.match(result.stdout, /format-error-99/);
-  });
-}
+  assert.deepEqual(r.start.slice(r.start.indexOf('--')),
+    ['--', '--model', 'claude-haiku-4-5', '--effort', 'max']);
+});
+
+test('escalation drops a route model that belongs to the previous kind', t => {
+  const f = fixture(t);
+  const routing = join(f.dir, 'routing.json');
+  writeFileSync(routing, JSON.stringify({
+    schema_version: 1,
+    kinds: { codex: { model: 'codex-default' }, claude: { model: 'claude-sonnet-5' } },
+    routes: [{
+      role: 'implementer', kind: 'codex', model: 'codex-cheap', escalation: ['claude'],
+    }],
+  }));
+  const first = runDelegate(t, { kind: null, fix: f, routing, attempt: '1/3' });
+  const second = runDelegate(t, { kind: null, fix: f, routing, attempt: '2/3' });
+  assert.deepEqual(first.start.slice(first.start.indexOf('--')), ['--', '--model', 'codex-cheap']);
+  assert.deepEqual(second.start.slice(second.start.indexOf('--')),
+    ['--', '--model', 'claude-sonnet-5']);
+});
+
+// --- Esforco de raciocinio ---
+
+test('full review asks for the highest reasoning effort', t => {
+  const r = runDelegate(t, { role: 'validator', mode: 'full', kind: null });
+  assert.deepEqual(r.start.slice(r.start.indexOf('--')),
+    ['--', '--model', 'claude-opus-5', '--effort', 'max']);
+  assert.equal(r.ledger[0].effort, 'max');
+});
+
+test('focused review runs at the cheaper effort of the same kind', t => {
+  const r = runDelegate(t, { role: 'validator', mode: 'focused', kind: null, taskKind: 'vertical' });
+  assert.deepEqual(r.start.slice(r.start.indexOf('--')),
+    ['--', '--model', 'claude-sonnet-5', '--effort', 'high']);
+});
+
+test('the effort template is per kind, not a shared spelling', t => {
+  const f = fixture(t);
+  const routing = join(f.dir, 'routing.json');
+  writeFileSync(routing, JSON.stringify({
+    schema_version: 1,
+    kinds: { codex: { effort_args: ['-c', 'model_reasoning_effort="{effort}"'] } },
+    routes: [{ role: 'implementer', kind: 'codex', effort: 'medium' }],
+  }));
+  const r = runDelegate(t, { kind: null, fix: f, routing });
+  assert.deepEqual(r.start.slice(r.start.indexOf('--')),
+    ['--', '-c', 'model_reasoning_effort="medium"']);
+});
+
+test('an explicit effort wins over the route', t => {
+  const r = runDelegate(t, { role: 'validator', mode: 'full', kind: null, effort: 'low' });
+  assert.deepEqual(r.start.slice(r.start.indexOf('--')),
+    ['--', '--model', 'claude-opus-5', '--effort', 'low']);
+});
+
+test('an effort a kind cannot express is recorded, never silently dropped', t => {
+  const f = fixture(t);
+  const routing = join(f.dir, 'routing.json');
+  writeFileSync(routing, JSON.stringify({
+    schema_version: 1,
+    kinds: { opencode: { effort_args: [] } },
+    routes: [{ role: 'implementer', kind: 'opencode', effort: 'max' }],
+  }));
+  const r = runDelegate(t, { kind: null, fix: f, routing });
+  assert.equal(r.start.includes('--'), false, 'no native args forwarded');
+  assert.match(r.stdout, /effort max ignorado: opencode nao expoe esforco/);
+  assert.equal(r.ledger[0].effort, null);
+});
+
+test('escalation drops a route effort that belongs to the previous kind', t => {
+  const f = fixture(t);
+  const routing = join(f.dir, 'routing.json');
+  writeFileSync(routing, JSON.stringify({
+    schema_version: 1,
+    kinds: {
+      codex: { effort_args: ['-c', 'model_reasoning_effort="{effort}"'] },
+      claude: { effort_args: ['--effort', '{effort}'], effort: 'high' },
+    },
+    routes: [{ role: 'implementer', kind: 'codex', effort: 'low', escalation: ['claude'] }],
+  }));
+  const first = runDelegate(t, { kind: null, fix: f, routing, attempt: '1/3' });
+  const second = runDelegate(t, { kind: null, fix: f, routing, attempt: '2/3' });
+  assert.deepEqual(first.start.slice(first.start.indexOf('--')),
+    ['--', '-c', 'model_reasoning_effort="low"']);
+  assert.deepEqual(second.start.slice(second.start.indexOf('--')), ['--', '--effort', 'high']);
+});
+
+test('a kind that carries effort inside the model name folds it into the value', t => {
+  const f = fixture(t);
+  const routing = join(f.dir, 'routing.json');
+  writeFileSync(routing, JSON.stringify({
+    schema_version: 1,
+    kinds: { cursor: { model_template: '{model}[effort={effort}]', effort_args: [] } },
+    routes: [{ role: 'implementer', kind: 'cursor', model: 'claude-opus-5', effort: 'high' }],
+  }));
+  const r = runDelegate(t, { kind: null, fix: f, routing });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.deepEqual(r.start.slice(r.start.indexOf('--')),
+    ['--', '--model', 'claude-opus-5[effort=high]']);
+  assert.equal(r.ledger[0].effort, 'high', 'effort was applied, not dropped');
+});
+
+test('a model template without a model falls back to the discard path', t => {
+  const f = fixture(t);
+  const routing = join(f.dir, 'routing.json');
+  writeFileSync(routing, JSON.stringify({
+    schema_version: 1,
+    kinds: { cursor: { model_template: '{model}[effort={effort}]', effort_args: [] } },
+    routes: [{ role: 'implementer', kind: 'cursor', effort: 'high' }],
+  }));
+  const r = runDelegate(t, { kind: null, fix: f, routing });
+  assert.equal(r.start.includes('--'), false);
+  assert.match(r.stdout, /effort high ignorado: cursor nao expoe esforco/);
+  assert.equal(r.ledger[0].effort, null);
+});

@@ -1,124 +1,61 @@
 ---
-# status alimenta o painel Kanban. Valores canonicos (sempre escreva estes):
-#   pending     -> 📋 A Fazer
-#   in_progress -> ⚙️ Em Progresso
-#   validating  -> 🔍 Em Validacao
-#   blocked     -> ⛔ Bloqueado
-#   done        -> ✅ Concluido
-# Tarefas recem-criadas nascem sempre como `pending`.
+# status alimenta o painel Kanban. Valores canônicos:
+#   pending -> 📋 A Fazer | in_progress -> ⚙️ Em Progresso | validating -> 🔍 Em Validação
+#   blocked -> ⛔ Bloqueado | done -> ✅ Concluído
+# Tasks nascem sempre como pending.
 status: pending
-slice_type: vertical # vertical | enabling
-verification_type: behavioral # behavioral | static; static somente para enabling
-parallelizable: false # Se pode executar em paralelo
-blocked_by: [] # IDs de tarefas que devem ser completadas primeiro
+
+# vertical  -> entrega comportamento observável; gate obrigatoriamente com --filter
+# enabling  -> exceção justificada, sem comportamento observável; gate estático (build/lint)
+task_kind: vertical
+
+blocked_by: []
+
+# Comando real do projeto — o mesmo que o CI roda. O exit code é o veredito.
+# vertical: comando de teste com seletor, e gate_expect quantificado (número de testes).
+# enabling: build/lint/typecheck, com a evidência descrita em gate_expect.
+gate: "[comando]"
+gate_expect: "[resultado determinístico esperado]"
 ---
 
-<task_context>
-<domain>engine/infra/[subdominio]</domain>
-<type>implementation|integration|testing|documentation</type>
-<scope>core_feature|middleware|configuration|performance</scope>
-<!-- low: configuracao simples -> gate e validator focused no perfil standard
-     medium: fatia vertical dentro do orcamento -> fluxo padrao
-     high: acoplamento irredutivel -> revisao humana do plano; reutilizar aprovacao ja dada
-     `high` e excecao. Se a maioria das tasks e high, a fragmentacao esta grosseira. -->
-<complexity>low|medium|high</complexity>
-<dependencies>external_apis|database|temporal|http_server</dependencies>
-<unblocks>"[IDs de tarefas desbloqueadas]"</unblocks>
-<feedback_checkpoint>[comando, cenario ou evidencia que valida esta task]</feedback_checkpoint>
-<gate_command>[scripts/ai-flow/gate.sh --filter="selector" OU scripts/ai-flow/gate.sh --static]</gate_command>
-<gate_test_selector>[classe+metodo, tag, caminho/filtro; N/A somente para enabling justificada]</gate_test_selector>
-<gate_expected_result>[resultado deterministico esperado]</gate_expected_result>
-<static_evidence>[comando adicional e resultado esperado para enabling static, ou N/A]</static_evidence>
-<!-- Faixa orientativa budget: criar 4-8, modificar 1-4, subtarefas <=6. Gateabilidade e
-     estado compilavel sao regras duras; nao fragmente apenas para cumprir contagem. -->
-<vertical_slice>[o comportamento unico e observavel que esta task entrega; N/A para enabling]</vertical_slice>
-</task_context>
+# [N].0 [Título da task]
 
-# Tarefa X.0: [Titulo da Tarefa Principal]
+**Fatia:** [V-XX] · **Cobre:** [RF-XX, RN-YY, US-ZZ] · **Spec:** `techspec.md#v-xx`
+· **ADR:** [ADR-NNN ou —]
 
-## Relacionada as User Stories
+## Comportamento
 
-- [US-XX] [Titulo da user story] ([cobertura direta|cobertura parcial|suporte])
+O que passa a funcionar quando esta task termina. Descreva entrada, regra aplicada e resultado
+observável com a extensão necessária para não restar ambiguidade — inclusive o caso negativo
+relevante. Não há limite de tamanho aqui: é a seção mais importante do arquivo.
 
-## Visao Geral
+[Ex: POST /servicos com payload válido → 201 com Location e slug no corpo, e ServicoCriado
+gravado no outbox na mesma transação. Categoria inexistente → 422 com code
+RELATED_AGGREGATE_NOT_FOUND.]
 
-[Breve descricao da tarefa, contexto, motivacao e valor que chega ao usuario ou ao sistema]
+## Fora do escopo desta task
 
-## Entrega Observavel
+O que esta fatia deliberadamente **não** prova, para o validator não cobrar. [Ex: publicação no
+broker fica em V-05; autorização por perfil fica em V-07.]
 
-- **Entrada ou gatilho:** [request, evento, comando ou acao]
-- **Resultado esperado:** [resposta, estado, evento, tela ou efeito observavel]
-- **Checkpoint de feedback:** [comando/cenario + saida esperada]
-- **Seletor focalizado:** [classe+metodo, tag ou caminho/filtro; N/A justificado em static]
-- **Fora deste checkpoint:** [o que ainda nao sera comprovado nesta task]
+## Decisões fechadas
 
-## Requisitos
+Decisões de negócio, contrato ou arquitetura que o implementador **não deve reabrir nem inventar**.
+Referencie a ADR quando houver; não copie o conteúdo dela.
 
-- [Requisito 1]
-- [Requisito 2]
+## Modificar / Referenciar
 
-## Arquivos Envolvidos
+Arquivos a criar não são listados — a estrutura vem da skill de arquitetura da stack.
 
-- **Criar:**
-  - `[caminho/completo/do/arquivo.ext]`
-  - `[caminho/completo/do/arquivo.test.ext]`
-- **Modificar:**
-  - `[caminho/completo/do/arquivo.ext]` ([descricao breve da alteracao])
-- **Referencia:**
-  - `[caminho/completo/do/arquivo.ext]` ([interface/tipo/config a consultar])
-- **Skills para consultar durante implementacao:**
-  - `[stack]-architecture` — [aspecto relevante, ex: "padrao de Repository"]
-  - `[stack]-testing` — [aspecto relevante, ex: "convencao de naming de testes"]
+- **modificar:** `[caminho]` ([o que muda])
+- **ref:** `[caminho]` ([interface, invariante ou padrão a respeitar])
 
-## Subtarefas
+## Pronto quando
 
-- [ ] X.1 [Implementar o fluxo ponta a ponta da fatia]
-- [ ] X.2 [Cobrir regra/caso negativo relevante]
-- [ ] X.3 [Executar teste focalizado e registrar a evidencia]
+Critérios do **comportamento**, não do processo. Invariantes de planejamento (selector válido,
+ausência de dependência futura, artefato do gate existente) são verificados por
+`scripts/validate_plan.py` e não entram aqui.
 
-## Sequenciamento
-
-- Bloqueado por: [IDs ou "Nenhum"]
-- Desbloqueia: [IDs]
-- Paralelizavel: [Sim/Nao] ([justificativa])
-
-## Rastreabilidade
-
-- Esta tarefa cobre: [IDs das user stories]
-- Evidencia esperada: [criterios de aceite, artefatos, testes ou docs que provam a cobertura]
-
-## Detalhes de Implementacao
-
-[Secoes relevantes da spec tecnica, incluindo o fluxo ponta a ponta, snippets de codigo, assinaturas
-de interfaces e decisoes de design. Copie o contexto necessario aqui para que o agente de codigo nao
-precise reconstruir a intencao consultando camadas sem relacao com esta fatia.]
-
-**Convencoes da stack (das skills consultadas):**
-- [Convencao 1 — ex: "Usar Repository Pattern conforme dotnet-architecture"]
-- [Convencao 2 — ex: "Testes seguem padrao Arrange-Act-Assert conforme dotnet-testing"]
-- [Convencao 3 — ex: "Logs estruturados com OpenTelemetry conforme dotnet-observability"]
-
-## Prontidao para Implementacao
-
-- **Decisoes fechadas:** [decisoes de negocio, contrato e arquitetura que o implementer nao deve inventar]
-- **Limites de decisao do implementer:** [decisoes locais que podem seguir padroes existentes]
-- **Dependencias disponiveis:** [tasks, componentes ou contratos que devem existir]
-- **Artefatos exigidos pelo gate:** [para cada teste/fixture/script, indicar preexistente ou criado/modificado nesta task]
-- **Dependencias futuras:** Nenhuma
-- **Ambiguidades bloqueantes:** Nenhuma
-
-## Criterios de Sucesso (Verificaveis)
-
-[Em static, substitua os dois itens de testes abaixo pela evidencia estatica declarada.
-Nao mantenha placeholders ou exigencias de teste inaplicaveis no arquivo final.]
-
-- [ ] Teste focalizado passa: `[comando com classe+metodo, tag ou filtro especifico]`
-- [ ] O seletor encontra pelo menos um teste e nao executa casos sem relação com esta task
-- [ ] Build compila sem erros: `[comando de build]`
-- [ ] [Verificacao funcional especifica — ex: endpoint responde 200 para request valido]
-- [ ] [Verificacao de edge case — ex: endpoint responde 422 para input invalido]
-- [ ] [Verificacao de qualidade — ex: lint passa sem warnings]
-- [ ] Checkpoint de feedback executado: `[comando/cenario]` → `[saida esperada]`
-- [ ] Todos os artefatos usados pelo gate existem antes da task ou foram criados/modificados nela
-- [ ] Nenhum arquivo produzido por task futura e necessario para compilar ou validar esta task
-- [ ] A evidencia acima prova somente esta fatia e nao depende de tasks futuras
+- [ ] Gate passa (exit 0): `[comando]`
+- [ ] [Verificação funcional do caminho feliz]
+- [ ] [Verificação do caso negativo]

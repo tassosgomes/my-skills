@@ -3,7 +3,38 @@
 Use a rota que corresponde ao trabalho. As skills de definição produzem arquivos; o Orchestrator
 coordena a implementação depois que o plano está pronto. Caminhos abaixo são relativos ao projeto alvo.
 
-## 1. Escolha o ponto de entrada
+## 1. Dimensione a mudança
+
+**A complexidade determina a profundidade — não existe pipeline fixo.** Antes de iniciar uma
+feature, dimensione o escopo e aplique somente os artefatos que ele exige.
+
+| Escopo | O que é | PRD | TechSpec | Tasks | Execução |
+|---|---|---|---|---|---|
+| **Pequeno** | ≤3 arquivos, uma frase descreve | Parágrafo no chat ou `_idea.md` | Pular | Pular | Implementar + gate |
+| **Médio** | Feature clara, <10 tasks | PRD enxuto | **Inline** — decidir ao implementar, sem `techspec.md` | **Implícitas** | Implementar + gate por comportamento |
+| **Grande** | Multi-componente, fronteiras novas | PRD completo | `techspec.md` | `tasks.md` + arquivos | Orchestrator com checkpoint por task |
+| **Complexo** | Ambiguidade real, domínio novo, contrato externo | PRD + discovery | `techspec.md` + contrato | Tasks + fases | Orchestrator + validação full |
+
+1. **PRD e verificação existem sempre.** É preciso saber o que construir e provar que foi
+   construído. O que varia é a forma, não a existência.
+2. **TechSpec é pulada** quando não há decisão arquitetural nova, contrato novo nem padrão novo —
+   o desenho acontece durante a implementação.
+3. **Tasks são puladas** quando há ≤3 passos óbvios.
+4. **Contrato de API** entra sempre que a feature cria ou altera API consumida por outro time ou
+   pelo frontend, independente do tamanho.
+5. **Orchestrator** entra a partir de Grande. Abaixo disso, o fluxo direto do projeto basta.
+
+### Válvula de segurança
+
+Mesmo quando as tasks foram puladas, comece a execução **listando os passos atômicos**. Se a lista
+passar de 5 passos ou revelar dependências não triviais, **pare e crie `tasks.md`** — o
+dimensionamento errou. Subir de nível é barato; descobrir no meio da implementação que o plano não
+existia, não.
+
+O inverso também vale: se um plano Grande gerar tasks que são todas `enabling`, a decomposição
+está errada — revise antes de executar.
+
+## 2. Escolha o ponto de entrada
 
 | Situação | Comece por |
 |---|---|
@@ -15,7 +46,7 @@ coordena a implementação depois que o plano está pronto. Caminhos abaixo são
 
 A ordem expressa dependências, não uma obrigação de recriar todos os documentos em cada feature.
 
-## 2. Definição do produto — normalmente uma vez, depois por mudança de premissas
+## 3. Definição do produto — normalmente uma vez, depois por mudança de premissas
 
 | Ordem | Skill | Entrada | Saída e próximo uso |
 |---|---|---|---|
@@ -28,34 +59,35 @@ A ordem expressa dependências, não uma obrigação de recriar todos os documen
 O baseline define restrições consumidas pelas TechSpecs. O backlog é útil para priorizar MVP e fases.
 Não detalhe todos os domínios antes de iniciar a primeira capacidade: comece pelos necessários à entrega.
 
-## 3. Planejamento — por feature
+## 4. Planejamento — por feature
 
 | Ordem | Skill | Quando executar |
 |---|---|---|
 | 6 | tsg-flow-prd-creator | Definir comportamento, escopo e critérios de aceite da capacidade/feature |
 | 7, condicional | tsg-flow-contract-creator | Criar/alterar API compartilhada. Reutilize contrato canônico já aprovado |
-| 8a, condicional | tsg-flow-techspec-creator | Há implementação backend ou trabalho técnico sem UI |
-| 8b, condicional | tsg-flow-frontend-techspec-creator | Há implementação frontend |
+| 8, condicional | tsg-flow-techspec-creator | Escopo Grande/Complexo. Declare Backend, Frontend ou Full-stack no cabeçalho — um único documento |
 | 9 | tsg-flow-task-creator | Consumir PRD e todas as specs necessárias aprovadas; gerar um único plano |
 
-Para frontend com API, o contrato antecede 8b. Para frontend sem API, declare N/A e dispense a etapa 7.
-Frontend isolado não exige 8a. Full-stack exige 8a e 8b; quando o frontend depende de decisões do
-backend, faça 8a primeiro. Serialize escritas nas ADRs e no diretório compartilhado.
+Para frontend com API, o contrato antecede a etapa 8. Para frontend sem API, declare N/A e dispense a
+etapa 7. Escopo Pequeno/Médio dispensa a etapa 8 inteira (ver o dimensionamento na seção 1).
+Quando o frontend depende de decisões do backend, resolva o backend primeiro. Serialize escritas nas ADRs e no diretório compartilhado.
 
 As etapas 3, 8a e 8b reutilizam ADRs pertinentes. Decisões arquiteturais novas ficam em
 `docs/adr/adr-NNN.md`, com numeração global; nunca dentro do diretório temporário do PRD.
 Leia o [ciclo e retenção das ADRs](tsg-flow-guide.md#adrs-sobrevivem-ao-prd).
 
-## 4. Preparação do repositório
+## 5. Preparação do repositório
 
-Execute `tsg-flow-gate-creator` uma vez por repositório, antes do Orchestrator. Reexecute quando
-stack, comandos do CI ou contrato do gate mudarem. Pode acontecer durante o planejamento técnico,
-assim que a stack e os comandos reais estiverem conhecidos.
+Não existe script de gate a gerar. Cada task declara em `gate` o **comando real do projeto** — o
+mesmo que o CI executa — e o exit code do comando é o veredito.
 
-O resultado é `scripts/ai-flow/gate.sh` e seu contrato. Verifique caminho comportamental, filtro sem
-match, caminho estático e falhas de uso/ambiente. Tasks devem apontar comandos reais do gate.
+Antes de iniciar o fluxo, levante os comandos em `.github/workflows/`, `Makefile`, `package.json`
+ou no build script, e confirme que o runner **falha sozinho quando o seletor não pega nenhum
+teste** (`--minimum-expected-tests` no Microsoft.Testing.Platform, exit 5 no pytest, falha padrão
+em Jest, Vitest, Surefire e Gradle). Onde o runner sair `0` com zero testes, quantifique a
+expectativa em `gate_expect` para que a divergência reprove.
 
-## 5. Execução — ponto de entrada único
+## 6. Execução — ponto de entrada único
 
 Depois de revisar/aprovar o plano e autorizar a implementação:
 
@@ -82,7 +114,7 @@ como se tivesse sido revisado anteriormente.
 Os workers não devem ser chamados manualmente por rotina. Use-os diretamente apenas para operação
 delimitada cujo contexto e pré-condições estejam disponíveis.
 
-## 6. Retomada e encerramento
+## 7. Retomada e encerramento
 
 Retome o Orchestrator com o mesmo prd-dir. Ele lê flow-state.json, tasks e Git e reconcilia a operação
 interrompida. Não reinicie do Vision nem gere o plano inteiro outra vez por trocar de conversa.

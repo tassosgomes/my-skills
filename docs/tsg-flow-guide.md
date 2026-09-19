@@ -30,16 +30,12 @@ docs/
   api/                                 # exemplo de contrato durável, se adotado pelo projeto
 tasks/prd-<slug>/
   prd.md
-  techspec.md                          # backend/geral, quando aplicável
-  frontend-techspec.md                 # frontend, quando aplicável
+  techspec.md                          # backend, frontend ou full-stack; escopo no cabeçalho
   tasks.md
   1.0_task.md
   1.0_task_review.md
   prd_review.md
   flow-state.json                     # retomada durante a execução
-scripts/ai-flow/
-  gate.sh
-  gate.contract.md
 ```
 
 Drafts de especificação usam .draft.md no diretório da feature. A versão aprovada permanece
@@ -95,25 +91,30 @@ Não arquive automaticamente ao concluir a implementação.
 
 ## Contrato entre planejamento e execução
 
-Task Creator consome PRD e specs aprovadas selecionadas pelo escopo:
-backend → techspec.md; frontend → frontend-techspec.md; full-stack → ambas.
+Task Creator consome PRD e a `techspec.md` aprovada, qualquer que seja seu escopo
+(Backend, Frontend ou Full-stack). Planos legados com `frontend-techspec.md` continuam aceitos.
 Produz um único tasks.md e arquivos individuais. IDs de capacidade, feature, RF, RN e ADR são
 mantidos para rastreabilidade.
+O frontmatter de cada task usa o campo canônico `task_kind: vertical|enabling`; `kind` fica
+reservado para o agente de execução.
 
-| Task | Verificação | Gate |
+| Task | Verificação | `gate` declarado na task |
 |---|---|---|
-| vertical | behavioral, teste do incremento na própria task | --filter com selector não vazio |
-| enabling | static, justificativa e evidência específica | --static |
-| enabling com comportamento testável | behavioral | --filter |
-| full do PRD | suíte agregada e revisão do diff integrado | --base=<sha> --all-tests |
+| vertical | teste do incremento na própria task | comando de teste com seletor; `gate_expect` quantifica os testes |
+| enabling | justificativa e evidência específica | build, lint ou typecheck; evidência em `gate_expect` |
+| full do PRD | suíte agregada e revisão do diff integrado | o mesmo comando de suíte completa que o CI roda |
 
-Se o projeto não tiver suíte e o plano for inteiramente estático, o full pode usar --static com
-justificativa explícita. Isso não equivale a testar comportamento.
---skip-tests é somente diagnóstico; nenhuma seleção e flags conflitantes são erro de uso.
+O exit code do comando é o veredito: `0` aprova, qualquer outro reprova — inclusive os códigos que
+o runner reserva para filtro sem match. Exit `0` com saída divergente de `gate_expect` também
+reprova. Comando de diagnóstico nunca vira aprovação.
+
+Se o projeto não tiver suíte comportamental, declare a limitação explicitamente no relatório em
+vez de aprovar por build — isso não equivale a testar comportamento. Falha de ambiente ou comando
+inexistente é erro de verificação, não reprovação do código.
 
 Todo artefato usado para compilar/testar precisa preexistir, ser criado pela task ou vir de dependência
-anterior declarada. O campo parallelizable registra oportunidade; o executor standard é sequencial.
-Todas as complexidades recebem gate e validator. High pede revisão do plano se ainda não ocorreu.
+anterior declarada — verificado por `scripts/validate_plan.py` antes do handoff, não por checkbox.
+Toda task recebe gate e validator focused.
 
 ## Execução, estado e tentativas
 

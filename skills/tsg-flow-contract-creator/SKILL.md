@@ -194,7 +194,7 @@ A resposta final deve conter:
 6. **Resultado do lint Spectral** — comando/ruleset usado e eventuais warnings restantes
 7. **Próximos passos:**
    - Backend: "Use a skill `tsg-flow-techspec-creator` referenciando este contrato como input adicional"
-   - Frontend: "Use a skill `tsg-flow-frontend-techspec-creator` referenciando este contrato — os schemas são a fonte de verdade para os tipos"
+   - Frontend: "Use a skill `tsg-flow-techspec-creator` (escopo Frontend ou Full-stack) referenciando este contrato — os schemas são a fonte de verdade para os tipos"
    - Mocks: "Execute `npx @stoplight/prism-cli mock api-contract.yaml` para ter um servidor mock imediatamente"
 
 ## Princípios Fundamentais

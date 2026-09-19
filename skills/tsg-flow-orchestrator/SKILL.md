@@ -24,8 +24,9 @@ este orquestrador. Não repita aprovação humana já explícita para o mesmo pl
 ## Inicialização e retomada
 
 1. Leia `tasks.md`, próxima task e `flow-state.json` se existente.
-2. Confira specs selecionadas (backend e/ou frontend), aprovação do plano e gate disponível.
-   Exija contrato de verificação consistente: behavioral/filtro ou enabling/static.
+2. Confira a spec selecionada, a aprovação do plano e que cada task declara `gate` e
+   `gate_expect` executáveis. Task `vertical` exige comando de teste com seletor e expectativa
+   quantificada; `enabling` exige a evidência estática descrita.
 3. Delegue `prepare-prd-branch` ao integrator; capture branch, base e último checkpoint.
 4. Persista estado mínimo em `{PRD_DIR}/flow-state.json`: branch, original_base_ref, base_ref,
    target_ref, last_checkpoint, task ativa, tentativa, full_attempt, fase e último resultado.
@@ -39,7 +40,9 @@ este orquestrador. Não repita aprovação humana já explícita para o mesmo pl
 2. Defina status in_progress e registre a tentativa antes da delegação.
 3. Delegue implementer em implement (primeira passagem) ou fix (bloqueios anteriores).
 4. TASK BLOCKED: marque blocked, registre evidência e pare sem consumir tentativa.
-   GATE ERROR/exit 2: trate como infraestrutura. GATE REPROVADO consome tentativa.
+   GATE ERROR (ambiente, comando inexistente, dependência indisponível): trate como
+   infraestrutura, sem consumir tentativa. GATE REPROVADO — exit diferente de zero no comando
+   declarado, ou saída divergente de `gate_expect` — consome tentativa.
 5. IMPLEMENTATION COMPLETE exige gate/evidências aprovados; TASK READY não comprova conclusão.
 6. Defina validating. Delegue validator focused na primeira revisão e revalidation após correção
    de bloqueios já revisados. Se a falha anterior foi apenas do gate, a primeira revisão é focused.
@@ -89,6 +92,10 @@ Use uma delegação por vez; workers compartilham working tree e branch.
   Se o runtime não permitir revisão independente, informe a limitação; não a declare independente.
 - **herdr:** leia [references/transport.md](references/transport.md) antes de usar
   `scripts/tsg-delegate.sh`. Cada chamada usa pane/agente novo e resultado JSON por run_id.
+  Omita `--kind` para deixar a política de roteamento escolher agente, modelo e esforço de
+  raciocínio por papel, modo e `task_kind` da task, com escalonamento por tentativa e anti-afinidade
+  entre implementer e validator.
+  Informe `--kind` apenas para impor um agente; isso desliga a política naquela chamada.
   Kind diferente pode oferecer diversidade de revisão, mas não garante ausência de pontos cegos.
   Use modelos configurados/autorizados, sem substituir escolhas explícitas.
 - Não execute localmente etapas delegadas. Para runtime sem workers, resolva a limitação de

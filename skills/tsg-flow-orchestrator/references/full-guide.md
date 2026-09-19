@@ -21,7 +21,7 @@ ou mecanismo de edição equivalente. Não contém credenciais nem transcripts c
   "max_attempts": 3,
   "full_attempt": 0,
   "transport_retries": 0,
-  "specs": ["frontend-techspec.md"],
+  "specs": ["techspec.md"],
   "delivery": "branch",
   "validated_commit": null,
   "validated_tree": null,

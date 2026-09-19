@@ -1,9 +1,15 @@
 # Template de Product Requirement Document (PRD)
 
-> Use este template para estruturar todo PRD. Preencha cada seção com base no resultado do
-> brainstorming. A seção **Rastreabilidade** é incluída apenas em Pipeline Mode (quando há
-> Vision Doc e/ou Domain Doc disponíveis). Marque pendências em "Questões em Aberto" ao invés
-> de adivinhar respostas.
+> Use este template para estruturar todo PRD. A seção **Rastreabilidade** é incluída apenas em
+> Pipeline Mode (quando há Vision Doc e/ou Domain Doc disponíveis). Marque pendências em
+> "Questões em Aberto" ao invés de adivinhar respostas.
+>
+> **Seção sem conteúdo material é omitida**, não preenchida com "N/A" nem com uma justificativa
+> de não-aplicabilidade. A ausência é a declaração.
+>
+> **Não há limite de extensão.** Comportamento, regra de negócio e critério de aceite recebem o
+> espaço que precisarem para ficar inequívocos. O PRD encolhe cortando seção supérflua, nunca
+> detalhe útil.
 
 ---
 
@@ -54,7 +60,7 @@
 
 | Termo | Definição de negócio | Escopo/Fonte |
 |---|---|---|
-| [Termo] | [Definição curta, sem implementação] | [Vision Doc, Domain Doc ou decisão desta feature] |
+| [Termo] | [Definição de negócio, sem implementação] | [Vision Doc, Domain Doc ou decisão desta feature] |
 
 ---
 

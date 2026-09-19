@@ -34,11 +34,19 @@ implementação pertencem à TechSpec.
    Pontos que não bloqueiam podem permanecer explícitos, com responsável ou próxima etapa.
 6. Leia [references/prd-template.md](references/prd-template.md) e grave o draft completo.
    Inclua requisitos numerados, histórias e critérios observáveis, inclusive casos negativos.
-   Omita exemplos do template e justifique seções não aplicáveis.
+   Omita os exemplos do template. **Seção sem conteúdo material é omitida, não justificada:**
+   a ausência já declara a não-aplicabilidade, e um parágrafo explicando por que a seção está
+   vazia é ruído que o leitor precisa atravessar.
 7. Revise consistência, cobertura, non-goals, métricas fundamentadas e rastreabilidade.
 8. Mostre o arquivo e um resumo das decisões. Pergunte somente sobre decisões ainda não aprovadas;
    a autorização explícita já dada para o mesmo escopo continua válida.
 9. Após aprovação, salve `prd.md` e aceite somente os PDs aprovados nesta entrega.
+
+## Extensão
+
+Não há limite de tamanho por seção. Descreva comportamento, regra e critério com a extensão
+necessária para não restar ambiguidade — é o "o quê", a parte que a implementação não pode
+adivinhar. O documento encolhe cortando seção supérflua, nunca detalhe que remove dúvida.
 
 ## Decisões e limites
 

@@ -1,327 +1,226 @@
 # Template de Especificação Técnica
 
-> **Modo de operação:** [Standalone | Pipeline | API-First]
-> **PRD de origem:** `tasks/prd-[nome-funcionalidade]/prd.md`
-> **API Contract:** `tasks/prd-[nome-funcionalidade]/api-contract.yaml` *(quando modo API-First)*
+> **Escopo:** [Backend | Frontend | Full-stack]
+> **Modo:** [Standalone | Pipeline | API-First]
+> **PRD de origem:** `tasks/prd-[slug]/prd.md`
+> **API Contract:** `api-contract.yaml` *(API-First)* | `N/A — [motivo]`
 > **Data:** [YYYY-MM-DD]
 > **Status:** [Rascunho | Em Revisão | Aprovado]
 > **Handoff:** [draft — não gerar Tasks | approved — pode alimentar o Task Creator]
+
+Este documento é um **contrato**, não um blueprint para transcrever. Registre o que o
+implementador não consegue derivar: comportamento, fronteira, decisão fechada e evidência.
+Estrutura de pastas, nomes de arquivo, assinaturas e convenções vêm das skills de stack no
+momento da implementação — não as copie para cá.
+
+**Seção sem conteúdo material é omitida**, não preenchida com "N/A" ou justificativa.
+Não há limite de tamanho: descreva o comportamento com a extensão necessária para que fique
+inequívoco. O que se corta é seção supérflua, não detalhe útil.
 
 ---
 
 ## Resumo Executivo
 
-[Visão técnica em 1-2 parágrafos que cobre:]
+Visão técnica da solução:
 
 - Decisões arquiteturais principais
 - Estratégia de implementação
-- **Trade-off primário da abordagem escolhida** (obrigatório — declarar explicitamente o que se ganha e o que se abre mão)
+- **Trade-off primário da abordagem escolhida** (obrigatório — o que se ganha e o que se abre mão)
 
 ---
 
-## Skills de Referência
+## Arquitetura da Solução
 
-[Skills consultadas na Phase 0 que embasaram as decisões desta TechSpec:]
+Componentes principais, responsabilidades e fluxo de dados. Inclua apenas o que esta feature
+cria ou altera; arquitetura herdada entra por referência ao baseline ou à ADR.
 
-| Skill | Caminho | Decisões Influenciadas |
-|-------|---------|------------------------|
-| `[stack]-architecture` | `[caminho]` | Estrutura de pastas, camadas, padrões |
-| `[stack]-dependency-config` | `[caminho]` | Libs aprovadas, DI, configuração |
-| `[stack]-code-quality` | `[caminho]` | Convenções de código, naming |
-| `[stack]-testing` | `[caminho]` | Estratégia de testes, frameworks |
-| `[stack]-observability` | `[caminho]` | Logging, métricas, tracing *(se aplicável)* |
-| `[stack]-performance` | `[caminho]` | Otimização, caching *(se aplicável)* |
-| `design-patterns` | `[caminho]` | Padrões aplicados *(se aplicável)* |
+### Diagrama *(opcional)*
+
+Diagrama mermaid/ascii quando as relações não couberem bem em texto.
+
+### Bloco Backend *(omitir em feature exclusivamente frontend)*
+
+- Agregados, casos de uso e portas afetadas
+- Onde a regra de negócio vive
+- Transação, consistência e eventos
+
+### Bloco Frontend *(omitir em feature exclusivamente backend)*
+
+- Jornadas e telas envolvidas
+- Onde mora o estado de cada jornada (servidor vs. cliente)
+- Pontos de integração com a API
+
+> Biblioteca de fetching, gerenciamento de estado, validação de formulário, estrutura de pastas
+> e geração de tipos são **decisões de projeto**, não de feature: vivem na skill de arquitetura da
+> stack ou no baseline arquitetural. Registre aqui apenas o desvio justificado do padrão.
 
 ---
 
-## Arquitetura do Sistema
+## Mapa de Fatias Verticais
 
-### Visão Geral dos Componentes
+Cada fatia entrega um comportamento observável de ponta a ponta, atravessando somente as
+camadas necessárias. Numa feature full-stack, uma fatia cruza UI e API — é uma linha só, não
+duas. A coluna `Bloqueado por` é a ordem de construção; não existe seção de build order
+separada.
 
-[Descrição dos componentes principais e suas responsabilidades:]
+Descreva o fluxo com a extensão que o comportamento exigir.
 
-- Nomes dos componentes e função primária
-- Relacionamentos entre componentes
-- Visão geral do fluxo de dados
+### V-01: [comportamento observável]
 
-### Diagrama de Componentes *(opcional)*
+- **Cobre:** [RF-XX, RN-YY, US-ZZ]
+- **Entrada / gatilho:** [request, evento, ação de UI]
+- **Processamento:** [regra aplicada, decisão, efeito colateral — quantas linhas forem necessárias]
+- **Saída observável:** [resposta, estado, evento, tela]
+- **Evidência / checkpoint:** [comando ou cenário + resultado esperado]
+- **Bloqueado por:** [IDs de fatias ou "Nenhum"]
 
-[Diagrama em mermaid/dot/ascii ilustrando relações entre componentes.]
+### V-02: [comportamento observável]
 
-## Estratégia de Entrega Incremental
-
-A implementação deve maximizar fatias verticais: cada linha abaixo entrega um comportamento
-observável de ponta a ponta, atravessando somente as camadas necessárias. O objetivo é permitir
-implementer → gate focado → validator → checkpoint após cada linha, sem esperar o fechamento de uma
-camada inteira.
-
-### Mapa de Fatias Verticais
-
-| Slice | Comportamento observável | US/RF/RN cobertos | Entrada → processamento → saída | Artefatos principais | Evidência / checkpoint | Bloqueado por |
-|-------|--------------------------|-------------------|--------------------------------|----------------------|-----------------------|---------------|
-| V-01 | [resultado demonstrável] | [IDs] | [fluxo em uma linha] | [arquivos] | [comando/cenário] | [IDs ou Nenhum] |
-
-Cada slice deve incluir seus testes e telemetria necessários no mesmo fluxo. Se uma entrega não
-produzir comportamento observável, classifique-a como habilitadora na tabela abaixo, explique por que
-ela é inevitável e aponte a primeira fatia que ela desbloqueia.
+[Repetir a estrutura.]
 
 ### Habilitadores inevitáveis
 
-| Habilitador | Por que não pode fazer parte de uma fatia | Menor escopo | Fatias desbloqueadas |
-|-------------|--------------------------------------------|--------------|----------------------|
-| [enabler] | [justificativa concreta] | [arquivos] | [V-XX] |
+Trabalho que não produz comportamento observável. É exceção e exige justificativa.
+
+| Habilitador | Por que não cabe numa fatia | Menor escopo | Primeira fatia desbloqueada |
+|---|---|---|---|
+| EN-01 | [justificativa concreta] | [arquivos] | [V-XX] |
 
 ---
 
-## Design de Implementação
+## Contratos e Fronteiras
 
-### Interfaces Principais
+O que o implementador não deriva sozinho. Omita as subseções que não se aplicam.
 
-[Defina as interfaces de serviço principais. Limite cada exemplo a 20 linhas:]
+### Mapeamento do contrato de API *(modo API-First)*
 
-```
-// Exemplo de definição de interface (substituir pela linguagem do projeto)
-interface NomeServico {
-    nomeMetodo(entrada: TipoEntrada): TipoSaida;
-}
-```
+Endpoints, schemas, autenticação, paginação e formato de erro vivem no `api-contract.yaml`.
+Esta spec **não duplica** essas definições.
 
-### Modelos de Dados
+| operationId | Caminho de implementação |
+|---|---|
+| `[operationId]` | `[Agregado]Endpoints.[handler]` → `[CasoDeUso]` → `[Repository]` |
 
-[Defina estruturas de dados essenciais:]
+**Validações além do contrato:**
 
-- Entidades de domínio principais (mantenha nomes do Domain Doc quando aplicável)
-- Tipos de requisição/resposta *(em modo API-First, derivam dos schemas do contrato)*
-- Esquemas de banco de dados *(se aplicável)*
+| operationId | Regra | Camada |
+|---|---|---|
+| `[operationId]` | [regra de negócio] | [domain/application] |
 
-**[Modo Pipeline]** Mapeamento Entidade do Domínio → Modelo de Dados:
+**Exceção → resposta HTTP:**
 
-| Entidade do Domain Doc | Modelo Técnico | Local |
-|------------------------|----------------|-------|
-| [Entidade] | [Classe/Tipo] | [Caminho] |
+| Exceção | HTTP | code do contrato |
+|---|---|---|
+| `[ExceçãoDoDomínio]` | 422 | `BUSINESS_RULE_VIOLATION` |
 
-### Endpoints de API
+### Mapeamento de jornada *(escopo frontend)*
 
-#### Modo Standalone / Pipeline
+| User Story | Tela / componente | operationId ou ação local | Evidência |
+|---|---|---|---|
+| US-01 | [tela] | `[operationId]` ou `[ação local]` | [teste ou cenário] |
 
-[Liste endpoints completos:]
+### Entidades do domínio *(modo Pipeline)*
 
-- Método e caminho (ex: `POST /api/v1/recurso`)
-- Breve descrição
-- Referências de formato de requisição/resposta
+| Entidade do Domain Doc | Representação técnica | Local |
+|---|---|---|
+| [Entidade] | [tipo/tabela] | [caminho] |
 
-#### Modo API-First
+### Interfaces entre fatias ou times
 
-> Os endpoints, schemas, autenticação, paginação e formato de erros são definidos no
-> [API Contract](api-contract.yaml). Esta TechSpec NÃO duplica essas definições.
-
-**Mapeamento de implementação dos endpoints do contrato:**
-
-| operationId | Caminho de Implementação |
-|-------------|--------------------------|
-| `[operationIdDoContrato]` | `Controller.[método]` → `[UseCase]` → `[DomainService]` → `[Repository]` |
-
-**Validações adicionais** (além das declaradas no contrato):
-
-| Endpoint | Validação | Local na Implementação |
-|----------|-----------|------------------------|
-| `[operationId]` | [regra de negócio] | [camada — domain/application] |
-
-**Mapeamento de Exceções → ErrorResponse do Contrato:**
-
-| Exceção de Domínio | HTTP | code (do contrato) |
-|--------------------|------|--------------------|
-| `[ExceptionDoDomínio]` | 422 | `BUSINESS_RULE_VIOLATION` |
+Apenas assinaturas que funcionam como **contrato entre fatias, times ou repositórios**.
+Assinatura interna derivável da skill de arquitetura não entra aqui.
 
 ---
 
-## Inventário de Artefatos
+## Arquivos a Modificar e a Referenciar
 
-[Lista TODOS os arquivos envolvidos. Esta seção alimenta diretamente o `tsg-flow-task-creator`.]
+Arquivos **a criar** não são listados: a estrutura é determinística pelas skills de arquitetura
+da stack. Liste o que o implementador não descobre sozinho.
 
-### Arquivos a Criar
+### A modificar
 
-| Caminho | Fatia | Tipo | Skills Aplicáveis | Descrição |
-|---------|-------|------|-------------------|-----------|
-| `[caminho/arquivo]` | [V-XX ou EN-XX] | [Controller/UseCase/Entity/Repository/DTO/Mapper/Migration/Test/Config] | `[skill-1]`, `[skill-2]` | [Descrição em 1 linha] |
+| Caminho | Fatia | Alteração |
+|---|---|---|
+| `[caminho]` | [V-XX] | [o que muda] |
 
-### Arquivos a Modificar
+### A referenciar (não alterar)
 
-| Caminho | Fatia | Skills Aplicáveis | Alteração |
-|---------|-------|-------------------|-----------|
-| `[caminho/arquivo]` | [V-XX ou EN-XX] | `[skill]` | [Descrição da alteração] |
-
-### Arquivos de Referência (não alterar)
-
-| Caminho | Motivo da Consulta |
-|---------|-------------------|
-| `[caminho/arquivo]` | [Por que o agente precisa consultar este arquivo] |
-
----
-
-## Pontos de Integração
-
-> *Inclua esta seção apenas se a feature integra com sistemas externos ao codebase.*
-
-[Para cada integração externa:]
-
-- Serviço/API integrado e propósito
-- Mecanismo de autenticação/autorização
-- Estratégia de tratamento de erros e retry
-- Timeouts e idempotência
-- **[Modo Pipeline]** Já mapeado no Domain Doc? Citar referência
+| Caminho | Por que consultar |
+|---|---|
+| `[caminho]` | [interface, invariante ou padrão a respeitar] |
 
 ---
 
 ## Análise de Impacto
 
-[Componentes afetados pela implementação:]
+O que esta feature afeta fora da sua própria fronteira.
 
-| Componente Afetado | Tipo de Impacto | Descrição & Risco | Ação Requerida |
-|--------------------|-----------------|-------------------|----------------|
-| [componente] | [novo/modificado/depreciado] | [o que muda + nível de risco] | [ação necessária] |
+| Componente | Tipo | Impacto e risco | Ação requerida |
+|---|---|---|---|
+| [componente] | [novo/modificado/depreciado] | [o que muda + risco] | [ação] |
 
-[Categorias a considerar:]
-
-- **Dependências Diretas:** módulos que chamarão ou serão chamados
-- **Recursos Compartilhados:** tabelas de BD, caches, filas
-- **Mudanças de API:** modificações em endpoints/contratos existentes
-  - **[Modo API-First]** Mudanças no API Contract devem ser explícitas
-- **Performance:** componentes que podem sofrer mudança de carga
-- **[Modo Pipeline]** Outros domínios do roadmap (Vision Doc) potencialmente afetados
+Considere: dependências diretas, recursos compartilhados (tabelas, filas, caches), mudanças em
+contrato existente, carga/performance e — em Pipeline — outros domínios do Domain Map.
 
 ---
 
-## Abordagem de Testes
+## Riscos e Preocupações
 
-### Testes Unitários
+Preencha **enquanto explora o código**, não depois. Toda preocupação encontrada nas áreas que a
+feature toca entra aqui com localização e mitigação. `Nenhuma encontrada` é entrada válida.
 
-- Estratégia e componentes principais a testar
-- Requisitos de mock (apenas serviços externos — não mockar classes do próprio domínio)
-- Cenários críticos e casos de borda
-- **[Modo Pipeline]** Cada RN-XX do Domain Doc deve ter caso de teste correspondente
+Categorias: código frágil (acoplamento, estado implícito), dívida técnica, risco de segurança,
+gargalo de performance, lacuna de cobertura de teste no caminho de que a feature depende.
 
-### Testes de Integração
-
-- Componentes a testar juntos
-- Requisitos de dados de teste
-- Dependências de ambiente (Testcontainers, banco em memória, etc.)
-
-### Testes de Contrato *(modo API-First)*
-
-- Validação da implementação contra o `api-contract.yaml`
-- Ferramenta sugerida (Dredd, Pact, etc.)
-- Cenários cobertos
+| Preocupação | Local (`arquivo:linha`) | Impacto | Mitigação |
+|---|---|---|---|
+| [o que está frágil] | `src/caminho/arquivo.cs:42` | [o que quebra ou degrada] | [como o desenho ou uma task trata] |
 
 ---
 
-## Sequenciamento de Desenvolvimento
+## Decisões Técnicas
 
-### Build Order
-
-[Sequência ordenada por fatias verticais, respeitando dependências. Cada passo após o primeiro DEVE
-declarar suas dependências e a evidência de feedback que ficará disponível:]
-
-1. [Primeiro componente] — sem dependências
-2. [Segundo componente] — depende de 1
-3. [Terceiro componente] — depende de 1 e 2
-4. [Continuar a cadeia de dependências]
-
-### Dependências Técnicas Bloqueantes
-
-[Dependências externas que devem ser resolvidas antes da implementação:]
-
-- Requisitos de infraestrutura
-- Disponibilidade de serviços externos
-- Entregas de outras equipes ou componentes compartilhados
-
----
-
-## Monitoramento e Observabilidade
-
-> *Recomendado para features de produção.*
-
-[Visibilidade operacional para a implementação:]
-
-- Métricas a expor (formato Prometheus/OpenTelemetry)
-- Eventos de log e campos estruturados
-- Limiares de alerta e escalonamento
-- Spans de tracing customizados em operações críticas
-- Correlation IDs propagados
-
----
-
-## Considerações Técnicas
-
-### Decisões Principais
-
-[Escolhas técnicas significativas com racional:]
+Somente decisões não óbvias. Aplicar arquitetura existente não é decisão.
 
 - **Decisão:** [o que foi escolhido]
-- **Racional:** [por que esta opção]
+- **Racional:** [por quê]
 - **Trade-offs:** [o que se abriu mão]
 - **Alternativas rejeitadas:** [o que mais foi considerado e por que não]
 
-### Riscos Conhecidos
+> Decisão que estabelece convenção ou restrição para features futuras vira ADR em `docs/adr/`.
+> Decisão local desta feature fica só aqui.
 
-[Desafios técnicos e estratégias de mitigação:]
+---
 
-- Descrição do risco e probabilidade
-- Abordagem de mitigação
-- Áreas que precisam de pesquisa ou prototipagem adicional
+## Verificação
 
-### Requisitos Especiais
+Só o que **foge do padrão** das skills de teste e observabilidade do projeto. A estratégia geral
+de testes já está nelas — não a repita.
 
-[Apenas se aplicável:]
-
-- Performance (métricas específicas)
-- Segurança (além de auth padrão)
-- Conformidade (LGPD, PCI-DSS, etc.)
-
-### Conformidade com Skills
-
-[Confirmar aderência às SKILL.md identificadas:]
-
-- Segue convenções de `[skill-architecture]`
-- Aplica `[skill-code-quality]`
-- Usa libs aprovadas em `[skill-dependency-config]`
-- Implementa testes conforme `[skill-testing]`
-
-**Desvios identificados** *(se houver)*:
-
-| Desvio | Skill | Justificativa |
-|--------|-------|---------------|
-| [descrição] | [skill] | [motivo] |
+- **Cenários críticos não óbvios:** [casos de borda, concorrência, falha parcial que exigem teste dedicado]
+- **Dados ou ambiente especiais:** [Testcontainers, fixture, seed, mock de terceiro]
+- **Observabilidade além do padrão:** [métrica, span ou log que não sai do padrão da stack]
+- **Teste de contrato** *(API-First)*: [cenários cobertos contra o `api-contract.yaml`]
 
 ---
 
 ## Questões em Aberto
 
-[Pontos pendentes de validação antes ou durante a implementação:]
+Pendências que não bloqueiam o handoff, com responsável e impacto se não resolvidas.
 
-- [ ] [Questão 1]
-- [ ] [Questão 2]
-- [ ] **[Modo API-First]** Conflito identificado com o API Contract? Listar aqui.
+- [ ] [Questão] — [quem responde] — [impacto se ficar aberta]
+
+Ambiguidade que **bloqueia** a implementação é resolvida antes do status `Aprovado`; não entra
+nesta lista.
 
 ---
 
 ## Architecture Decision Records
 
-[ADRs relevantes herdadas ou novas. Nenhuma ADR nova é necessária se o desenho aplica decisões existentes.]
+ADRs herdadas e novas. Nenhuma ADR nova é necessária quando o desenho apenas aplica decisões
+existentes.
 
-> ADRs vivem em `docs/adr/`, com status Proposed durante revisão e Accepted após aprovação.
-> Os links abaixo partem de `tasks/prd-<slug>/`; ajuste se o diretório for diferente.
+> ADRs vivem em `docs/adr/`, com status `Proposed` durante revisão e `Accepted` após aprovação.
+> Links partem de `tasks/prd-<slug>/`; recalcule se o diretório for outro.
 
-- [ADR-001: Título](../../docs/adr/adr-001.md) — Resumo da decisão em 1 linha
-- [ADR-NNN: Título](../../docs/adr/adr-NNN.md) — Resumo da decisão em 1 linha
-
----
-
-## Próximos Passos
-
-1. **Implementação:** Use a skill `tsg-flow-task-creator` referenciando esta TechSpec para gerar as tarefas
-2. **Frontend** *(se aplicável):* Use a skill `tsg-flow-frontend-techspec-creator` referenciando o
-   `api-contract.yaml` e o PRD
-3. **Validação:** Itens da seção "Questões em Aberto" devem ser resolvidos antes ou durante a
-   implementação
+- [ADR-NNN: Título](../../docs/adr/adr-NNN.md) — [decisão e por que importa para esta feature]

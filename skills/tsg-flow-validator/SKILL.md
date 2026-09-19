@@ -18,17 +18,25 @@ separados. Somente falhas essenciais e bloqueantes reprovam.
 
 ## Gate antes da revisão
 
-Leia apenas o contrato de verificação da task para obter tipo, comando, seletor e resultado esperado.
-Depois rode o gate antes de carregar material semântico:
+Leia apenas o frontmatter da task para obter `task_kind`, `gate` e `gate_expect`. Rode o gate antes de
+carregar material semântico:
 
-- behavioral: `scripts/ai-flow/gate.sh --filter="<selector>"`;
-- static: `scripts/ai-flow/gate.sh --static` e a evidência específica declarada;
-- full: `scripts/ai-flow/gate.sh --base=<base-ref> --all-tests`.
+- **task:** execute o `gate` declarado, sem alterá-lo, e compare a saída com `gate_expect`.
+- **full:** execute a suíte completa do projeto — o mesmo comando que o CI roda no merge.
 
-Em repositório sem suíte, full pode usar `--static` somente se todas as tasks forem static e o
-plano justificar a ausência de comportamento executável; declare a limitação no relatório.
-Exit 1 reprova e encerra a revisão; exit 2 retorna `VALIDATION ERROR` por infraestrutura/uso.
-Não converta diagnóstico `--skip-tests` em aprovação. Use compute/infra conforme instruções locais.
+**O exit code é o veredito.** `0` aprova; qualquer outro reprova. Não interprete a saída para
+contornar um exit code: um runner que sai `5`, `8` ou `9` por filtro vazio está reprovando a task,
+não relatando um detalhe. Falha de ambiente, comando inexistente ou dependência indisponível é
+`VALIDATION ERROR` — nem aprova nem reprova o código.
+
+`gate_expect` não substitui o exit code: ele detecta o caso em que o comando sai `0` mas não
+provou o que deveria (contagem de testes menor que a esperada, por exemplo). Divergência entre
+saída e `gate_expect` reprova mesmo com exit `0`.
+
+Comando de diagnóstico — pular testes, `--dry-run`, execução parcial — nunca vira aprovação.
+Em repositório sem suíte comportamental, declare a limitação explicitamente no relatório em vez
+de aprovar por build. Task legada pode trazer `gate_command`/`gate_test_selector`: leia os campos
+equivalentes. Use compute/infra conforme instruções locais.
 
 A revisão independente usa worker fresco. Não reutilize aprovação do implementer como revisão
 semântica. O padrão é executar o gate; reutilização futura exigiria igualdade demonstrada de código,
@@ -42,8 +50,37 @@ comandos, dependências, ambiente e evidência, não apenas um mesmo SHA.
   Acrescente uma seção de revalidação ao relatório; não rederive observações sem mudança relevante.
 - **full:** revise diff desde a base preparada, rastreabilidade de todas as specs selecionadas,
   contratos entre tasks, integração, segurança, arquitetura e regressões. Rode a suíte agregada.
-  Consulte design-patterns Review se disponível e pertinente; recomendações de refatoração não
-  bloqueiam por preferência. Não crie abstrações nem aplique correções.
+  Execute o **sensor de discriminação** (abaixo). Consulte design-patterns Review se disponível e
+  pertinente; recomendações de refatoração não bloqueiam por preferência. Não crie abstrações nem
+  aplique correções.
+
+## Sensor de discriminação (modo full)
+
+A suíte passar prova que o código não quebrou os testes. Não prova que os testes testam algo.
+O sensor fecha essa lacuna: injeta falhas de comportamento e confirma que a suíte as detecta.
+
+1. **Isole.** Trabalhe em `git worktree add` temporário ou em cópias dos arquivos.
+   **Nunca use `git stash`** nem edite a árvore real — uma interrupção no meio deixaria o
+   repositório do usuário alterado.
+2. **Registre a linha de base.** Capture `git status --porcelain` e o HEAD antes de começar.
+3. **Mute o comportamento, não a sintaxe.** Derive cada mutação de um critério de aceite da spec:
+   inverta uma condição de guarda, troque o limite de uma fronteira, remova o efeito colateral
+   (evento não gravado, campo não persistido), devolva o código de erro errado, ignore um filtro.
+   Mutação que só quebra compilação não mede nada.
+4. **Cubra o que a feature entrega.** Uma mutação por fatia vertical, priorizando regra de negócio
+   e caso negativo. Não mute código de terceiros, gerado ou fora do diff.
+5. **Rode a suíte focalizada** de cada fatia contra sua mutação. O teste **deve falhar**.
+6. **Descarte e confirme.** Remova o worktree ou restaure as cópias e verifique que
+   `git status --porcelain` e o HEAD voltaram exatamente à linha de base. Divergência é
+   `VALIDATION ERROR`, não aprovação.
+
+**Veredito.** Mutante que sobrevive é **bloqueante**: a fatia tem teste que não discrimina
+comportamento. Registre no relatório o arquivo, a linha, a mutação aplicada, o critério de aceite
+correspondente e o teste que deveria ter falhado. Cada sobrevivente vira task de correção —
+corrigir o teste, nunca enfraquecê-lo ou removê-lo.
+
+Sem ferramenta de execução ou sem suíte comportamental, declare a limitação explicitamente no
+relatório. Não declare o sensor executado quando ele não rodou.
 
 ## Evidência e resultados
 
