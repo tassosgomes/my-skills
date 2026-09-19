@@ -90,11 +90,155 @@ e liberação gradual; enquanto `model` for `null`, vale o padrão da CLI. `gpt-
 `gpt-5.4-mini`, `gpt-5.2` e `gpt-5.3-codex` são nomes legados e não devem ser usados em novas
 rotas sem confirmar que ainda estão disponíveis para a conta.
 
-### opencode — a pesquisar
+### opencode — modelos mapeados
 
-Formato `provider/model`. Liste os disponíveis com `opencode models`; os provedores autenticados
-saem de `opencode providers`. Hoje a instalação local oferece, entre outros, os provedores
-`opencode`, `opencode-go`, `zai`, `openai` e `zai-coding-plan`.
+Formato `provider/model`; o valor de `model` é passado literalmente à CLI. Catálogo informado:
+
+#### `opencode`
+
+```text
+opencode/big-pickle
+opencode/claude-fable-5
+opencode/claude-fable-5-1
+opencode/claude-haiku-4-5
+opencode/claude-opus-4-5
+opencode/claude-opus-4-6
+opencode/claude-opus-4-7
+opencode/claude-opus-4-8
+opencode/claude-opus-5
+opencode/claude-sonnet-4
+opencode/claude-sonnet-4-5
+opencode/claude-sonnet-4-6
+opencode/claude-sonnet-5
+opencode/deepseek-v4-flash
+opencode/deepseek-v4-flash-vision-exp
+opencode/deepseek-v4-pro
+opencode/deepseek-v4.1-flash
+opencode/gemini-3-flash
+opencode/gemini-3.1-pro
+opencode/gemini-3.5-flash
+opencode/gemini-3.5-flash-lite
+opencode/gemini-3.6-flash
+opencode/gemini-3.7-flash
+opencode/gemini-3.8-flash
+opencode/glm-5
+opencode/glm-5.1
+opencode/glm-5.2
+opencode/glm-5.3
+opencode/glm-5.3-flash
+opencode/gpt-5
+opencode/gpt-5-codex
+opencode/gpt-5-nano
+opencode/gpt-5.1
+opencode/gpt-5.1-codex
+opencode/gpt-5.1-codex-max
+opencode/gpt-5.1-codex-mini
+opencode/gpt-5.2
+opencode/gpt-5.2-codex
+opencode/gpt-5.3-codex
+opencode/gpt-5.3-codex-spark
+opencode/gpt-5.4
+opencode/gpt-5.4-mini
+opencode/gpt-5.4-nano
+opencode/gpt-5.4-pro
+opencode/gpt-5.5
+opencode/gpt-5.5-pro
+opencode/gpt-5.6-luna
+opencode/gpt-5.6-sol
+opencode/gpt-5.6-terra
+opencode/gpt-6-astra
+opencode/grok-4.5
+opencode/grok-4.6
+opencode/grok-build-0.1
+opencode/jev-1.13
+opencode/jev-1.13-free
+opencode/jev-latest
+opencode/kimi-k2.5
+opencode/kimi-k2.6
+opencode/kimi-k2.7-code
+opencode/kimi-k3
+opencode/ling-3.0-flash-fin-free
+opencode/mimo-v2.5-free
+opencode/minimax-m2.5
+opencode/minimax-m2.7
+opencode/minimax-m3
+opencode/muse-spark-1.2
+opencode/muse-spark-1.2-contributor-free
+opencode/muse-spark-1.3
+opencode/muse-spark-1.3-contributor-free
+opencode/nemotron-3-ultra-free
+opencode/nemotron-3.5-lightning-free
+opencode/qwen3.5-plus
+opencode/qwen3.6-plus
+opencode/qwen3.8-flash
+```
+
+#### `opencode-go`
+
+```text
+opencode-go/deepseek-v4-flash
+opencode-go/deepseek-v4-flash-vision-exp
+opencode-go/deepseek-v4-pro
+opencode-go/deepseek-v4.1-flash
+opencode-go/glm-5.1
+opencode-go/glm-5.2
+opencode-go/glm-5.3
+opencode-go/glm-5.3-flash
+opencode-go/gpt-5.6-luna
+opencode-go/grok-4.6
+opencode-go/hy3
+opencode-go/hy4-preview
+opencode-go/kimi-k2.6
+opencode-go/kimi-k2.7-code
+opencode-go/kimi-k3
+opencode-go/longcat-2.0
+opencode-go/mimo-v2.5
+opencode-go/mimo-v2.5-pro
+opencode-go/minimax-m2.7
+opencode-go/minimax-m3
+opencode-go/muse-spark-1.2-contributor
+opencode-go/muse-spark-1.3-contributor
+opencode-go/qwen3.6-plus
+opencode-go/qwen3.7-max
+opencode-go/qwen3.7-plus
+opencode-go/qwen3.8-flash
+opencode-go/qwen3.8-max
+```
+
+#### `openai`
+
+```text
+openai/gpt-5.3-codex-spark
+openai/gpt-5.4
+openai/gpt-5.4-fast
+openai/gpt-5.4-mini
+openai/gpt-5.4-mini-fast
+openai/gpt-5.5
+openai/gpt-5.5-fast
+openai/gpt-5.6-luna
+openai/gpt-5.6-luna-fast
+openai/gpt-5.6-sol
+openai/gpt-5.6-sol-fast
+openai/gpt-5.6-terra
+openai/gpt-5.6-terra-fast
+openai/gpt-6-astra
+openai/gpt-6-astra-fast
+```
+
+#### `zai-coding-plan`
+
+```text
+zai-coding-plan/glm-4.7
+zai-coding-plan/glm-5-turbo
+zai-coding-plan/glm-5.2
+zai-coding-plan/glm-5.2-highspeed
+zai-coding-plan/glm-5.3
+zai-coding-plan/glm-5.3-flash
+zai-coding-plan/glm-5.3-highspeed
+```
+
+Liste o catálogo instalado com `opencode models` e os provedores autenticados com
+`opencode providers`; a disponibilidade real pode variar conforme a configuração local.
 
 ### cursor — modelos mapeados, esforço a confirmar
 
@@ -166,10 +310,17 @@ Não existe grafia comum. São três formas, resolvidas nesta ordem:
 | Agente | `effort_args` | Níveis |
 |---|---|---|
 | `claude` | `["--effort", "{effort}"]` | `low`, `medium`, `high`, `xhigh`, `max` |
-| `codex` | `["-c", "model_reasoning_effort=\"{effort}\""]` | a pesquisar; não há flag dedicada |
+| `codex` | `["-c", "model_reasoning_effort=\"{effort}\""]` | `minimal`, `low`, `medium`, `high`, `xhigh`, `max`, `ultra`* |
 | `cursor` | `model_template` — vai **dentro** do nome do modelo | `low`, `medium`, `high`, `xhigh` |
 | `opencode` | `[]` — sem esforço por chamada | vai na config do agente, via `--agent` |
 | `agy` | `["--effort", "{effort}"]` | `low`, `medium`, `high` |
+
+No Codex não existe flag `--effort` dedicada: o script envia
+`-c model_reasoning_effort="{effort}"`, a mesma chave que pode ser definida no `config.toml`.
+`minimal` aparece na referência de configuração; `max`, `xhigh` e `ultra` dependem do modelo
+selecionado. `ultra` pode delegar partes da tarefa a subagentes, portanto não é apenas um tier
+mais caro de raciocínio numa única execução. Consulte a [documentação oficial de subagentes](https://developers.openai.com/pt-BR/docs/agent-configuration/subagents)
+ao fixar esses níveis.
 
 Kind sem nenhuma das duas formas **não** aceita esforço em silêncio: o script descarta o pedido, anota
 `effort <nível> ignorado` na linha ROUTE e grava `effort: null` no ledger. Assim um esforço que
