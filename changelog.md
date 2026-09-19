@@ -1,5 +1,32 @@
 # Changelog das skills TSG Flow
 
+## 2026-09-19 — `restful-api` absorvida pela `tsg-flow-contract-creator`
+
+A norma HTTP existia em duas skills que discordavam entre si. A `restful-api` mantinha seu próprio
+ruleset Spectral — em bloco de prosa, não em arquivo — enquanto a `tsg-flow-contract-creator`
+empacotava outro, com três regras. Rodado contra um contrato correto, o ruleset da `restful-api`
+produzia **8 erros, todos falsos positivos**: `path-must-have-version` não enxergava a versão
+declarada em `servers`, e `operation-has-success-response` aplicava `pattern` sobre cada chave do
+mapa de responses, reprovando toda resposta de erro documentada.
+
+Como todo endpoint nasce de um `api-contract.yaml` no TSG Flow, a norma só precisa existir onde o
+contrato é escrito. A partir daqui:
+
+- convenções HTTP em `tsg-flow-contract-creator/references/http-conventions.md` — URLs,
+  versionamento, status, RFC 9457, paginação, documentação;
+- **um** ruleset, em `tsg-flow-contract-creator/rulesets/openapi.yaml`, com as duas regras
+  corrigidas e `tsg-api-must-be-versioned` aceitando versão em `servers.url` ou no path;
+- resiliência de cliente HTTP (timeout, retry, circuit breaker) sai da norma: é implementação e já
+  estava coberta, de forma mais atual, em `dotnet-dependency-config`, `dotnet-performance` e
+  `java-dependency-config`. A `restful-api` ainda recomendava Polly, que
+  `dotnet-dependency-config` lista como pacote proibido;
+- `markdown-contract-template.md` passa a usar RFC 9457 no formato padrão de erro; antes
+  exemplificava `code`/`message`/`details`, contrariando a própria skill.
+
+Depois de um contrato aprovado, TechSpec, tasks e implementação referenciam **o contrato**, nunca a
+norma. `dotnet-architecture/examples/api-layer.md` e `dotnet-program-setup` foram ajustadas para
+isso. De 48 para 47 skills.
+
 ## 2026-09-19 — `tsg-flow-index` removida
 
 A skill roteava por uma tabela que apenas restatava a `description` de cada skill do fluxo, e sua

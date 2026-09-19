@@ -1,7 +1,14 @@
+# Ruleset único dos contratos HTTP deste repositório.
+# Norma legível: ../references/http-conventions.md
+# Execução: ../references/spectral.md
 extends:
   - spectral:oas
 
 rules:
+  # ---------------------------------------------------------------
+  # OpenAPI 3.1
+  # ---------------------------------------------------------------
+
   tsg-openapi-version:
     description: Contratos desta skill devem usar OpenAPI 3.1.
     message: Use uma versão OpenAPI 3.1.x neste contrato.
@@ -65,3 +72,169 @@ rules:
       functionOptions:
         schema:
           type: array
+
+  # ---------------------------------------------------------------
+  # URLs e versionamento — http-conventions.md §1 e §2
+  # ---------------------------------------------------------------
+
+  tsg-paths-kebab-case:
+    description: Paths devem usar kebab-case e somente caracteres [a-z0-9-/{}].
+    severity: error
+    given: $.paths[*]~
+    then:
+      function: pattern
+      functionOptions:
+        match: "^(/([a-z0-9-]+|\\{[a-zA-Z0-9]+\\}))+/?$"
+
+  tsg-paths-max-nesting:
+    description: Evite mais de 3 níveis de aninhamento de recursos.
+    severity: warn
+    given: $.paths[*]~
+    then:
+      function: pattern
+      functionOptions:
+        notMatch: "^(/[^/]+){7,}$"
+
+  # A versão pode viver na URL base (`servers`) ou em cada path. Esta regra aceita as duas
+  # formas e reprova o contrato que não tem nenhuma. Avaliar por path isoladamente produzia
+  # falso positivo em todo contrato que versiona no `servers`.
+  tsg-api-must-be-versioned:
+    description: "A versão major deve aparecer na URL base (servers) ou no path (ex.: /v1/users)."
+    message: "Contrato sem versão: use `servers: [{url: /api/v1}]` ou prefixe os paths com /vN."
+    severity: error
+    given: $
+    then:
+      function: schema
+      functionOptions:
+        schema:
+          anyOf:
+            - type: object
+              required: [servers]
+              properties:
+                servers:
+                  type: array
+                  contains:
+                    type: object
+                    required: [url]
+                    properties:
+                      url:
+                        type: string
+                        pattern: "/v[0-9]+(/|$)"
+            - type: object
+              required: [paths]
+              properties:
+                paths:
+                  type: object
+                  propertyNames:
+                    pattern: "/v[0-9]+(/|$)"
+
+  # ---------------------------------------------------------------
+  # Formato e segurança — http-conventions.md §4
+  # ---------------------------------------------------------------
+
+  tsg-content-type-json-only:
+    description: Bodies devem usar application/json (ou application/problem+json em erros).
+    severity: error
+    given:
+      - $.paths[*][*].requestBody.content
+      - $.paths[*][*].responses[*].content
+    then:
+      function: enumeration
+      field: "@key"
+      functionOptions:
+        values:
+          - application/json
+          - application/problem+json
+
+  tsg-operation-security-defined:
+    description: "Cada operação deve declarar security (use [] explícito para públicas)."
+    severity: error
+    given: $.paths[*][get,post,put,patch,delete]
+    then:
+      field: security
+      function: defined
+
+  # ---------------------------------------------------------------
+  # Respostas — http-conventions.md §5 e §6
+  # ---------------------------------------------------------------
+
+  # Escopo restrito aos verbos e verificação por `anyOf`: a versão anterior aplicava `pattern`
+  # sobre cada chave do mapa de responses, o que reprovava toda resposta de erro documentada
+  # e apontava para components.responses.* depois da resolução de $ref.
+  tsg-operation-has-success-response:
+    description: Operação deve declarar pelo menos uma resposta 2xx.
+    message: "A operação não declara nenhuma resposta de sucesso (200, 201, 202 ou 204)."
+    severity: error
+    given: $.paths[*][get,post,put,patch,delete].responses
+    then:
+      function: schema
+      functionOptions:
+        schema:
+          type: object
+          anyOf:
+            - required: ["200"]
+            - required: ["201"]
+            - required: ["202"]
+            - required: ["204"]
+            - required: ["2XX"]
+
+  tsg-error-uses-problem-details:
+    description: Respostas 4xx/5xx devem usar application/problem+json (RFC 9457).
+    severity: error
+    given: $.paths[*][*].responses[?(@property.match(/^[45]/))].content
+    then:
+      field: application/problem+json
+      function: truthy
+
+  tsg-problem-details-schema:
+    description: Schemas de erro devem conter pelo menos type, title e status.
+    severity: warn
+    given: $.paths[*][*].responses[?(@property.match(/^[45]/))].content.application/problem+json.schema.properties
+    then:
+      - field: type
+        function: truthy
+      - field: title
+        function: truthy
+      - field: status
+        function: truthy
+
+  # ---------------------------------------------------------------
+  # Paginação e documentação — http-conventions.md §7 e §9
+  # ---------------------------------------------------------------
+
+  # Warn, não error: coleção com teto fixo declarado em `maxItems` e justificada no PRD é
+  # exceção legítima (http-conventions.md §7). Revise o aviso e registre a exceção.
+  tsg-collection-pagination-params:
+    description: GET de coleção deve aceitar _page e _size, salvo exceção registrada.
+    severity: warn
+    given: $.paths[?(@property.match(/s$/))][get].parameters
+    then:
+      function: schema
+      functionOptions:
+        schema:
+          type: array
+          contains:
+            type: object
+            properties:
+              name:
+                enum: [_page, _size]
+
+  tsg-info-contact-defined:
+    description: info.contact deve ser preenchido.
+    severity: warn
+    given: $.info
+    then:
+      field: contact
+      function: truthy
+
+  tsg-operation-must-be-documented:
+    description: Operações devem ter summary, description e operationId.
+    severity: warn
+    given: $.paths[*][get,post,put,patch,delete]
+    then:
+      - field: summary
+        function: truthy
+      - field: description
+        function: truthy
+      - field: operationId
+        function: truthy

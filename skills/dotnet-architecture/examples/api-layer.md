@@ -1,8 +1,11 @@
 # Camada Api — Endpoints Minimal API, Envelope e Autorização
 
-A Api só traduz HTTP para caso de uso. O contrato segue a skill `restful-api`: versão no path,
-recursos no plural em kebab-case, paginação `_page`/`_size`, erros RFC 9457 e JSON camelCase
-(padrão do `System.Text.Json`; não configure outra naming policy).
+A Api só traduz HTTP para caso de uso. **Havendo `api-contract.yaml` aprovado, ele é a fonte de
+verdade** do contrato — paths, status, schemas e formato de erro saem dele, não de convenção
+reescrita aqui. Sem contrato, aplique a norma em
+`tsg-flow-contract-creator/references/http-conventions.md`: versão na URL base ou no path,
+recursos no plural em kebab-case, paginação `_page`/`_size` e erros RFC 9457. Em qualquer dos
+casos, JSON em camelCase (padrão do `System.Text.Json`; não configure outra naming policy).
 
 ## Estrutura
 
