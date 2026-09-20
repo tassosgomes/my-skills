@@ -1,28 +1,37 @@
 ---
 name: tsg-flow-prd-creator
-description: Cria ou atualiza um PRD de uma feature, com requisitos de produto, escopo e critérios de aceite. Use para definir o quê e por quê antes da TechSpec; não para implementar código ou planejar um produto inteiro.
+description: Cria ou atualiza o PRD de uma capacidade, com requisitos de produto, escopo da fatia e critérios de aceite. Use para definir o quê e por quê antes da TechSpec; não para implementar código ou planejar um produto inteiro.
 metadata:
   group: tsg-flow
 ---
 
 # PRD Creator
 
-Produza requisitos autocontidos de uma feature. O PRD descreve comportamento e valor; decisões de
-implementação pertencem à TechSpec.
+Produza requisitos autocontidos de **uma capacidade**. O PRD descreve comportamento e valor;
+decisões de implementação pertencem à TechSpec.
+
+A unidade do PRD é a capacidade do backlog (`CAP-XXX`), não o domínio. Uma fatia vertical atravessa
+domínios com frequência e consome mais de um domain doc — é por isso que ela não pode ser ancorada
+em um. Um PRD pertence a exatamente uma capacidade; uma capacidade pode render mais de um PRD ao
+longo do tempo, quando entra primeiro em fatia mínima.
 
 ## Entradas e saída
 
-- Ideia, pedido de atualização ou `_idea.md`.
-- Quando disponíveis: `vision.md`, `context/domain-map.md`,
-  `domains/<dominio>/domain.md`, `backlog/capabilities.md`,
+- ID da capacidade (`CAP-XXX`) e o escopo da fatia a entregar, ou ideia/`_idea.md` em modo standalone.
+- **Todos** os domain docs que a capacidade atravessa — `domains/<dominio>/domain.md`, um por
+  domínio tocado. Domínio sem domain doc é normal: ele rende um PRD só, e as regras dele nascem aqui.
+- Quando disponíveis: `vision.md`, `context/domain-map.md`, `backlog/capabilities.md`,
   `context/architecture-baseline.md` e `docs/product-decisions/index.md`.
-- Saída: `tasks/prd-<slug>/prd.md`; revisão: `prd.draft.md` no mesmo diretório.
-- Respeite caminhos fornecidos. IDs de capacidade, feature, RN e termos upstream devem ser preservados.
+- Saída: `tasks/prd-<slug>/prd.md`; revisão: `prd.draft.md` no mesmo diretório. Grave o frontmatter
+  (`tsg_artifact: prd`, a capacidade e as origens com versão) e registre o artefato em `flow-state.json`.
+- Respeite caminhos fornecidos. IDs de capacidade, RN e termos upstream devem ser preservados.
 
 ## Processo
 
-1. Identifique a feature e o diretório. Se o pedido atravessa várias features independentes,
-   proponha divisão; use Vision/Domain quando faltarem fronteiras de produto.
+1. Identifique a capacidade, a fatia e o diretório. **Declare o escopo desta entrega antes de
+   escrever**: quando a capacidade entra em versão mínima, o recorte é entrada do PRD, não saída —
+   sem isso o documento cresce para a capacidade inteira e entrega casa de máquinas para acender uma
+   tomada. Se o pedido atravessa capacidades independentes, proponha divisão: um PRD, uma capacidade.
 2. Extraia contexto existente. Herdar decisões evita reabrir escopo, vocabulário, prioridades e
    restrições; não copie o baseline técnico inteiro para o PRD.
 3. Faça discovery somente das lacunas materiais. Consulte

@@ -108,6 +108,28 @@ Antes de finalizar, valide cada um destes pontos — se algum falhar, volte à F
 
 ## 7. Saída Final
 
+## Frontmatter e estado
+
+Grave no topo do documento:
+
+```yaml
+---
+tsg_artifact: domain-map
+product: <nome do produto>
+version: <versão deste documento>
+status: draft | in_review | approved | superseded
+updated: <YYYY-MM-DD>
+sources: vision.md@<versão>
+---
+```
+
+`sources` declara a **versão corrente de cada origem no momento da escrita**. É o que permite
+detectar depois que uma origem mudou e este documento não foi revisitado — sem isso, a procedência
+em prosa envelhece em silêncio e ninguém consegue afirmar se o documento ainda vale.
+
+Ao concluir, registre o artefato em `flow-state.json`. O formato canônico do frontmatter e do
+estado, e o gate que os verifica, estão em `tsg-flow-next/references/flow-state.md`.
+
 Gerar `context/domain-map.md` com esta estrutura:
 
 ```markdown

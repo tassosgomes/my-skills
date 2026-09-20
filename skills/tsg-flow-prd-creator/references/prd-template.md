@@ -30,27 +30,37 @@
 
 ### Capacidade e fronteiras
 
-- **Capacidade selecionada:** [CAP-XXX do backlog, quando disponível]
-- **Domínio no Domain Map:** [nome canônico e fronteiras pertinentes]
-- **Prioridade e dependências:** [herdadas do backlog/domínio]
+- **Capacidade:** [CAP-XXX — título exato do backlog. O PRD pertence a uma capacidade, nunca a um domínio]
+- **Escopo desta entrega:** [**obrigatório.** O recorte da capacidade que *este* PRD entrega.
+  Ex.: "CAP-026 em fatia mínima: e-mail transacional, um canal, sem preferência e sem campanha."
+  Se entrega a capacidade inteira, declare isso explicitamente. Uma capacidade pode render mais de
+  um PRD ao longo do tempo; a fatia mínima é o primeiro deles, não uma capacidade capenga]
+- **Fora desta entrega:** [partes da capacidade adiadas, com a fase em que voltam]
+- **Domínios atravessados:** [nomes canônicos + caminho de cada domain doc consumido. Uma fatia
+  vertical cruza domínios com frequência]
+- **Junta entre os domínios:** [quando atravessa dois ou mais: onde um termina e o outro começa e
+  quem é dono do dado. Herdado do domain doc e do Domain Map — não é decidido aqui]
+- **Dependências entre capacidades:** [herdadas do backlog. Ex.: CAP-001 depende de CAP-026]
 - **Restrições do baseline:** [somente as que limitam o escopo, sem decisões de implementação]
 
 ### Vision Doc
 
 - **Objetivos de negócio atendidos**: [Listar IDs ou descrições dos objetivos do Vision Doc
-  que esta feature endereça]
+  que esta entrega endereça]
 - **Restrições globais aplicáveis**: [Stack, regulatório, prazos herdados]
-- **Non-Goals globais respeitados**: [Itens do Vision Doc que esta feature não viola]
+- **Non-Goals globais respeitados**: [Itens do Vision Doc que esta entrega não viola]
 
-### Domain Doc
+### Domain Docs
 
-- **ID da feature**: [Ex: F03 — Aprovação de Pagamentos]
-- **Entidades envolvidas**: [Listar pelos nomes exatos definidos no Domain Doc]
-- **Regras de negócio referenciadas**: [Ex: RN-04, RN-07]
-- **Dependências upstream**: [Outras features das quais esta depende]
-- **Dependências downstream**: [Features que dependem desta]
-- **Eventos consumidos**: [Eventos do domínio que esta feature ouve]
-- **Eventos produzidos**: [Eventos do domínio que esta feature emite]
+> Uma fatia vertical pode consumir **mais de um** domain doc — liste todos. Quando um domínio da
+> fatia ainda não tem domain doc (porque rende um único PRD), as regras dele nascem aqui, nesta
+> entrega, e serão absorvidas pelo domain doc quando ele existir.
+
+- **Entidades envolvidas**: [nomes exatos definidos nos Domain Docs, indicando o domínio de cada uma]
+- **Regras de negócio referenciadas**: [Ex: RN-04, RN-07 — com o domínio de origem]
+- **Regras nascidas neste PRD**: [quando o domínio não tem domain doc; numere no mesmo padrão RN-XX]
+- **Eventos consumidos**: [eventos que esta entrega ouve]
+- **Eventos produzidos**: [eventos que esta entrega emite]
 
 ## Termos Canônicos
 
@@ -60,7 +70,7 @@
 
 | Termo | Definição de negócio | Escopo/Fonte |
 |---|---|---|
-| [Termo] | [Definição de negócio, sem implementação] | [Vision Doc, Domain Doc ou decisão desta feature] |
+| [Termo] | [Definição de negócio, sem implementação] | [Vision Doc, Domain Doc ou decisão desta entrega] |
 
 ---
 
