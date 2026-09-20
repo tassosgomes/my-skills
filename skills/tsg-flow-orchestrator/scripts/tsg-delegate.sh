@@ -191,7 +191,7 @@ RUN_DIR="$(cd "$RUN_DIR" && pwd -P)"
 RUN_ID="${RUN_DIR##*/}"
 RESULT_FILE="$RUN_DIR/result.json"
 LOG_FILE="$RUN_DIR/transcript.log"
-AGENT_NAME="tsg-$ROLE-$RUN_ID"
+AGENT_NAME="tsg-$ROLE-$(printf '%s' "$RUN_ID" | tr '[:upper:].' '[:lower:]-')"
 START_TS=$SECONDS
 REPORT_PATH=""
 if [[ "$ROLE" == validator ]]; then
@@ -295,6 +295,9 @@ fi
 START_ARGS=(agent start "$AGENT_NAME" --kind "$KIND" --pane "$PANE_ID" --timeout 120000)
 (("${#AGENT_ARGS[@]}" > 0)) && START_ARGS+=(-- "${AGENT_ARGS[@]}")
 "$HERDR" "${START_ARGS[@]}" >"$LOG_FILE" 2>&1 || fail agent_start_failed
+# agent start pode reportar pronto antes do pane aceitar paste+Enter de forma confiavel:
+# um prompt disparado sem intervalo perde o Enter e trava em agent_prompt_stalled.
+sleep 1
 
 PROMPT_RC=0
 "$HERDR" agent prompt "$AGENT_NAME" "$PROMPT" --wait --until idle --until "done" \
