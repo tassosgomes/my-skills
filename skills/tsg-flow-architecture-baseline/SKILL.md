@@ -33,6 +33,13 @@ REGRAS
 
 - Concentrar-se em princípios arquiteturais, não na implementação de funcionalidades.
 - Definir restrições que evitem a deriva arquitetural.
+- **Não sequenciar.** O baseline decide o *agrupamento* — quais domínios moram em qual unidade de
+  deploy e por quê — e o *critério de extração* de um módulo para serviço próprio. Não decide **em
+  que fase** cada unidade aparece: fase é consequência do sequenciamento das capacidades, e este
+  baseline roda **antes** do backlog existir, sem ter como enxergar dependência entre capacidades.
+  Um roadmap de serviços por fase escrito aqui contradiz o backlog na primeira dependência cruzada
+  e ninguém percebe até alguém tentar implementar. Quando for útil indicar evolução, use "grupo
+  inicial" e "extraído depois", com o gatilho de extração — nunca número de fase.
 - Evitar otimização prematura.
 - Priorizar simplicidade e facilidade de manutenção.
 - Garantir que o baseline permita a evolução futura.
@@ -108,6 +115,28 @@ Gerar:
 
 TechSpecs devem consumir este baseline. Backlog e PRDs herdam suas restrições aplicáveis.
 Entregar resumo e link; revisar apenas quando as premissas estruturais mudarem.
+
+## Frontmatter e estado
+
+Grave no topo do documento:
+
+```yaml
+---
+tsg_artifact: architecture-baseline
+product: <nome do produto>
+version: <versão deste documento>
+status: draft | in_review | approved | superseded
+updated: <YYYY-MM-DD>
+sources: vision.md@<versão>, context/domain-map.md@<versão>
+---
+```
+
+`sources` declara a **versão corrente de cada origem no momento da escrita**. É o que permite
+detectar depois que uma origem mudou e este documento não foi revisitado — sem isso, a procedência
+em prosa envelhece em silêncio e ninguém consegue afirmar se o documento ainda vale.
+
+Ao concluir, registre o artefato em `flow-state.json`. O formato canônico do frontmatter e do
+estado, e o gate que os verifica, estão em `tsg-flow-next/references/flow-state.md`.
 
 Usar a seguinte estrutura:
 

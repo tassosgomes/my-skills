@@ -39,6 +39,28 @@ Não detalhe endpoints, tabelas, entidades técnicas, eventos, arquitetura, hist
 tarefas. Registre tecnologia somente como restrição estratégica já existente.
 Não force a identificação de bounded contexts nesta etapa: essa é a função do Domain Decomposer.
 
+## Frontmatter e estado
+
+Grave no topo do documento:
+
+```yaml
+---
+tsg_artifact: vision
+product: <nome do produto>
+version: <versão deste documento>
+status: draft | in_review | approved | superseded
+updated: <YYYY-MM-DD>
+sources:
+---
+```
+
+`sources` declara a **versão corrente de cada origem no momento da escrita**. É o que permite
+detectar depois que uma origem mudou e este documento não foi revisitado — sem isso, a procedência
+em prosa envelhece em silêncio e ninguém consegue afirmar se o documento ainda vale.
+
+Ao concluir, registre o artefato em `flow-state.json`. O formato canônico do frontmatter e do
+estado, e o gate que os verifica, estão em `tsg-flow-next/references/flow-state.md`.
+
 ## Entrega e próximo passo
 
 Entregue resumo, link para o documento e pontos abertos, sem repetir o arquivo completo.

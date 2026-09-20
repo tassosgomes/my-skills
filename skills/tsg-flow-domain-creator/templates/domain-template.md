@@ -1,15 +1,21 @@
+---
+tsg_artifact: domain
+product: [nome-do-produto]
+version: 1.0
+status: draft
+updated: [YYYY-MM-DD]
+sources: vision.md@[versão], context/domain-map.md@[versão], backlog/capabilities.md@[versão]
+---
+
 # Domain Document — [Nome do Domínio]
 
-> **Nível 1 da hierarquia de documentação.** Este documento detalha o bounded context de um domínio específico do sistema. Sempre forneça o `vision.md` junto com este arquivo ao iniciar sessões de PRD ou Tech Spec dentro deste domínio.
+> Detalha o bounded context de **um** domínio do Domain Map. Não decide prioridade, ordem nem
+> escopo de entrega — isso é do backlog de capacidades e do PRD. Forneça este arquivo junto com o
+> `vision.md` ao iniciar um PRD de capacidade que toque este domínio.
 
-**Domínio:** [Nome]
-**Domain Map:** [caminho e domínio selecionado]
-**Capacidades relacionadas:** [CAP-XXX e prioridades herdadas, quando houver backlog]
-**Restrições arquiteturais pertinentes:** [referência ao baseline, sem detalhar implementação]
-**Responsável:** [Nome ou "a definir"]
-**Status:** `planned` · `in-progress` · `done`
-**Fase do Roadmap:** Fase [N] — [Nome da Fase]
-**Última revisão:** [YYYY-MM-DD]
+**Domínio:** [Nome, exatamente como no Domain Map]
+**Capacidades atendidas:** [CAP-XXX, CAP-YYY — só os IDs; prioridade e fase vivem no backlog]
+**Restrições arquiteturais pertinentes:** [referência ao baseline por ID (BA/G), sem detalhar implementação]
 
 ---
 
@@ -22,7 +28,8 @@
 [Qual dor de negócio específica este domínio endereça? Seja concreto.]
 
 ### Fora do Escopo deste Domínio (Out of Scope)
-[O que parece pertencer a este domínio mas está explicitamente excluído — e onde vai em vez disso.]
+[O que parece pertencer a este domínio mas está explicitamente excluído — e onde vai em vez disso.
+Herde do Domain Map: o campo "O que não faz" já traz a maior parte disto.]
 - [Ex: Emissão de NF-e → pertence ao domínio Faturamento]
 - [Ex: Gestão de fornecedores → pertence ao domínio Compras]
 
@@ -50,47 +57,51 @@
 
 ---
 
-## 4. Features Previstas (Planned Features)
+## 4. Capacidades Atendidas (Capabilities Served)
 
-> Lista de features deste domínio. Cada feature marcada como `prd-ready` tem (ou terá) um PRD dedicado.
+> Quais capacidades do backlog este domínio serve. **Só referência.** Prioridade, fase, dependência
+> entre capacidades e ordem de implementação vivem em `backlog/capabilities.md`, que é o único
+> documento que enxerga através dos domínios. Não reproduza nada disso aqui: uma ordem proposta por
+> um domínio isolado contradiz a ordem do backlog na primeira dependência cruzada.
 
-| # | Feature | Descrição | Prioridade | Status | PRD |
-|---|---|---|---|---|---|
-| F01 | [Ex: Cadastro de Contas a Pagar] | [Criação e gestão de obrigações financeiras] | Must Have | `planned` | — |
-| F02 | [Ex: Aprovação de Pagamentos] | [Fluxo de aprovação multinível para pagamentos] | Must Have | `planned` | — |
-| F03 | [Ex: Conciliação Bancária] | [Reconciliação automática de extratos] | Should Have | `planned` | — |
-| F04 | [Ex: DRE Gerencial] | [Relatório de resultado por período e centro de custo] | Could Have | `planned` | — |
-
-**Prioridades (MoSCoW):** `Must Have` · `Should Have` · `Could Have` · `Won't Have`
-**Status possíveis:** `planned` · `prd-ready` · `in-progress` · `done` · `out-of-scope`
+| Capacidade | O que este domínio entrega a ela |
+|---|---|
+| `CAP-XXX` | [A parte do ciclo de valor que é responsabilidade deste domínio] |
+| `CAP-YYY` | [Idem] |
 
 ---
 
-## 5. Dependências (Domain Dependencies)
+## 5. Juntas com Outros Domínios (Domain Joints)
+
+> **É o que faz as fatias verticais encaixarem.** Herde da tabela de interações do Domain Map —
+> não invente junta aqui. Quando uma capacidade atravessa dois domínios, é esta seção que diz onde
+> um termina e o outro começa, e quem é dono do dado.
 
 ### Depende de (Upstream)
-| Domínio | O que consome | Tipo | Criticidade |
-|---|---|---|---|
-| [Ex: RH] | [Dados de colaboradores para centro de custo] | Dados (leitura) | Alta |
-| [Ex: Compras] | [Ordens de compra aprovadas] | Evento | Média |
+| Domínio | O que consome | Tipo | Dono do dado | Criticidade |
+|---|---|---|---|---|
+| [Ex: RH] | [Dados de colaboradores para centro de custo] | Dados (leitura) | RH | Alta |
+| [Ex: Compras] | [Ordens de compra aprovadas] | Evento | Compras | Média |
 
 ### Fornece para (Downstream)
-| Domínio | O que fornece | Tipo | Criticidade |
-|---|---|---|---|
-| [Ex: Faturamento] | [Saldo disponível para crédito] | Dados (leitura) | Alta |
-| [Ex: Relatórios] | [Extratos e DRE consolidados] | Dados (leitura) | Média |
+| Domínio | O que fornece | Tipo | Dono do dado | Criticidade |
+|---|---|---|---|---|
+| [Ex: Faturamento] | [Saldo disponível para crédito] | Dados (leitura) | Este domínio | Alta |
+| [Ex: Relatórios] | [Extratos e DRE consolidados] | Dados (leitura) | Este domínio | Média |
 
 ### Integrações Externas (External Integrations)
-| Sistema Externo | Finalidade | Direção | Status |
-|---|---|---|---|
-| [Ex: Banco Itaú — API OFX] | [Importação de extratos] | Entrada | `planned` |
-| [Ex: SEFAZ] | [Consulta de NF-e] | Entrada/Saída | `planned` |
+| Sistema Externo | Finalidade | Direção |
+|---|---|---|
+| [Ex: Banco Itaú — API OFX] | [Importação de extratos] | Entrada |
+| [Ex: SEFAZ] | [Consulta de NF-e] | Entrada/Saída |
 
 ---
 
 ## 6. Regras de Negócio (Business Rules)
 
-> Regras que governam o comportamento deste domínio. Serão referenciadas nos PRDs como critérios de aceitação.
+> **A razão de existir deste documento.** É o único conteúdo aqui que não vem do Domain Map nem vai
+> para o contrato: regra reaproveitada entre os PRDs deste domínio. Referenciadas nos PRDs como
+> critério de aceitação.
 
 | ID | Regra | Origem |
 |---|---|---|
@@ -102,7 +113,8 @@
 
 ## 7. Eventos do Domínio (Domain Events)
 
-> Fatos relevantes de negócio que este domínio produz ou consome. Útil para identificar integrações assíncronas.
+> Fatos relevantes de negócio que este domínio produz ou consome. O contrato real do evento
+> materializa no pacote de contratos e na TechSpec; aqui fica o fato de negócio.
 
 ### Produz (Publishes)
 - `pagamento.realizado` — quando um pagamento é processado
@@ -115,19 +127,16 @@
 
 ---
 
-## 8. Estratégia de Desenvolvimento (Development Strategy)
+## 8. Riscos de Fronteira (Boundary Risks)
 
-### Ordem de Implementação Sugerida
-1. [F01] — Base do domínio, sem dependências
-2. [F02] — Depende de F01
-3. [F03] — Depende de integração bancária externa
-4. [F04] — Depende de F01, F02, F03
+> Risco da **natureza deste domínio** — o que tende a vazar, a ser confundido com o vizinho ou a
+> mudar por força externa. Risco de entrega (prazo, dependência contratual, sequenciamento) é do
+> backlog e do PRD, não daqui.
 
-### Riscos do Domínio
 | Risco | Probabilidade | Impacto | Mitigação |
 |---|---|---|---|
-| [Ex: API bancária com documentação incompleta] | Média | Alto | Spike técnico antes do PRD de conciliação |
-| [Ex: Regras contábeis variáveis por cliente] | Alta | Médio | Parametrização desde o início |
+| [Ex: comportamento ditado por restrição externa (CDN, provedor), tende a mudar] | Alta | Médio | Isolar a estratégia atrás de uma fronteira própria |
+| [Ex: confundido com o domínio vizinho por compartilhar vocabulário] | Média | Alto | Fora do Escopo explícito + junta declarada em §5 |
 
 ---
 
@@ -135,8 +144,9 @@
 
 - [ ] [Ex: O sistema precisa suportar múltiplas moedas na v1?]
 - [ ] [Ex: A aprovação de pagamentos será por alçada de valor ou por centro de custo?]
-- [ ] [Ex: Qual banco será integrado primeiro?]
 
 ---
 
-*Domain Doc gerado com o agente `criador-domain`. Para criar PRDs das features deste domínio, use o agente `criador-prd` fornecendo este arquivo e o `vision.md` como contexto.*
+*Domain Doc gerado com a skill `tsg-flow-domain-creator`. Para criar o PRD de uma capacidade que
+toca este domínio, use `tsg-flow-prd-creator` fornecendo o `vision.md`, este arquivo, os demais
+domain docs que a capacidade atravessa e o ID da capacidade.*
