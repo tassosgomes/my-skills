@@ -25,15 +25,18 @@ Um documento por feature, cobrindo backend, frontend ou ambos.
 | Tamanho | Sem limite de extensão por seção | Comportamento ambíguo custa mais que documento longo |
 | Seção vazia | Omitida | Justificativa de não-aplicabilidade é ruído |
 | Arquivos a criar | Não são listados | Determinístico pelas skills de arquitetura da stack |
-| Coordenação front/back | O `api-contract.yaml` | Contrato coordena times; spec separada só duplica |
+| Coordenação de integrações | `contracts.md` e contratos OpenAPI/AsyncAPI/ODCS do PRD | Acordos coordenam provedores e consumidores daquela implementação |
 | Decisão de projeto | Vive na skill de arquitetura da stack ou no baseline, não na spec | Biblioteca, estrutura e convenção não se decidem por feature |
 | Fatia sem comportamento | Habilitador, com justificativa e fatia desbloqueada | Impede "infra primeiro" disfarçada de planejamento |
 
 ## Entradas
 
 - `tasks/prd-<slug>/prd.md` aprovado, ou aprovação equivalente registrada pelo usuário.
-- Quando a feature consome ou altera uma API: contrato aprovado, normalmente `api-contract.yaml`.
-  Para UI sem integração remota, registre `API Contract: N/A — <motivo>`.
+- Quando a feature consome ou altera HTTP, mensagens ou dados compartilhados: `contracts.md`
+  e contratos aplicáveis aprovados para a implementação do PRD. Aceite `api-contract.yaml`
+  diretamente em PRDs existentes sem índice. Sem integração, registre a não aplicabilidade.
+- Contratos registram o acordo daquele PRD e podem ser evoluídos por outros. Não atribua à
+  TechSpec catalogação, armazenamento definitivo ou atualização do acervo; isso cabe à plataforma.
 - Quando disponíveis: `vision.md`, `context/domain-map.md`, `context/architecture-baseline.md`,
   `domains/<dominio>/domain.md`, capacidade em `backlog/capabilities.md`, designs e ADRs.
 - Saída: `tasks/prd-<slug>/techspec.md`. Respeite caminhos já definidos pelo projeto.
@@ -57,9 +60,10 @@ documentos para uma feature full-stack.
    Skills instaladas orientam; sua presença não comprova a stack.
 2. **Contexto.** Leia o PRD e explore arquivos, símbolos, chamadores, testes e configuração
    afetados. Em projeto novo, registre a ausência de código e use as restrições explícitas.
-3. **Herança.** Absorva baseline, contrato e ADRs antes de propor arquitetura. No modo API-First,
-   o contrato define endpoints, schemas, autenticação e erros: referencie `operationId`s sem
-   duplicar schema.
+3. **Herança.** Absorva baseline, contratos e ADRs antes de propor arquitetura. Referencie
+   `operationId`s HTTP, operações/mensagens AsyncAPI e modelos/compromissos ODCS sem duplicar
+   schemas. Mapeie os contratos do PRD à implementação, às diferenças para as versões de entrada
+   e aos cenários de verificação; não presuma que um contrato histórico representa produção.
 4. **Decisões ativas.** Leia `docs/adr/index.md` e as ADRs pertinentes. Uma decisão `Accepted`
    conflitante tem exatamente duas saídas, e ambas são explícitas:
    **conformar** com a restrição, ou **substituir** criando nova ADR e marcando a anterior

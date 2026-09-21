@@ -1,0 +1,64 @@
+# Exemplo mínimo: adapte participantes, canais, payload e garantias ao PRD.
+# Sem servidores/bindings: protocolo e segurança precisam vir do contexto real.
+asyncapi: 3.0.0
+id: urn:example:orders
+info:
+  title: Orders application
+  version: 1.0.0
+  description: Acordo de publicação de pedidos para a implementação do PRD.
+defaultContentType: application/json
+channels:
+  ordersCreated:
+    address: orders.created
+    description: Canal de pedidos criados.
+    messages:
+      orderCreated:
+        $ref: '#/components/messages/OrderCreated'
+operations:
+  sendOrderCreated:
+    action: send
+    summary: Publicar pedido criado
+    channel:
+      $ref: '#/channels/ordersCreated'
+    messages:
+      - $ref: '#/channels/ordersCreated/messages/orderCreated'
+components:
+  messages:
+    OrderCreated:
+      name: OrderCreated
+      title: Pedido criado
+      summary: Informa a criação de um pedido.
+      contentType: application/json
+      correlationId:
+        location: $message.header#/correlationId
+      headers:
+        type: object
+        required: [correlationId]
+        properties:
+          correlationId:
+            type: string
+            description: Identificador de correlação do fluxo.
+      payload:
+        type: object
+        required: [eventId, orderId, occurredAt]
+        properties:
+          eventId:
+            type: string
+            format: uuid
+            description: Identidade desta ocorrência do evento.
+          orderId:
+            type: string
+            format: uuid
+            description: Identificador do pedido criado.
+          occurredAt:
+            type: string
+            format: date-time
+            description: Instante em que o pedido foi criado.
+      examples:
+        - name: orderCreated
+          headers:
+            correlationId: checkout-2026-09-21-0001
+          payload:
+            eventId: 9f8afbd4-ec18-42a8-abfa-e988e47812f6
+            orderId: 550e8400-e29b-41d4-a716-446655440000
+            occurredAt: '2026-09-21T10:30:00Z'

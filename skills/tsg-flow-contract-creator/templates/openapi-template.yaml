@@ -10,7 +10,7 @@ info:
     
     ## Premissas Adotadas
     - [Premissa 1 — ex: Autenticação via JWT Bearer]
-    - [Premissa 2 — ex: Paginação por offset/limit]
+    - [Premissa 2 — ex: Paginação por _page/_size]
     - [Premissa 3 — ex: Valores monetários em centavos (inteiro)]
   version: "1.0.0"
   contact:
@@ -37,17 +37,19 @@ tags:
 # ─── Paths ───────────────────────────────────────────────────────────────────
 paths:
 
-  /recursos:
+  /resources:
     get:
       summary: Listar recursos
       description: |
         Retorna lista paginada de [recursos].
         [Regras de negócio relevantes]
+      security:
+        - BearerAuth: []
       operationId: listarRecursos
       tags:
         - Recurso
       parameters:
-        - name: page
+        - name: _page
           in: query
           description: Número da página (começa em 1)
           schema:
@@ -56,16 +58,16 @@ paths:
             default: 1
             examples:
               - 1
-        - name: limit
+        - name: _size
           in: query
           description: Itens por página (máx 100)
           schema:
             type: integer
             minimum: 1
             maximum: 100
-            default: 20
+            default: 10
             examples:
-              - 20
+              - 10
         - name: filtro
           in: query
           description: "[Descrição do filtro]"
@@ -92,6 +94,8 @@ paths:
     post:
       summary: Criar recurso
       description: Cria um novo recurso.
+      security:
+        - BearerAuth: []
       operationId: criarRecurso
       tags:
         - Recurso
@@ -104,6 +108,12 @@ paths:
       responses:
         "201":
           description: Recurso criado com sucesso
+          headers:
+            Location:
+              description: URL do recurso criado.
+              schema:
+                type: string
+                format: uri-reference
           content:
             application/json:
               schema:
@@ -119,7 +129,7 @@ paths:
         "500":
           $ref: "#/components/responses/InternalServerError"
 
-  /recursos/{id}:
+  /resources/{id}:
     parameters:
       - name: id
         in: path
@@ -134,6 +144,8 @@ paths:
     get:
       summary: Buscar recurso por ID
       description: Retorna um recurso pelo seu identificador.
+      security:
+        - BearerAuth: []
       operationId: buscarRecursoPorId
       tags:
         - Recurso
@@ -156,6 +168,8 @@ paths:
     patch:
       summary: Atualizar recurso
       description: Atualiza parcialmente um recurso existente.
+      security:
+        - BearerAuth: []
       operationId: atualizarRecurso
       tags:
         - Recurso
@@ -188,6 +202,8 @@ paths:
     delete:
       summary: Remover recurso
       description: Remove um recurso existente.
+      security:
+        - BearerAuth: []
       operationId: removerRecurso
       tags:
         - Recurso
@@ -217,80 +233,88 @@ components:
   # Respostas reutilizáveis
   responses:
     BadRequest:
-      description: Requisição inválida — erro de validação de campos
+      description: Requisição inválida
       content:
-        application/json:
+        application/problem+json:
           schema:
-            $ref: "#/components/schemas/ErrorResponse"
+            $ref: '#/components/schemas/ErrorResponse'
           examples:
-            default:
+            problem:
               value:
-                code: "VALIDATION_ERROR"
-                message: "Dados inválidos na requisição"
-                details:
-                  - field: "email"
-                    message: "Formato de e-mail inválido"
+                type: about:blank
+                title: Requisição inválida
+                status: 400
+                code: VALIDATION_ERROR
 
     Unauthorized:
-      description: Não autenticado — token ausente ou inválido
+      description: Autenticação necessária
       content:
-        application/json:
+        application/problem+json:
           schema:
-            $ref: "#/components/schemas/ErrorResponse"
+            $ref: '#/components/schemas/ErrorResponse'
           examples:
-            default:
+            problem:
               value:
-                code: "UNAUTHORIZED"
-                message: "Token de autenticação inválido ou expirado"
+                type: about:blank
+                title: Autenticação necessária
+                status: 401
+                code: UNAUTHORIZED
 
     Forbidden:
-      description: Sem permissão para esta operação
+      description: Permissão insuficiente
       content:
-        application/json:
+        application/problem+json:
           schema:
-            $ref: "#/components/schemas/ErrorResponse"
+            $ref: '#/components/schemas/ErrorResponse'
           examples:
-            default:
+            problem:
               value:
-                code: "FORBIDDEN"
-                message: "Você não tem permissão para realizar esta operação"
+                type: about:blank
+                title: Permissão insuficiente
+                status: 403
+                code: FORBIDDEN
 
     NotFound:
       description: Recurso não encontrado
       content:
-        application/json:
+        application/problem+json:
           schema:
-            $ref: "#/components/schemas/ErrorResponse"
+            $ref: '#/components/schemas/ErrorResponse'
           examples:
-            default:
+            problem:
               value:
-                code: "NOT_FOUND"
-                message: "Recurso não encontrado"
+                type: about:blank
+                title: Recurso não encontrado
+                status: 404
+                code: NOT_FOUND
 
     UnprocessableEntity:
-      description: Erro de regra de negócio
+      description: Violação de regra de negócio
       content:
-        application/json:
+        application/problem+json:
           schema:
-            $ref: "#/components/schemas/ErrorResponse"
+            $ref: '#/components/schemas/ErrorResponse'
           examples:
-            default:
+            problem:
               value:
-                code: "BUSINESS_RULE_VIOLATION"
-                message: "Não é possível realizar esta operação no estado atual"
+                type: about:blank
+                title: Violação de regra de negócio
+                status: 422
+                code: BUSINESS_RULE_VIOLATION
 
     InternalServerError:
-      description: Erro interno do servidor
+      description: Erro interno
       content:
-        application/json:
+        application/problem+json:
           schema:
-            $ref: "#/components/schemas/ErrorResponse"
+            $ref: '#/components/schemas/ErrorResponse'
           examples:
-            default:
+            problem:
               value:
-                code: "INTERNAL_ERROR"
-                message: "Ocorreu um erro interno. Tente novamente mais tarde."
-                traceId: "abc123xyz"
+                type: about:blank
+                title: Erro interno
+                status: 500
+                code: INTERNAL_ERROR
 
   # Schemas
   schemas:
@@ -402,7 +426,7 @@ components:
       type: object
       required:
         - page
-        - limit
+        - size
         - total
         - totalPages
       properties:
@@ -411,11 +435,11 @@ components:
           description: Página atual
           examples:
             - 1
-        limit:
+        size:
           type: integer
           description: Itens por página
           examples:
-            - 20
+            - 10
         total:
           type: integer
           description: Total de itens
@@ -425,44 +449,36 @@ components:
           type: integer
           description: Total de páginas
           examples:
-            - 8
+            - 15
 
     ErrorResponse:
       type: object
-      required:
-        - code
-        - message
+      description: Problem Details; campos obrigatórios pela convenção local.
+      required: [type, title, status]
       properties:
+        type:
+          type: string
+          format: uri-reference
+          examples: [about:blank]
+        title:
+          type: string
+          examples: [Requisição inválida]
+        status:
+          type: integer
+          minimum: 400
+          maximum: 599
+          examples: [400]
+        detail:
+          type: string
+          examples: [Um campo obrigatório não foi informado.]
+        instance:
+          type: string
+          format: uri-reference
+          examples: [/api/v1/resources]
         code:
           type: string
-          description: Código de erro legível por máquina
-          examples:
-            - "VALIDATION_ERROR"
-        message:
-          type: string
-          description: Mensagem de erro legível por humano
-          examples:
-            - "Dados inválidos na requisição"
-        details:
-          type:
-            - array
-            - "null"
-          description: "Detalhes adicionais (ex: erros por campo)"
-          items:
-            type: object
-            properties:
-              field:
-                type: string
-                examples:
-                  - "email"
-              message:
-                type: string
-                examples:
-                  - "Formato inválido"
+          description: Código estável para tratamento programático.
+          examples: [VALIDATION_ERROR]
         traceId:
-          type:
-            - string
-            - "null"
-          description: ID de rastreamento para debug (presente em erros 5xx)
-          examples:
-            - "abc123xyz"
+          type: string
+          examples: [00-9f2b5d6c4e7a8b90123456789abcdef0-0123456789abcdef-01]

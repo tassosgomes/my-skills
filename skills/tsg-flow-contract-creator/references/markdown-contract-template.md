@@ -5,6 +5,9 @@
 > **Status:** Rascunho | Em Revisão | Aprovado  
 > **Versão do contrato:** 1.0.0
 
+Este documento descreve o acordo para a implementação deste PRD e deriva do YAML correspondente.
+PRDs posteriores podem evoluí-lo. Catalogação e mecanismos de atualização cabem à plataforma.
+
 ---
 
 ## Premissas e Decisões
@@ -12,7 +15,7 @@
 | Decisão | Escolha | Motivo |
 |---------|---------|--------|
 | Autenticação | JWT Bearer | [motivo] |
-| Paginação | offset/limit | [motivo] |
+| Paginação | `_page` / `_size` | [motivo] |
 | Formato de datas | ISO 8601 UTC | Consistência entre fusos horários |
 | Valores monetários | Centavos (inteiro) | Evitar problemas de ponto flutuante |
 | Nomenclatura de campos | camelCase | [motivo] |
@@ -43,8 +46,8 @@
 
 | Parâmetro | Tipo | Obrigatório | Default | Descrição |
 |-----------|------|-------------|---------|-----------|
-| `page` | integer | Não | 1 | Número da página |
-| `limit` | integer | Não | 20 | Itens por página (máx 100) |
+| `_page` | integer | Não | 1 | Número da página |
+| `_size` | integer | Não | 10 | Itens por página (máx 100) |
 | `[filtro]` | string | Não | — | [Descrição do filtro] |
 
 #### Response 200
@@ -62,9 +65,9 @@
   ],
   "pagination": {
     "page": 1,
-    "limit": 20,
+    "size": 10,
     "total": 142,
-    "totalPages": 8
+    "totalPages": 15
   }
 }
 ```
@@ -182,7 +185,7 @@
 ### Formato Padrão de Erro
 
 RFC 9457, com `Content-Type: application/problem+json`. `type`, `title` e `status` são
-obrigatórios pela RFC; `code`, `traceId` e `errors` são as extensões deste repositório.
+obrigatórios por convenção deste repositório, não pela RFC; `code`, `traceId` e `errors` são as extensões deste repositório.
 
 ```json
 {
@@ -221,10 +224,8 @@ Implemente os endpoints exatamente conforme descrito. Use `x-backend-notes` no Y
 Passe os exemplos JSON das responses como contexto para gerar componentes com dados realistas.
 
 ### Testes de Contrato
-```bash
-# Validar implementação contra o contrato
-npx dredd api-contract.yaml http://localhost:3000
-```
+Defina cenários que comparem a implementação com este acordo do PRD usando ferramentas
+compatíveis com a versão OpenAPI adotada. Lint estrutural não substitui esses testes.
 
 ---
 

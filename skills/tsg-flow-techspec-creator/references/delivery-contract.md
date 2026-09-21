@@ -39,8 +39,10 @@ verifique colisões antes de salvar. O TSG Flow standard não executa essas escr
 Na TechSpec em `tasks/prd-<slug>/`, use `../../docs/adr/adr-NNN.md`. Recalcule caminhos relativos
 se a especificação estiver em outro diretório. Dentro de `docs/adr/`, links entre ADRs são locais.
 
-A remoção/arquivamento do PRD não remove ADRs. Antes de descartar artefatos temporários, preserve
-contratos usados por geração/testes no local canônico do projeto e corrija referências ativas.
+A remoção/arquivamento do PRD não remove ADRs. Contratos de integração registram o acordo daquela
+implementação e podem evoluir em PRDs posteriores. O time de plataforma define armazenamento
+definitivo, catalogação e mecanismos de atualização; esta etapa não promove contratos para um
+local canônico nem exige essa definição para entregar a TechSpec.
 Arquivar é uma operação separada da implementação; não apague PRDs automaticamente.
 
 ## Migração de ADRs antigas

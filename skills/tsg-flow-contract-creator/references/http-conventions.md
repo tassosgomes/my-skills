@@ -79,7 +79,8 @@ Respostas de erro seguem a [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457.htm
 }
 ```
 
-`type`, `title` e `status` são obrigatórios pela RFC. `code` (estável, para tratamento
+`type`, `title` e `status` são obrigatórios por convenção deste repositório, não pela RFC.
+`code` (estável, para tratamento
 programático no cliente), `traceId` e `errors` (validação por campo) são extensões recomendadas —
 declare-as no schema quando usá-las.
 
@@ -116,7 +117,8 @@ Padrões consistentes quando aplicáveis:
 - Todo endpoint com `summary`, `description`, `operationId` único em camelCase e `tags`.
 - `examples` realistas em requests e responses — nunca `string`, `123` ou `foo`.
 - Esquemas de autenticação descritos.
-- Uma UI navegável publicada (Scalar, Redoc, Swagger UI).
+- Uma visualização local navegável (Scalar, Redoc, Swagger UI) pode apoiar a revisão. Publicação
+  e catalogação não fazem parte desta skill.
 
 ## Fora do escopo desta norma
 

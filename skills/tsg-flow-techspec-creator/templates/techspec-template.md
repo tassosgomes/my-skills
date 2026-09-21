@@ -3,7 +3,7 @@
 > **Escopo:** [Backend | Frontend | Full-stack]
 > **Modo:** [Standalone | Pipeline | API-First]
 > **PRD de origem:** `tasks/prd-[slug]/prd.md`
-> **API Contract:** `api-contract.yaml` *(API-First)* | `N/A — [motivo]`
+> **Contratos de integração:** `contracts.md` e documentos aplicáveis (OpenAPI/AsyncAPI/ODCS); aceite `api-contract.yaml` em PRDs existentes | `N/A — [motivo]`
 > **Data:** [YYYY-MM-DD]
 > **Status:** [Rascunho | Em Revisão | Aprovado]
 > **Handoff:** [draft — não gerar Tasks | approved — pode alimentar o Task Creator]
@@ -91,6 +91,19 @@ Trabalho que não produz comportamento observável. É exceção e exige justifi
 ## Contratos e Fronteiras
 
 O que o implementador não deriva sozinho. Omita as subseções que não se aplicam.
+
+Referencie o conjunto decidido para este PRD. Outros PRDs podem evoluí-lo; esta spec não
+define catálogo, armazenamento definitivo ou mecanismo de atualização do acervo da plataforma.
+
+### Mapeamento de mensagens e dados *(quando aplicável)*
+
+| Contrato e identificador | Aplicação/produtor e consumidores | Comportamento a implementar | Evidência |
+|---|---|---|---|
+| [AsyncAPI: operação/mensagem] | [participantes; perspectiva send/receive] | [envio/recebimento, duplicidade e falhas acordadas] | [cenário] |
+| [ODCS: modelo/regra/SLA] | [participantes] | [fornecimento dos dados e compromisso mensurável] | [cenário] |
+
+Referencie schemas e garantias nos documentos técnicos sem copiá-los. Registre diferenças para
+o acordo anterior e transição necessária à implementação, quando houver.
 
 ### Mapeamento do contrato de API *(modo API-First)*
 
@@ -200,7 +213,9 @@ de testes já está nelas — não a repita.
 - **Cenários críticos não óbvios:** [casos de borda, concorrência, falha parcial que exigem teste dedicado]
 - **Dados ou ambiente especiais:** [Testcontainers, fixture, seed, mock de terceiro]
 - **Observabilidade além do padrão:** [métrica, span ou log que não sai do padrão da stack]
-- **Teste de contrato** *(API-First)*: [cenários cobertos contra o `api-contract.yaml`]
+- **Verificação dos contratos** *(quando aplicável)*: [cenários contra os documentos do PRD:
+  HTTP; envio/recebimento e falhas de mensagens; estrutura, qualidade e serviço dos dados.
+  Validação de YAML é distinta da conformidade da implementação.]
 
 ---
 

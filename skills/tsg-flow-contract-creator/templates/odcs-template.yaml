@@ -1,0 +1,29 @@
+# Exemplo mínimo: acrescente responsáveis, qualidade e SLA decididos no PRD.
+apiVersion: v3.0.1
+kind: DataContract
+id: 53581432-6c55-4ba2-a65f-72344a91553a
+name: orders-analytics
+version: 1.0.0
+status: draft
+domain: orders
+dataProduct: orders-analytics
+description:
+  purpose: Disponibilizar pedidos para análises de vendas.
+  usage: Agregações de valores de pedidos por data.
+schema:
+  - name: orders
+    logicalType: object
+    description: Um registro por pedido.
+    properties:
+      - name: orderId
+        logicalType: string
+        required: true
+        description: Identificador do pedido no domínio de origem.
+      - name: createdAt
+        logicalType: date
+        required: true
+        description: Data de criação do pedido em UTC.
+      - name: totalAmountCents
+        logicalType: integer
+        required: true
+        description: Valor total em centavos de real brasileiro.
