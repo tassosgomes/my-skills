@@ -42,7 +42,7 @@ HTTPS com `gh auth login` / `GITHUB_TOKEN`.
 ### Instalação por grupo
 
 O repositório declara grupos de skills em [`.claude-plugin/marketplace.json`](.claude-plugin/marketplace.json):
-`tsg-flow`, `flow-qa`, `dotnet`, `java` e `react`. Rodando `npx skills add tassosgomes/my-skills`
+`tsg-flow`, `flow-qa`, `java` e `react`. Rodando `npx skills add tassosgomes/my-skills`
 sem `-s`, o picker interativo agrupa as skills por família e permite selecionar um grupo inteiro
 de uma vez (ex.: todo o `tsg-flow`, para não instalar `tsg-flow-implementer` sem `tsg-flow-orchestrator`).
 Cada `SKILL.md` do grupo também documenta a família no próprio frontmatter (`metadata.group`) —
@@ -68,7 +68,7 @@ continua instalando skills avulsas normalmente.
 | :star: [tsg-flow-capability-backlog](skills/tsg-flow-capability-backlog/) | Capacidades | Prioriza MVP e evolução por capacidades de negócio |
 | :star: [tsg-flow-domain-creator](skills/tsg-flow-domain-creator/) | Domain | Detalha um domínio, suas features e regras de negócio |
 | :star: [tsg-flow-prd-creator](skills/tsg-flow-prd-creator/) | PRD | Conduz discovery e cria requisitos de produto rastreáveis |
-| :star: [tsg-flow-contract-creator](skills/tsg-flow-contract-creator/) | API Contract | Define o contrato OpenAPI como fonte de verdade |
+| :star: [tsg-flow-contract-creator](skills/tsg-flow-contract-creator/) | Integration Contracts | Define contratos OpenAPI, AsyncAPI e ODCS para a implementação da feature |
 | :star: [tsg-flow-techspec-creator](skills/tsg-flow-techspec-creator/) | TechSpec | Traduz o PRD em fatias, contratos e decisões — backend, frontend ou full-stack |
 | :star: [tsg-flow-task-creator](skills/tsg-flow-task-creator/) | Tasks | Gera tasks verticais, rastreáveis e prontas para agentes |
 
@@ -113,20 +113,6 @@ e permanecem com esse namespace nesta etapa.
 | :star: [java-observability](#java-observability) | Normativo | Logging JSON + OpenTelemetry, tracing com Jaeger, métricas Prometheus, Health Checks |
 | :star: [java-performance](#java-performance) | Code review | JPA otimizado, N+1, QueryDSL, caching (Caffeine/Redis), WebClient, HikariCP |
 | :star: [java-testing](#java-testing) | Normativo | JUnit 5 + AssertJ + Mockito, Testcontainers, Playwright E2E, Dev Containers |
-
-### .NET / ASP.NET Core
-
-| Skill | Tipo | Propósito |
-|-------|------|-----------|
-| :star: [dotnet-index](#dotnet-index) | Índice | Mapa de navegação entre os 8 módulos de skills .NET |
-| :star: [dotnet-architecture](#dotnet-architecture) | Normativo | Clean Architecture com `src/`+`tests/`, UUIDv7, agregados e eventos, um caso de uso por classe (sem MediatR), endpoints Minimal API, API simples/Monolito Modular/Microsserviços com fronteiras verificadas por ArchUnitNET |
-| :star: [dotnet-code-quality](#dotnet-code-quality) | Transversal | Convenções do time: idioma, pasta = namespace, `sealed`, sufixo `Async`, limites de tamanho, cancelamento pós-commit |
-| :star: [dotnet-dependency-config](#dotnet-dependency-config) | Baseline | .NET 10 com versões centralizadas, pacotes permitidos e proibidos, EF Core + PostgreSQL, migrations, RabbitMQ com outbox/inbox, configuração e segredos, containers locais |
-| :star: [dotnet-observability](#dotnet-observability) | Normativo | Health checks e probes, ActivitySource/Meter, atributos semânticos, logging e níveis |
-| :star: [dotnet-performance](#dotnet-performance) | Code review | Consultas de leitura por projeção, escrita em lote, paginação, cache de Output, HttpClient com resilience handler |
-| :star: [dotnet-production-readiness](#dotnet-production-readiness) | Checklist | OpenTelemetry OTLP, sanitização de dados sensíveis, níveis por ambiente, gate de deploy |
-| :star: [dotnet-program-setup](#dotnet-program-setup) | Normativo | `Program.cs` com extensions por concern, pipeline único, OpenAPI nativo + Scalar |
-| :star: [dotnet-testing](#dotnet-testing) | Normativo | xUnit v3 + AwesomeAssertions + Moq + Bogus, Testcontainers, E2E da API, testes de arquitetura com ArchUnitNET |
 
 ### React / Vite / TypeScript
 
@@ -366,132 +352,6 @@ security-audit-workflow/
 **Fluxo em dois passos:** resolve o nome da biblioteca para um ID Context7 → consulta a documentação com esse ID.
 
 **Quando usar:** qualquer pergunta sobre sintaxe de API, opções de configuração, migração de versão, debugging de comportamento específico de biblioteca ou setup de CLI — mesmo para libs conhecidas como React, Next.js, Prisma ou Spring Boot, pois o training data pode estar desatualizado.
-
----
-
-## dotnet-index
-
-**Papel:** Router das skills .NET — mapeia a tarefa ao módulo certo sem carregar todos.
-
-| Módulo | Escopo |
-|--------|--------|
-| `dotnet-architecture` | Camadas, UUIDv7, agregados, casos de uso, endpoints Minimal API, formatos de solução |
-| `dotnet-code-quality` | Convenções do time aplicadas a um diff |
-| `dotnet-dependency-config` | Baseline de pacotes, EF Core, migrations, RabbitMQ + outbox/inbox, configuração, containers locais |
-| `dotnet-observability` | Health checks, probes, tracing, métricas, logging |
-| `dotnet-performance` | Leitura, escrita em lote, paginação, cache, HttpClient |
-| `dotnet-production-readiness` | Gate de deploy |
-| `dotnet-program-setup` | `Program.cs`, extensions por concern, OpenAPI/Scalar |
-| `dotnet-testing` | xUnit v3, Testcontainers, E2E, ArchUnitNET |
-
-**Quando acionar:** só para escolher ou combinar módulos; tarefas comuns acionam a skill do domínio direto.
-
----
-
-## dotnet-architecture
-
-**Papel:** Decisões de estrutura para serviços .NET C# / ASP.NET Core.
-
-**Modelo arquitetural:** Clean Architecture com `src/` e `tests/` na raiz — `Domain` (SeedWork, agregados, eventos, portas de persistência), `Application` (um caso de uso por pasta), `Api` (endpoints Minimal API, envelope, exception handler) e um projeto de infraestrutura por tecnologia (`Infra.Data`, `Infra.Messaging`).
-
-**Formatos de solução:** API simples (padrão), Monolito Modular (módulos que só se enxergam por `Contracts`) e Microsserviços (banco por serviço, contrato em pacote NuGet).
-
-**Decisões:**
-- **Minimal API** com um `{Agregado}Endpoints` por agregado, `MapGroup`, `TypedResults` e handlers estáticos nomeados; controllers não são usados.
-- **UUIDv7** (`Guid.CreateVersion7()`) gerado no domínio; `Guid.NewGuid()` e `DateTime.Now` banidos por `BannedSymbols.txt`.
-- **Casos de uso** com interface própria, sem MediatR; FluentValidation chamada no caso de uso; mapeamento manual `From{Entidade}`.
-- **Repository por agregado** retornando `null`; eventos gravados no outbox pelo `IUnitOfWork`.
-- **Erros** em `ProblemDetails` por um único `IExceptionHandler`: 400, 404, 422, 500.
-- **Fronteiras** verificadas por `ProjectName.ArchitectureTests` (ArchUnitNET).
-
-**Quando acionar:** criar serviço, módulo, feature, caso de uso ou endpoint; definir ou revisar camadas e agregados.
-
----
-
-## dotnet-code-quality
-
-**Papel:** Convenções próprias do time aplicadas a um diff; boas práticas universais de C# são pressupostas.
-
-**Convenções:** código, logs e exceções em inglês; pasta = namespace com pastas de agrupamento no plural; classes `sealed`, primary constructor para construtor único de DI e clássico quando há N construtores ou comportamento; sufixo `Async` (inclusive handlers de endpoint); `CancellationToken` obrigatório e por último; até 3 parâmetros, ~50 linhas por método e ~300 por classe; limpeza pós-commit com `CancellationToken.None`; sem `try/catch` de tradução fora do exception handler.
-
-**Quando aplicar:** revisão de PR ou refatoração em que qualidade é objetivo.
-
----
-
-## dotnet-dependency-config
-
-**Papel:** Baseline de dependências e infraestrutura para projetos .NET.
-
-**Baseline:** .NET 10 (LTS) com `global.json`, `Directory.Build.props` e `Directory.Packages.props`; EF Core + Npgsql (Oracle só por política); Scrutor; FluentValidation; `Microsoft.Extensions.Http.Resilience`; `RabbitMQ.Client` 7 direto; Valkey; OpenTelemetry. Proibidos: AutoMapper, MediatR, FluentAssertions, `Http.Polly`, wrappers de RabbitMQ.
-
-**Convenções:**
-- **EF Core:** nomes `snake_case`, Id `uuid` com `ValueGeneratedNever`, `dotnet-ef` fixado, `has-pending-model-changes` na CI, migration fora do boot em produção.
-- **Mensageria:** exchange `topic`, filas quorum com DLQ e `x-delivery-limit`, routing key `{servico}.{agregado}.{evento}.v{n}`, publicação só pelo worker de outbox com `FOR UPDATE SKIP LOCKED`, inbox para efeitos não idempotentes.
-- **Configuração:** nenhum segredo em `appsettings*.json`, env vars no deploy, `dotnet user-secrets` local, options com `ValidateOnStart`.
-- **Containers locais:** PostgreSQL 18, MongoDB 8, Valkey 8.1, RabbitMQ 4.3, as mesmas tags nos Testcontainers.
-
-**Quando acionar:** adicionar pacote, banco, cache, mensageria, migration ou configuração.
-
----
-
-## dotnet-observability
-
-**Papel:** Sinais operacionais do serviço.
-
-**Pilares:**
-- **Health checks:** `/health/live` sem dependência externa e `/health/ready` com as obrigatórias; opcionais `Degraded`; checks próprios de RabbitMQ e outbox.
-- **Tracing e métricas:** uma `ActivitySource` e um `Meter` por serviço; atributos semânticos do OpenTelemetry; sem dado pessoal nem Id como dimensão.
-- **Logging:** templates estruturados, scopes em consumidores e workers, tabela de níveis por situação.
-
-**Quando acionar:** implementar health checks, probes, spans, métricas ou logs.
-
----
-
-## dotnet-performance
-
-**Papel:** Decisões de performance aplicadas só com medição.
-
-**Áreas:** leitura por projeção em `IXxxQueries`; `ExecuteUpdate/Delete` só sem regra nem evento; paginação offset com limite e keyset para volume; cache do Output com chave versionada e invalidação pós-commit; HttpClient com `AddStandardResilienceHandler` e retry só em método seguro.
-
-**Quando acionar:** gargalo, latência, query lenta, cache, paginação profunda ou tuning de HttpClient.
-
----
-
-## dotnet-production-readiness
-
-**Papel:** Gate agregado antes de release ou deploy.
-
-**Pilares:** OpenTelemetry com OTLP e resource completo; máscaras de CPF, CNPJ, e-mail e telefone; níveis de log por ambiente; Dockerfile multi-stage não root; alertas de outbox e DLQ; checklist de telemetria, resiliência, dados, segurança e entrega.
-
-**Quando acionar:** preparar deploy, auditoria pré-produção.
-
----
-
-## dotnet-program-setup
-
-**Papel:** Mantém `Program.cs` como índice do bootstrap.
-
-**Pilares:** um arquivo de extensão por concern (`AddXxxConfiguration`, `UseXxx`, `MapXxx`); ordem do pipeline só em `UseApplicationPipeline`, que chama `MapApiEndpoints`; policies com constantes `Policies`/`Roles`; OpenAPI nativo 3.1 + Scalar só em Development.
-
-**Quando acionar:** novo serviço, novo concern de bootstrap ou `Program.cs` que cresceu demais.
-
----
-
-## dotnet-testing
-
-**Papel:** Estratégia de testes .NET.
-
-**Stack:** xUnit v3 no Microsoft.Testing.Platform, AwesomeAssertions, Moq, Bogus, Testcontainers e ArchUnitNET.
-
-**Camadas:**
-- **Arquitetura:** regras ArchUnitNET por formato (API simples, Monolito Modular, Microsserviços).
-- **Unitários:** agregados e casos de uso isolados, fixtures em camadas.
-- **Integração:** caso de uso + repositório + `UnitOfWork` contra PostgreSQL em Testcontainers, com migrations e outbox.
-- **E2E da API:** `WebApplicationFactory` + Testcontainers, asserts de contrato e de efeito.
-
-**Organização:** árvore espelhada de `src/`, `Test`/`TestFixture`/`TestDataGenerator`, `DisplayName` + `Trait`, `TestContext.Current.CancellationToken`.
-
-**Quando acionar:** criar, revisar ou diagnosticar testes; criar regras de arquitetura.
 
 ---
 
