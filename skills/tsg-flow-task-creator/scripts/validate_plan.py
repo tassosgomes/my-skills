@@ -3,8 +3,8 @@
 
 Verifica invariantes que antes viviam como checkbox em cada arquivo de task:
 frontmatter completo, contrato de gate coerente com o tipo da fatia, dependências
-sem ciclo nem referência futura, paridade entre tasks.md e os arquivos, e cobertura
-de todo requisito do plano.
+sem ciclo nem referência futura, paridade entre tasks.md e os arquivos, cobertura
+de todo requisito e seção de checks em planos que declaram verificação herdada.
 
 Uso:
     python3 <skill-dir>/scripts/validate_plan.py tasks/prd-<slug>/
@@ -106,6 +106,8 @@ def checar(prd_dir):
     erros, avisos = [], []
     arquivos = sorted(prd_dir.glob("*_task.md"))
     tasks_md = prd_dir / "tasks.md"
+    resumo = tasks_md.read_text(encoding="utf-8") if tasks_md.exists() else ""
+    plano_com_verificacao = "## Verificação herdada" in resumo
 
     if not arquivos:
         erros.append(f"nenhum arquivo *_task.md em {prd_dir}")
@@ -165,6 +167,9 @@ def checar(prd_dir):
         for secao in ("## Comportamento", "## Pronto quando"):
             if secao not in corpo:
                 erros.append(f"{rotulo}: seção obrigatória ausente: {secao}")
+        if plano_com_verificacao and "## Verificações do projeto" not in corpo:
+            erros.append(f"{rotulo}: plano declara Verificação herdada, mas task não lista "
+                         "Verificações do projeto")
 
         grafo[tid] = parse_lista(fm.get("blocked_by", ""))
 
@@ -181,7 +186,6 @@ def checar(prd_dir):
         erros.append(f"ciclo de dependências: {' → '.join(ciclo)}")
 
     if tasks_md.exists():
-        resumo = tasks_md.read_text(encoding="utf-8")
         listadas = set(re.findall(r"^\s*-\s*\[[ xX]\]\s*([0-9]+\.[0-9]+)", resumo, re.MULTILINE))
         for tid in sorted(set(tasks) - listadas, key=ordem):
             erros.append(f"task {tid} tem arquivo mas não está listada em tasks.md")

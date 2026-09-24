@@ -95,7 +95,8 @@ e a sequência dos checkpoints.
 
 Cada `<num>_task.md` traz o frontmatter mínimo (`status`, `task_kind`, `blocked_by`, `gate`,
 `gate_expect`) e, no corpo: comportamento observável com caso negativo, o que fica fora do escopo
-da fatia, decisões fechadas, arquivos a modificar/referenciar e critérios de comportamento.
+da fatia, decisões fechadas, arquivos a modificar/referenciar, checks do projeto aplicáveis ao
+incremento e critérios de comportamento.
 
 Convenção de stack, estrutura de pastas e assinatura **não** entram na task — vêm das skills de
 stack na hora da implementação. Invariante de plano é verificado por `scripts/validate_plan.py`.

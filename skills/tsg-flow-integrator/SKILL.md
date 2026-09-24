@@ -71,7 +71,9 @@ Retorne `PRD COMPLETE` somente após concluir o destino autorizado.
 
 Com `--result-file` e `--run-id`, grave JSON no schema fornecido, usando outcomes:
 `branch_ready|checkpoint_ok|task_reopened|integration_ready|prd_complete|integration_blocked|revalidation_required`.
-Inclua branch e os SHAs aplicáveis. Registre bloqueios operacionais, sem emitir sucesso parcial.
+Inclua branch e os SHAs aplicáveis. Antes de gravar sucesso, confira que `commit` é o SHA completo
+do checkpoint ou HEAD correspondente ao modo, que a branch é a esperada e que nenhum campo
+obrigatório está nulo. Registre bloqueios operacionais, sem emitir sucesso parcial.
 O orquestrador conduz perguntas necessárias; um worker não interativo devolve o bloqueio.
 
 Leia [references/full-guide.md](references/full-guide.md) para pré-condições e retenção.

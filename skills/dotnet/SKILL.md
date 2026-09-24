@@ -153,6 +153,8 @@ por concern em `Api/Extensions/` (`AddXxxConfiguration` / `UseXxx` / `MapXxx`), 
 - `ApplyConfigurationsFromAssembly`; um `DbContext` por serviço (ou por módulo).
 - Migrations history em `__ef_migrations_history`; `dotnet-ef` fixado em `.config/dotnet-tools.json`.
 - Migration é step de deploy (`database update` ou script `--idempotent`), nunca no boot.
+- Após gerar migration, execute o check de formatação exigido pela solution ou seu CI e corrija
+  o arquivo gerado antes do gate. Preserve migrations já aplicadas.
 - `IUnitOfWork.CommitAsync` grava dados e outbox no mesmo `SaveChangesAsync`.
 - `EnableSensitiveDataLogging`/`EnableDetailedErrors` só em Development.
 
@@ -233,6 +235,8 @@ regressão. Registre o baseline, mude uma coisa por vez, compare no mesmo ambien
 | Query, mapeamento EF, migration, outbox no commit | integração |
 | Consumidor RabbitMQ, inbox | integração com RabbitMQ |
 | Rota, status, formato da resposta, ProblemDetails, autorização | end-to-end |
+| Cliente HTTP de saída com mapeamento ou autenticação própria | teste do cliente real com handler HTTP controlado |
+| Registro ou composição de dependências do host | partida do host com os registros reais em configuração de teste |
 
 - Árvore de cada projeto espelha `src/`.
 - Arquivos por cenário: `{Alvo}Test.cs`, `{Alvo}TestFixture.cs`, `{Alvo}TestDataGenerator.cs`.

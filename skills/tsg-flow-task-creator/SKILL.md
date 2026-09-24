@@ -21,9 +21,10 @@ Não implemente código nesta skill.
 
 | Tema | Decisão | Motivo |
 |---|---|---|
-| Conteúdo da task | Comportamento, fronteira, decisão fechada e gate — nada de "como implementar" | A skill de stack entrega convenção e estrutura na hora da implementação |
-| Gate | O **comando real do projeto**, declarado na task; sem script intermediário | Runner moderno já falha sozinho em filtro vazio; embrulhar só adiciona parse frágil |
-| Veredito | O exit code do comando | Contrato estável da ferramenta, imune a mudança de formato de saída |
+| Conteúdo da task | Comportamento, fronteira, decisão fechada, gate e checks do projeto — nada de "como implementar" | A skill de stack entrega convenção e estrutura na hora da implementação |
+| Gate | Comando real de teste da fatia, com seletor, declarado na task | Evidência de comportamento continua focalizada e verificável |
+| Checks do projeto | Comandos aplicáveis ao componente alterado, separados do gate | Lint, format, cobertura e build não ficam ocultos por um `&&` que para no primeiro erro |
+| Veredito | O exit code de cada comando | Contrato estável da ferramenta, imune a mudança de formato de saída |
 | Metadado | Só o que alguma skill lê: `status`, `task_kind`, `blocked_by`, `gate`, `gate_expect` | Campo que ninguém consome é custo sem retorno |
 | Invariante de plano | Verificado por `scripts/validate_plan.py`, não por checkbox na task | Regra em script não degrada quando o modelo esquece |
 | Tamanho | Sem limite na seção **Comportamento** | É o "o quê" — a parte que não pode ficar ambígua |
@@ -41,7 +42,15 @@ Não implemente código nesta skill.
 ## Processo
 
 1. Leia PRD e TechSpec. Extraia requisitos, fatias, decisões e arquivos a modificar.
-2. Confirme a stack por evidências do repositório.
+2. Confirme a stack por evidências do repositório. Leia o CI **do projeto atual**, incluindo
+   workflows reutilizáveis e parâmetros do chamador quando acessíveis. Identifique os checks
+   obrigatórios para cada componente que as tasks alterarão (por exemplo, lint, format, testes,
+   cobertura e build) e seus limites. Use scripts de build e convenções do projeto quando não
+   houver CI; não invente um limite de cobertura.
+   Use a evidência disponível para o estado da base; marque `não medido` quando não houver.
+   Se houver falha herdada comprovada em um check exigido, planeje como resolver o bloqueio
+   antes da integração. Não atribua automaticamente toda a dívida à primeira fatia que toca o
+   componente.
 3. Leia [references/vertical-slicing.md](references/vertical-slicing.md) para dividir comportamentos.
 4. Gere `tasks.md` com [templates/tasks-template.md](templates/tasks-template.md) e um
    `<num>_task.md` por task com [templates/task-template.md](templates/task-template.md).
@@ -69,9 +78,9 @@ gate: "<comando real do projeto>"
 gate_expect: "<resultado determinístico>"
 ```
 
-`gate` é o **comando que o projeto já usa** — o mesmo do CI, do `Makefile` ou do `package.json`.
-Não existe script intermediário: o exit code do comando é o veredito. `0` aprova, qualquer outro
-reprova.
+`gate` usa o runner e a configuração de teste do projeto, com um seletor da fatia. Pode diferir
+do comando agregado do CI apenas pelo escopo selecionado. Não existe script intermediário para
+interpretar seu resultado: o exit code do comando é o veredito. `0` aprova, qualquer outro reprova.
 
 | `task_kind` | Gate | `gate_expect` |
 |---|---|---|
@@ -90,9 +99,17 @@ inspecionar a saída:
 | Gradle | `--tests` já falha com "No tests found" |
 | `go test -run` | sai `0` mesmo sem match — use `-run` com `go test ./... -count=1` e verifique a contagem em `gate_expect` |
 
-Descubra o comando lendo `.github/workflows/`, `Makefile`, `package.json` ou o build script.
-**Prefira sempre o comando que o CI usa:** se o gate e a esteira divergirem, o fluxo aprova código
-que o CI reprova.
+Descubra o comando lendo a configuração de CI da plataforma usada pelo projeto, `Makefile`,
+`package.json` ou o build script. Não pare na configuração que chama um workflow reutilizável:
+consulte também os passos e parâmetros efetivos desse workflow. Quando ele não estiver acessível,
+registre a lacuna e não declare paridade com o CI.
+
+Em **Verificações do projeto** de cada task, liste separadamente os checks aplicáveis ao
+incremento nos componentes alterados, com comando executável, resultado esperado e origem.
+Inclua checks estáticos exigidos pelo CI do componente; cobertura e demais checks agregados ficam
+no mapa do plano para a full e entram na task quando seu escopo os exigir. Execute os checks da
+task e registre cada exit code; não os una com `&&`. Uma task sem CI declara a fonte alternativa
+usada ou a ausência de check automatizado. O gate focalizado continua obrigatório para `vertical`.
 
 Comando que só diagnostica (pular testes, `--dry-run`) nunca é evidência de conclusão.
 Toda task recebe validator focused no perfil standard.
@@ -116,6 +133,13 @@ Toda task recebe validator focused no perfil standard.
    de tamanho.
 10. A seção **Comportamento** não tem limite de extensão. Corte campo supérfluo, nunca a descrição
     que remove ambiguidade.
+11. Quando uma fatia cria ou altera um cliente de rede, exija evidência do adaptador real com a
+    fronteira externa controlada no teste. Quando altera composição de dependências, exija evidência
+    de que a aplicação inicia com os registros reais no ambiente de teste. Dublês de serviços externos
+    não substituem essas duas evidências.
+12. Se o PRD exige smoke e o ambiente ainda não o permite, planeje o menor habilitador necessário
+    para configuração, dados/migrations e isolamento de recursos aplicáveis. O critério da fatia
+    deve comprovar a jornada observável, incluindo o destino de links públicos quando existirem.
 
 ## Cobertura
 
@@ -124,13 +148,18 @@ arquivo a modificar da TechSpec tem uma task produtora. Categoria sem task (obse
 segurança, migração de dados) exige justificativa — não invente task artificial para preencher.
 
 `validate_plan.py` verifica a paridade `tasks.md` ↔ arquivos e a tabela de cobertura; o julgamento
-de que a fatia é a certa continua sendo seu.
+de que a fatia é a certa continua sendo seu. Quando o plano traz **Verificação herdada**, o script
+também exige **Verificações do projeto** em cada task.
 
 ## Checklist antes do handoff
 
 - [ ] `validate_plan.py` sai com exit 0.
 - [ ] Toda task vertical tem gate de teste com seletor real e `gate_expect` quantificado.
-- [ ] O comando do gate é o mesmo que o CI usa.
+- [ ] Gate focalizado e checks dos componentes alterados refletem os comandos e limites do
+      projeto atual, ou a ausência de CI está registrada.
+- [ ] Falhas herdadas da base com impacto na integração têm plano de resolução.
+- [ ] Integrações e composição da aplicação alteradas têm evidência direta; smoke exigido tem
+      pré-requisitos reproduzíveis.
 - [ ] Todo habilitador justifica a horizontalidade e aponta a fatia desbloqueada.
 - [ ] Nenhuma task copia convenção de stack ou trecho da TechSpec.
 - [ ] Nenhuma task lista arquivos a criar.

@@ -40,6 +40,17 @@ Uma linha por task. A fatia vem da TechSpec; numa feature full-stack ela cruza U
 - [ ] 1.0 [Título]
 - [ ] 2.0 [Título]
 
+## Verificação herdada
+
+Resuma por componente alterado a fonte de CI (incluindo workflows reutilizáveis quando houver),
+os checks obrigatórios e seus limites. Registre falhas já comprovadas na base e a task ou decisão
+que as resolve antes da integração. Se a base não foi medida, marque isso. Sem CI, indique a fonte
+alternativa ou a limitação.
+
+| Componente | Fonte | Checks e limites | Estado da base | Resolução planejada |
+|---|---|---|---|---|
+| [componente] | [workflow/target/script] | [passos aplicáveis] | [evidência ou não medido] | [task/decisão se necessária] |
+
 ## Cobertura
 
 Toda linha do PRD precisa aparecer aqui. Lacuna é bloqueio de handoff, não observação.

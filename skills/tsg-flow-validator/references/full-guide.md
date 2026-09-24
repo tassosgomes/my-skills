@@ -3,7 +3,7 @@
 ## Focused e revalidation
 
 Leia o contrato de gate da task antes de material adicional. Registre gate, evidência específica,
-arquivos revisados, bloqueantes, recomendações e veredito em N_task_review.md.
+checks do projeto, arquivos revisados, bloqueantes, recomendações e veredito em N_task_review.md.
 Em revalidation, acrescente a tentativa, confira bloqueios anteriores e regressões no diff novo.
 Não considere dívida anterior fora do escopo como bloqueio sem impacto concreto da entrega.
 
@@ -14,7 +14,10 @@ validated_tree; confirme estabilidade de HEAD/código durante a revisão.
 
 Leia PRD, tasks e todas as specs selecionadas (incluindo frontend quando aplicável). Cruze requisitos,
 artefatos, testes e contratos entre tasks. Consulte somente baseline/ADRs pertinentes.
-Verifique suíte completa, integrações, regressões, segurança e arquitetura proporcionais à mudança.
+Verifique os jobs obrigatórios aplicáveis do CI do projeto atual, integrações, regressões, segurança
+e arquitetura proporcionais à mudança. A matriz de evidência identifica componentes, fonte dos
+comandos, parâmetros e limites, exit code e motivo de qualquer passo não executado. Verifique
+também workflows reutilizáveis; o arquivo chamador sozinho pode não conter os passos.
 
 Não faça revisão de padrões como lista genérica: quando houver pressão concreta, compare manter a
 solução, uma refatoração simples e padrões candidatos. Registre benefício, custo e gatilho futuro.

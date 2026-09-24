@@ -33,6 +33,8 @@ Visão técnica da solução:
 
 Componentes principais, responsabilidades e fluxo de dados. Inclua apenas o que esta feature
 cria ou altera; arquitetura herdada entra por referência ao baseline ou à ADR.
+Se a feature emitir links de navegação, declare a URL pública completa, incluindo origem, base
+path e rota, mesmo quando o link é criado no backend.
 
 ### Diagrama *(opcional)*
 
@@ -104,6 +106,9 @@ define catálogo, armazenamento definitivo ou mecanismo de atualização do acer
 
 Referencie schemas e garantias nos documentos técnicos sem copiá-los. Registre diferenças para
 o acordo anterior e transição necessária à implementação, quando houver.
+
+Para credenciais transitórias ou dados sensíveis, registre o percurso por armazenamento,
+mensagens, retries, logs e descarte, incluindo a proteção necessária em cada ponto.
 
 ### Mapeamento do contrato de API *(modo API-First)*
 
@@ -208,7 +213,9 @@ Somente decisões não óbvias. Aplicar arquitetura existente não é decisão.
 ## Verificação
 
 Só o que **foge do padrão** das skills de teste e observabilidade do projeto. A estratégia geral
-de testes já está nelas — não a repita.
+de testes já está nelas — não a repita. Quando a evidência depender de ambiente real, declare
+pré-requisitos reproduzíveis e o cenário que comprova a jornada completa, incluindo o destino
+de links públicos.
 
 - **Cenários críticos não óbvios:** [casos de borda, concorrência, falha parcial que exigem teste dedicado]
 - **Dados ou ambiente especiais:** [Testcontainers, fixture, seed, mock de terceiro]

@@ -98,13 +98,17 @@ mantidos para rastreabilidade.
 O frontmatter de cada task usa o campo canônico `task_kind: vertical|enabling`; `kind` fica
 reservado para o agente de execução.
 
-| Task | Verificação | `gate` declarado na task |
+| Task | Verificação | Evidência exigida |
 |---|---|---|
 | vertical | teste do incremento na própria task | comando de teste com seletor; `gate_expect` quantifica os testes |
 | enabling | justificativa e evidência específica | build, lint ou typecheck; evidência em `gate_expect` |
-| full do PRD | suíte agregada e revisão do diff integrado | o mesmo comando de suíte completa que o CI roda |
+| full do PRD | suíte agregada e revisão do diff integrado | matriz dos jobs e checks obrigatórios aplicáveis do CI do projeto atual |
 
-O exit code do comando é o veredito: `0` aprova, qualquer outro reprova — inclusive os códigos que
+Cada task também lista checks do projeto aplicáveis ao incremento, em comandos separados do gate
+focalizado. A full lê o CI do repositório em execução, inclusive workflows reutilizáveis e
+parâmetros; sem CI, usa os comandos de verificação publicados pelo projeto.
+
+O exit code de cada comando é o veredito: `0` aprova, qualquer outro reprova — inclusive os códigos que
 o runner reserva para filtro sem match. Exit `0` com saída divergente de `gate_expect` também
 reprova. Comando de diagnóstico nunca vira aprovação.
 

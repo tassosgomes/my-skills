@@ -10,6 +10,9 @@ aguarda conclusão e valida um JSON em diretório exclusivo por run_id.
 
 Para full, omita task e forneça --base-ref. Integrator aceita todos os modos do seu SKILL.md,
 incluindo prepare-integration. Não há mais dependência de um veredito extraído do terminal.
+Use `--context-file=<path>` para decisões adicionais de uma chamada. O script copia o arquivo
+para o diretório do run antes de iniciar o worker; não misture essas decisões ao plano da task.
+Essa cópia fica retida com os logs, então registre decisões sem credenciais.
 
 ## Roteamento entre agentes
 
@@ -54,7 +57,8 @@ roteamento; o pior caso é consumir uma tentativa.
   anti-afinidade e esforço descartado.
 - VERDICT: outcome do JSON. Resultado de negócio pertence ao orquestrador.
 - RESULT: caminho do JSON, contendo identidade da chamada e resultado final.
-- REPORT: review, para validator; inclui Run da chamada para impedir reutilização de relatório antigo.
+- REPORT: relatório do implementer no diretório do run ou review do validator na task/PRD;
+  inclui Run da chamada para impedir reutilização de relatório antigo.
 - LOG: saída de inicialização/espera e trecho final de diagnóstico do terminal.
 - LEDGER: `runs.jsonl`, uma linha por chamada.
 
@@ -62,6 +66,9 @@ Exit 0 significa envelope válido; 2 é falha de transporte; 3 é erro de uso.
 Outcome gate_error/validation_error é infraestrutura mesmo com exit 0 do transporte.
 Timeout continua sendo falha mesmo se o worker escreveu um resultado parcial ou completo:
 reconcilie seus efeitos antes de repetir. Nunca use TASK READY como implementação concluída.
+O script repete `agent start` somente após `agent_pane_busy`, até três chamadas. Não reenvia um
+prompt após `agent_prompt_stalled`: esse erro não prova que o prompt deixou de chegar ao agente.
+Inspecione o agente e reconcilie arquivos/commits antes de nova delegação.
 
 ## Ambiente e operação
 
@@ -82,6 +89,7 @@ Não aumente --lines para transportar um relatório: leia REPORT/RESULT do disco
 `route_note`, `result`, `outcome`, `gate`, `elapsed_s` e `reason`. Falha ao gravar não derruba a
 delegação, e o ledger nunca decide resultado — ele existe para comparar kind e modelo por entrega
 aprovada, e é a fonte da anti-afinidade.
+Quando `--context-file` é usado, `context_file` aponta para a cópia mantida no diretório do run.
 
 Só é possível comparar provedores com tentativas, gates e retrabalho no mesmo lugar; número de
 linhas de prompt não mede nada. Duas leituras diretas:

@@ -333,8 +333,8 @@ inclusive `haiku`. Conferir: `claude --help | grep -A1 -- --effort`.
 
 ## Ajustes comuns
 
-Commit e checkpoint no tier mais barato do Claude, em vez do opencode — trabalho mecânico, que
-não paga raciocínio:
+Para reduzir custo de commit e checkpoint, configure um tier menor quando a confiabilidade
+observada no projeto permitir:
 
 ```json
 { "role": "integrator", "kind": "claude", "model": "claude-haiku-4-5", "effort": "low",

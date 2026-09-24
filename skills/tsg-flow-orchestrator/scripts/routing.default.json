@@ -28,7 +28,7 @@
   },
 
   "routes": [
-    { "role": "integrator", "kind": "opencode", "escalation": ["codex"] },
+    { "role": "integrator", "kind": "codex", "escalation": ["claude"] },
     { "role": "implementer", "task_kind": "enabling", "kind": "opencode",
       "escalation": ["codex", "claude"] },
     { "role": "implementer", "task_kind": "vertical", "kind": "codex",
@@ -43,7 +43,7 @@
   "escalation": {
     "implementer": ["claude"],
     "validator": [],
-    "integrator": ["codex"]
+    "integrator": ["claude"]
   },
 
   "anti_affinity": {

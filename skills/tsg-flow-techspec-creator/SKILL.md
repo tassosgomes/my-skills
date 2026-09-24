@@ -59,7 +59,8 @@ documentos para uma feature full-stack.
 1. **Stack.** Identifique-a por instruções do projeto, manifests, CI, configuração e código.
    Skills instaladas orientam; sua presença não comprova a stack.
 2. **Contexto.** Leia o PRD e explore arquivos, símbolos, chamadores, testes e configuração
-   afetados. Em projeto novo, registre a ausência de código e use as restrições explícitas.
+   afetados. Verifique os caminhos públicos de navegação e os ambientes necessários às evidências
+   exigidas. Em projeto novo, registre a ausência de código e use as restrições explícitas.
 3. **Herança.** Absorva baseline, contratos e ADRs antes de propor arquitetura. Referencie
    `operationId`s HTTP, operações/mensagens AsyncAPI e modelos/compromissos ODCS sem duplicar
    schemas. Mapeie os contratos do PRD à implementação, às diferenças para as versões de entrada
@@ -71,7 +72,9 @@ documentos para uma feature full-stack.
 5. **Lacunas.** Pergunte somente o que muda comportamento, contrato, dados ou arquitetura.
    Resolva escolhas locais pelas convenções existentes. Sem quota de perguntas.
 6. **Conflitos.** Se contrato, baseline e PRD divergirem, apresente o conflito e resolva antes do
-   handoff. Não invente alternativas nem ADRs para preencher cota.
+   handoff. Cruze também requisitos de segurança com o fluxo de dados e seus locais de
+   persistência, como filas, outbox, cache, logs e backups. Não invente alternativas nem ADRs
+   para preencher cota.
 7. **Redação.** Leia [templates/techspec-template.md](templates/techspec-template.md) e
    [references/delivery-contract.md](references/delivery-contract.md).
 
@@ -109,6 +112,13 @@ preferível a fabricação.
 9. Ambiguidade que bloqueia implementação é resolvida antes do status `Aprovado`.
    Pendência não bloqueante fica explícita com responsável.
 10. Sem limite de extensão. Corte seção supérflua, nunca detalhe que remove ambiguidade.
+11. Quando a feature cria links de navegação, declare a URL pública completa, incluindo base path,
+    origem e rota, e a evidência de que o link abre o destino esperado.
+12. Quando dados sensíveis ou credenciais transitórias atravessam componentes, declare onde são
+    criados, copiados, persistidos, lidos e descartados. A proteção escolhida deve ser compatível
+    com o fluxo de entrega e repetição; não presuma um mecanismo único para todos os projetos.
+13. Smoke que depende de infraestrutura local exige pré-requisitos reproduzíveis no plano:
+    configuração, dados/migrations e isolamento de recursos compartilhados quando aplicável.
 
 ## Persistência e ADRs
 
@@ -133,6 +143,9 @@ preferível a fabricação.
 - [ ] Riscos trazem `arquivo:linha` e mitigação, ou a seção declara `Nenhuma encontrada`.
 - [ ] ADR ativa conflitante foi conformada ou substituída — nunca ignorada.
 - [ ] Nada foi inventado: o que não foi encontrado está marcado como incerto.
+- [ ] Links públicos e dados sensíveis, quando presentes, foram seguidos até o destino e pelos
+      locais de persistência relevantes.
+- [ ] Evidências de integração têm ambiente e pré-requisitos executáveis identificados.
 
 ## Entrega
 

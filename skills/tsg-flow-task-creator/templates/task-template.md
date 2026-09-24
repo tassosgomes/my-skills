@@ -11,7 +11,7 @@ task_kind: vertical
 
 blocked_by: []
 
-# Comando real do projeto — o mesmo que o CI roda. O exit code é o veredito.
+# Comando real de teste do projeto com seletor da fatia. O exit code é o veredito.
 # vertical: comando de teste com seletor, e gate_expect quantificado (número de testes).
 # enabling: build/lint/typecheck, com a evidência descrita em gate_expect.
 gate: "[comando]"
@@ -50,12 +50,22 @@ Arquivos a criar não são listados — a estrutura vem da skill de arquitetura 
 - **modificar:** `[caminho]` ([o que muda])
 - **ref:** `[caminho]` ([interface, invariante ou padrão a respeitar])
 
+## Verificações do projeto
+
+Liste os checks obrigatórios aplicáveis aos componentes alterados, conforme o CI ou os scripts
+do projeto atual. Cada comando roda separadamente, para que uma falha não esconda as demais.
+Se não houver check automatizado, registre a fonte consultada e a limitação.
+
+| Componente | Comando | Resultado esperado | Fonte |
+|---|---|---|---|
+| [componente] | `[comando]` | [exit 0 e limite aplicável] | [workflow/target/script] |
+
 ## Pronto quando
 
 Critérios do **comportamento**, não do processo. Invariantes de planejamento (selector válido,
 ausência de dependência futura, artefato do gate existente) são verificados por
 `scripts/validate_plan.py` e não entram aqui.
 
-- [ ] Gate passa (exit 0): `[comando]`
+- [ ] Gate focalizado passa (exit 0): `[comando]`
 - [ ] [Verificação funcional do caminho feliz]
 - [ ] [Verificação do caso negativo]

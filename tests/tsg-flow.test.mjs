@@ -208,10 +208,10 @@ test('task routing rejects the ambiguous legacy kind metadata', t => {
   assert.match(r.stderr, /task_kind ausente ou invalido/);
 });
 
-test('policy routes the integrator to the cheap kind', t => {
+test('policy routes the integrator to codex', t => {
   const r = runDelegate(t, { role: 'integrator', mode: 'checkpoint-task', kind: null });
   assert.equal(r.status, 0, r.stdout + r.stderr);
-  assert.equal(startedKind(r), 'opencode');
+  assert.equal(startedKind(r), 'codex');
 });
 
 test('policy routes full validation to the strongest kind', t => {
