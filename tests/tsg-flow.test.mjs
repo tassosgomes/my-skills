@@ -37,12 +37,28 @@ function fixture(t) {
 }
 
 const mockHerdr = `#!/usr/bin/env node
-import { appendFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, readFileSync, writeFileSync } from 'node:fs';
 const args = process.argv.slice(2);
 appendFileSync(process.env.MOCK_CALLS, JSON.stringify(args) + '\\n');
 if (args[0] === 'pane' && args[1] === 'split') {
   console.log(JSON.stringify({result:{pane:{pane_id:'pane-test'}}}));
+} else if (args[0] === 'agent' && args[1] === 'start') {
+  const starts = readFileSync(process.env.MOCK_CALLS, 'utf8').split('\\n')
+    .filter(Boolean).map(JSON.parse).filter(a => a[0] === 'agent' && a[1] === 'start').length;
+  if (process.env.MOCK_SCENARIO === 'busy_always' ||
+      (process.env.MOCK_SCENARIO === 'busy_first_3' && starts <= 3)) {
+    console.error(JSON.stringify({error:{code:'agent_pane_busy',message:'not an available shell'}}));
+    process.exit(1);
+  }
+  if (process.env.MOCK_SCENARIO === 'start_not_ready') {
+    console.error(JSON.stringify({error:{code:'agent_not_ready'}}));
+    process.exit(1);
+  }
 } else if (args[0] === 'agent' && args[1] === 'prompt') {
+  if (process.env.MOCK_SCENARIO === 'prompt_stalled') {
+    console.error(JSON.stringify({error:{code:'agent_prompt_stalled'}}));
+    process.exit(1);
+  }
   const prompt = args[3];
   const resultPath = prompt.match(/Grave o resultado final em (.*), somente depois/)[1];
   const result = JSON.parse(prompt.match(/\\{\\n[\\s\\S]+?\\n\\}/)[0]);
@@ -87,8 +103,12 @@ if (args[0] === 'pane' && args[1] === 'split') {
   if (result.report && scenario !== 'missing_report') {
     writeFileSync(result.report, 'Run: ' + (scenario === 'stale_report' ? 'old-run' : result.run_id) + '\\n');
   }
-  console.log('TASK READY');
-  if (scenario === 'timeout_with_result') process.exit(1);
+  if (scenario === 'timeout_with_result') {
+    console.error(JSON.stringify({error:{code:'timeout'}}));
+    process.exit(1);
+  }
+  console.log(JSON.stringify({result:{agent:{agent_status:
+    scenario === 'agent_blocked' ? 'blocked' : 'idle'}}}));
 } else if (args[0] === 'agent' && args[1] === 'read') {
   console.log('TASK READY');
 }
@@ -97,7 +117,7 @@ if (args[0] === 'pane' && args[1] === 'split') {
 function runDelegate(t, {
   role = 'implementer', mode = 'implement', scenario = 'ok', kind = 'codex',
   attempt = '1/3', taskKind = null, taskKindField = 'task_kind', routing = null, fix = null, model = null,
-  effort = null, allowNoCalls = false,
+  effort = null, allowNoCalls = false, shellWaitS = null,
 } = {}) {
   const f = fix ?? fixture(t);
   const mock = join(f.bin, 'herdr');
@@ -118,20 +138,26 @@ function runDelegate(t, {
   }
   const logs = join(f.dir, 'logs');
   const result = command('bash', args, f.repo, {
-    HERDR_BIN_PATH: mock, MOCK_SCENARIO: scenario, MOCK_CALLS: calls,
+    HERDR_ENV: '1', HERDR_BIN_PATH: mock, MOCK_SCENARIO: scenario, MOCK_CALLS: calls,
     MOCK_SHA: f.sha, MOCK_TREE: f.tree, TSG_DELEGATE_LOG_DIR: logs,
     ...(routing ? { TSG_ROUTING_FILE: routing } : {}),
+    ...(shellWaitS ? { TSG_START_SHELL_TIMEOUT_S: shellWaitS } : {}),
   });
   const recorded = existsSync(calls)
     ? readFileSync(calls, 'utf8').trim().split('\n').filter(Boolean).map(JSON.parse)
     : [];
   if (!allowNoCalls) {
-    assert.equal(recorded.filter(a => a[1] === 'read').length, 1, 'single transcript read');
-    assert.equal(recorded.filter(a => a[1] === 'close').length, 1, 'pane cleanup');
+    const retained = !['ok', 'busy_first_3', 'busy_always', 'failed_gate',
+      'infra', 'static', 'blocked'].includes(scenario);
+    assert.equal(recorded.filter(a => a[1] === 'read').length, 1,
+      'single transcript or diagnostic read');
+    assert.equal(recorded.filter(a => a[1] === 'close').length, retained ? 0 : 1,
+      'pane cleanup or retention');
   }
   rmSync(calls, { force: true });
   result.fixture = f;
   result.start = recorded.find(a => a[0] === 'agent' && a[1] === 'start') ?? [];
+  result.calls = recorded;
   const ledger = join(logs, 'runs.jsonl');
   result.ledger = existsSync(ledger)
     ? readFileSync(ledger, 'utf8').trim().split('\n').map(JSON.parse) : [];
@@ -163,6 +189,41 @@ for (const scenario of ['wrong_run', 'wrong_task', 'no_result', 'partial_json',
     assert.match(r.stdout, /TRANSPORT_FAILURE/);
   });
 }
+
+test('waits for a newly split pane to become an available shell', t => {
+  const r = runDelegate(t, { scenario: 'busy_first_3' });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.equal(r.calls.filter(a => a[0] === 'agent' && a[1] === 'start').length, 4);
+});
+
+test('reports persistent pane busy with process diagnostics', t => {
+  const r = runDelegate(t, { scenario: 'busy_always', shellWaitS: '1' });
+  assert.equal(r.status, 2, r.stdout + r.stderr);
+  assert.equal(r.ledger.at(-1).reason, 'agent_pane_busy');
+  assert.ok(r.calls.some(a => a[0] === 'pane' && a[1] === 'process-info'));
+});
+
+test('preserves an agent blocked during startup', t => {
+  const r = runDelegate(t, { scenario: 'start_not_ready' });
+  assert.equal(r.status, 2, r.stdout + r.stderr);
+  assert.equal(r.ledger.at(-1).reason, 'agent_not_ready');
+  assert.equal(r.calls.filter(a => a[0] === 'agent' && a[1] === 'prompt').length, 0);
+  assert.ok(r.calls.some(a => a[0] === 'agent' && a[1] === 'get'));
+});
+
+test('preserves the agent after a stalled prompt for reconciliation', t => {
+  const r = runDelegate(t, { scenario: 'prompt_stalled' });
+  assert.equal(r.status, 2, r.stdout + r.stderr);
+  assert.equal(r.ledger.at(-1).reason, 'agent_prompt_stalled');
+  assert.ok(r.calls.some(a => a[0] === 'agent' && a[1] === 'get'));
+});
+
+test('returns promptly when an agent is blocked and retains its pane', t => {
+  const r = runDelegate(t, { scenario: 'agent_blocked' });
+  assert.equal(r.status, 2, r.stdout + r.stderr);
+  assert.equal(r.ledger.at(-1).reason, 'agent_blocked');
+  assert.equal(r.calls.filter(a => a[0] === 'agent' && a[1] === 'prompt').length, 1);
+});
 
 for (const scenario of ['missing_report', 'stale_report']) {
   test('validator requires report from current run: ' + scenario, t => {
@@ -301,7 +362,7 @@ test('an invalid routing policy stops the call instead of guessing a kind', t =>
   writeFileSync(routing, JSON.stringify({ schema_version: 2 }));
   const r = command('bash', [delegate, '--role=implementer', '--prd-dir=' + f.prd,
     '--mode=implement', '--task=1.0', '--attempt=1/3'], f.repo, {
-    HERDR_BIN_PATH: mock, TSG_ROUTING_FILE: routing, MOCK_SCENARIO: 'ok',
+    HERDR_ENV: '1', HERDR_BIN_PATH: mock, TSG_ROUTING_FILE: routing, MOCK_SCENARIO: 'ok',
     MOCK_CALLS: join(f.dir, 'calls.jsonl'), MOCK_SHA: f.sha, MOCK_TREE: f.tree,
     TSG_DELEGATE_LOG_DIR: join(f.dir, 'logs'),
   });

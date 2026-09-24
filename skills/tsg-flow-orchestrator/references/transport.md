@@ -66,13 +66,28 @@ Exit 0 significa envelope válido; 2 é falha de transporte; 3 é erro de uso.
 Outcome gate_error/validation_error é infraestrutura mesmo com exit 0 do transporte.
 Timeout continua sendo falha mesmo se o worker escreveu um resultado parcial ou completo:
 reconcilie seus efeitos antes de repetir. Nunca use TASK READY como implementação concluída.
-O script repete `agent start` somente após `agent_pane_busy`, até três chamadas. Não reenvia um
-prompt após `agent_prompt_stalled`: esse erro não prova que o prompt deixou de chegar ao agente.
-Inspecione o agente e reconcilie arquivos/commits antes de nova delegação.
+`agent start` exige que o pane novo já esteja no prompt do shell interativo. O script repete
+somente `agent_pane_busy`, por até 20 segundos (ajustável com `TSG_START_SHELL_TIMEOUT_S`).
+Se o shell não ficar disponível, registra `pane process-info` e a tela do pane no LOG.
+Outros erros de start não são repetidos: `agent_not_ready`, por exemplo, indica um agente
+iniciado mas bloqueado durante a inicialização.
+
+`agent prompt --wait` aceita os estados padrão do Herdr (`idle`, `done`, `blocked`). Um bloqueio
+é relatado como `agent_blocked`; `agent_prompt_stalled` recebe motivo próprio. Em qualquer falha
+de transporte depois que um agente pode ter iniciado, o script mantém o pane e informa seu ID
+na linha DELEGATE para diagnóstico. Consulte `agent get <pane-id>`, `agent read <pane-id>` e, se a
+detecção estiver errada, `agent explain <pane-id> --json`. Um timeout ou `agent_prompt_stalled`
+não prova que o prompt deixou de chegar: reconcilie arquivos e commits antes de nova delegação.
+Feche o pane preservado
+depois da inspeção com `herdr pane close <id>`.
 
 ## Ambiente e operação
 
-Herdr e jq devem estar disponíveis. Configure o modo não interativo conforme o runtime e autoridade
+Herdr e jq devem estar disponíveis. Execute de dentro de um pane Herdr (`HERDR_ENV=1`), pois
+`pane split --current` usa o pane do chamador. A [skill do Herdr](https://herdr.dev/docs/agent-skill/)
+ensina agentes dentro do Herdr a operar o CLI; o [agent guide](https://herdr.dev/agent-guide.md)
+orienta diagnóstico. Instalar a skill por si só não altera este script.
+Configure o modo não interativo conforme o runtime e autoridade
 já existente; não desligue controles de autorização por conveniência.
 TSG_AGENT_EXTRA_ARGS aceita argumentos simples separados por espaço, sem interpretação de shell.
 Use --model somente para escolhas já configuradas/autorizadas.

@@ -8,7 +8,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 HERDR="${HERDR_BIN_PATH:-herdr}"
 ROLE="" KIND="" PRD_DIR="" TASK="" MODE="" ATTEMPT="" BASE_REF="" CONTEXT_FILE=""
 MODEL="" TIMEOUT_MS=900000 READ_LINES=200 RATIO=0.4 KEEP_PANE=0
-DELIVERY="" RESULT_FILE="" PANE_ID="" LEDGER="" CONTEXT_COPY=""
+START_SHELL_TIMEOUT_S="${TSG_START_SHELL_TIMEOUT_S:-20}"
+DELIVERY="" RESULT_FILE="" PANE_ID="" LEDGER="" CONTEXT_COPY="" AGENT_STARTED=0
 ROUTE_SOURCE="explicit" ROUTE_NOTE="" ROUTE_MODEL="" ROUTE_EFFORT=""
 EFFORT="" TASK_KIND="" MODEL_FLAG="--model"
 
@@ -47,6 +48,7 @@ done
 
 [[ -n "$ROLE" && -n "$PRD_DIR" ]] || die "role e prd-dir obrigatorios"
 [[ "$TIMEOUT_MS" =~ ^[1-9][0-9]*$ && "$READ_LINES" =~ ^[1-9][0-9]*$ ]] || die "timeout/lines invalidos"
+[[ "$START_SHELL_TIMEOUT_S" =~ ^[1-9][0-9]*$ ]] || die "TSG_START_SHELL_TIMEOUT_S invalido"
 [[ "$RATIO" =~ ^0\.[0-9]*[1-9][0-9]*$ ]] || die "ratio deve estar entre 0 e 1"
 [[ -z "$KIND" || "$KIND" =~ ^[a-zA-Z0-9_-]+$ ]] || die "kind invalido"
 [[ -z "$EFFORT" || "$EFFORT" =~ ^[a-z][a-z0-9_-]*$ ]] || die "effort invalido"
@@ -80,6 +82,7 @@ esac
 
 command -v "$HERDR" >/dev/null 2>&1 || die "herdr nao encontrado"
 command -v jq >/dev/null 2>&1 || die "jq necessario"
+[[ "${HERDR_ENV:-}" == 1 ]] || die "execute dentro de um pane Herdr (HERDR_ENV=1)"
 [[ -d "$PRD_DIR" ]] || die "prd-dir inexistente"
 PRD_DIR="$(cd "$PRD_DIR" && pwd -P)" || die "prd-dir inacessivel"
 if [[ -n "$CONTEXT_FILE" ]]; then
@@ -250,7 +253,13 @@ emit() {
   printf 'LOG: %s\nLEDGER: %s\n' "$LOG_FILE" "$LEDGER"
   ledger "$1" "$2" "${3:-}"
 }
-fail() { emit transport_failure TRANSPORT_FAILURE "$1"; exit 2; }
+fail() {
+  # Depois que um agente pode ter iniciado, a evidencia no pane importa para
+  # reconciliar efeitos antes de repetir a delegacao.
+  ((AGENT_STARTED == 1)) && KEEP_PANE=1
+  emit transport_failure TRANSPORT_FAILURE "$1"
+  exit 2
+}
 
 ARGS=("tsg-flow-$ROLE" "--prd-dir=$PRD_DIR" "--mode=$MODE" "--run-id=$RUN_ID" "--result-file=$RESULT_FILE")
 [[ -n "$TASK" ]] && ARGS+=("--task=$TASK")
@@ -311,16 +320,31 @@ fi
 START_ARGS=(agent start "$AGENT_NAME" --kind "$KIND" --pane "$PANE_ID" --timeout 120000)
 (("${#AGENT_ARGS[@]}" > 0)) && START_ARGS+=(-- "${AGENT_ARGS[@]}")
 START_LOG="$RUN_DIR/start.log"
-for START_TRY in 1 2 3; do
+START_DEADLINE=$((SECONDS + START_SHELL_TIMEOUT_S))
+START_TRY=0
+while :; do
+  START_TRY=$((START_TRY + 1))
   if "$HERDR" "${START_ARGS[@]}" >"$START_LOG" 2>&1; then
     cat "$START_LOG" >>"$LOG_FILE"
+    AGENT_STARTED=1
     break
   fi
+  printf 'agent start attempt %s failed:\n' "$START_TRY" >>"$LOG_FILE"
   cat "$START_LOG" >>"$LOG_FILE"
-  # Um pane recem-criado pode ainda nao estar no prompt do shell. Somente esse erro permite
-  # repetir o start: outros erros podem ter iniciado um agente ou exigir intervencao.
-  if (( START_TRY == 3 )) || ! grep -Fq 'agent_pane_busy' "$START_LOG"; then
+  START_ERROR="$(jq -r '.error.code // empty' "$START_LOG" 2>/dev/null || true)"
+  # Um pane recem-criado pode ainda nao ter o shell no primeiro plano. Apenas
+  # agent_pane_busy garante que o start nao iniciou um agente e pode ser repetido.
+  if [[ "$START_ERROR" != agent_pane_busy ]]; then
+    AGENT_STARTED=1
+    "$HERDR" agent get "$AGENT_NAME" >>"$LOG_FILE" 2>&1 || true
+    "$HERDR" pane read "$PANE_ID" --source visible --lines 40 >>"$LOG_FILE" 2>&1 || true
+    [[ "$START_ERROR" == agent_not_ready ]] && fail agent_not_ready
     fail agent_start_failed
+  fi
+  if (( SECONDS >= START_DEADLINE )); then
+    "$HERDR" pane process-info --pane "$PANE_ID" >>"$LOG_FILE" 2>&1 || true
+    "$HERDR" pane read "$PANE_ID" --source visible --lines 40 >>"$LOG_FILE" 2>&1 || true
+    fail agent_pane_busy
   fi
   sleep 1
 done
@@ -329,11 +353,26 @@ done
 sleep 1
 
 PROMPT_RC=0
-"$HERDR" agent prompt "$AGENT_NAME" "$PROMPT" --wait --until idle --until "done" \
-  --timeout "$TIMEOUT_MS" >>"$LOG_FILE" 2>&1 || PROMPT_RC=$?
+PROMPT_LOG="$RUN_DIR/prompt.log"
+"$HERDR" agent prompt "$AGENT_NAME" "$PROMPT" --wait \
+  --timeout "$TIMEOUT_MS" >"$PROMPT_LOG" 2>&1 || PROMPT_RC=$?
+cat "$PROMPT_LOG" >>"$LOG_FILE"
+if ((PROMPT_RC != 0)); then
+  # Timeout/stall nao prova que o prompt nao chegou. Preserve o pane para
+  # reconciliar a execucao antes de qualquer nova delegacao.
+  "$HERDR" agent get "$AGENT_NAME" >>"$LOG_FILE" 2>&1 || true
+  "$HERDR" agent read "$AGENT_NAME" --source visible --lines "$READ_LINES" >>"$LOG_FILE" 2>&1 || true
+  PROMPT_ERROR="$(jq -r '.error.code // empty' "$PROMPT_LOG" 2>/dev/null || true)"
+  [[ "$PROMPT_ERROR" == agent_prompt_stalled ]] && fail agent_prompt_stalled
+  fail timeout_or_blocked
+fi
+PROMPT_STATUS="$(jq -r '.result.agent.agent_status // empty' "$PROMPT_LOG" 2>/dev/null | tail -1)"
+if [[ "$PROMPT_STATUS" == blocked ]]; then
+  "$HERDR" agent read "$AGENT_NAME" --source visible --lines "$READ_LINES" >>"$LOG_FILE" 2>&1 || true
+  fail agent_blocked
+fi
 # Uma leitura para diagnostico; o transcript nunca decide o resultado.
 "$HERDR" agent read "$AGENT_NAME" --source recent-unwrapped --lines "$READ_LINES" >>"$LOG_FILE" 2>&1 || true
-((PROMPT_RC == 0)) || fail timeout_or_blocked
 [[ -f "$RESULT_FILE" && ! -L "$RESULT_FILE" ]] || fail result_missing
 
 jq -e --arg run "$RUN_ID" --arg role "$ROLE" --arg mode "$MODE" --arg prd "$PRD_DIR" \
