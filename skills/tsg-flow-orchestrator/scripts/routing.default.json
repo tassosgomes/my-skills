@@ -10,11 +10,11 @@
     "codex": {
       "model_flag": "--model", "model": null,
       "effort_args": ["-c", "model_reasoning_effort=\"{effort}\""], "effort": null,
-      "extra_args": []
+      "extra_args": [], "start_settle_s": 3
     },
     "opencode": {
       "model_flag": "--model", "model": null,
-      "effort_args": [], "effort": null, "extra_args": []
+      "effort_args": [], "effort": null, "extra_args": [], "start_settle_s": 6
     },
     "cursor": {
       "model_flag": "--model", "model": null,
@@ -23,7 +23,8 @@
     },
     "agy": {
       "model_flag": "--model", "model": null,
-      "effort_args": ["--effort", "{effort}"], "effort": null, "extra_args": []
+      "effort_args": ["--effort", "{effort}"], "effort": null, "extra_args": [],
+      "start_settle_s": 8
     }
   },
 

@@ -1,5 +1,37 @@
 # Changelog das skills TSG Flow
 
+## 2026-09-24 — Transporte Herdr testado com claude, codex, opencode e agy
+
+Um PRD de duas tasks foi orquestrado de ponta a ponta num repositório sandbox, com integrator
+em opencode, implementers em agy (enabling) e codex (vertical) e validator em claude. Com o
+script anterior, a orquestração não passava da primeira delegação. Das 13 chamadas, 8 falharam
+no transporte, e nenhuma dessas falhas era do código entregue:
+
+- **`task_kind` nunca era lido.** O script procurava `1.0_task.md`, mas o task-creator grava
+  `1_task.md`. O arquivo não era encontrado e o `task_kind` ficava vazio em silêncio: toda task
+  caía na rota genérica, e as rotas por `enabling`/`vertical` não se aplicavam. Agora as duas
+  grafias são aceitas e a falta do arquivo é erro de uso.
+- **Prompt descartado na inicialização.** O Herdr declara opencode, agy e codex prontos antes de
+  a TUI aceitar input (o opencode renderiza cerca de 3s depois), e o `sleep 1` fixo perdia o prompt.
+  Novo campo `start_settle_s` por kind, com os valores medidos no `routing.default.json`. Esperar
+  não basta: com 8s o agy ainda perdeu 1 prompt em 3. O script agora confere a chegada pelo
+  marcador `--run-id` no pane e reenvia só o prompt que comprovadamente não chegou.
+- **Stall com worker vivo.** O `agent prompt --wait` exige `working` em 5s. O opencode passou disso
+  com o prompt já aceito: o script relatava falha enquanto o worker seguia escrevendo no repo.
+  Em stall, o script agora espera o turno aparecer e o acompanha até o fim.
+- **Falso idle do agy.** A detecção marca `idle` entre chamadas de ferramenta; o script concluía
+  `result_missing` e o agy gravava um resultado válido 80s depois. Sem resultado, há uma janela
+  para o turno voltar a `working`.
+- **Campos do integrator aninhados.** O schema enviado não listava `branch`, `commit` e `base_ref`,
+  e um modelo os pôs dentro de `report`. Os campos agora vêm no schema, e qualquer `SUBSTITUIR`
+  restante no resultado o invalida.
+- **Ledger perdido com `| head`.** O ledger era gravado depois do stdout; um leitor que fechava o
+  pipe cedo matava o script por SIGPIPE antes da gravação. Agora é gravado primeiro.
+
+Rodada real de confirmação com o script novo, sem nenhuma intervenção manual: 4 chamadas, 4
+resultados válidos (opencode, agy, claude e codex). No caminho, o opencode perdeu um prompt,
+recuperado pelo reenvio, e o agy teve dois falsos idle, acompanhados até o fim.
+
 ## 2026-09-19 — `restful-api` absorvida pela `tsg-flow-contract-creator`
 
 A norma HTTP existia em duas skills que discordavam entre si. A `restful-api` mantinha seu próprio

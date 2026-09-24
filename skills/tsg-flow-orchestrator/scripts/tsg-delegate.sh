@@ -110,8 +110,12 @@ jq -e '.schema_version == 1' "$ROUTING_FILE" >/dev/null 2>&1 ||
 
 ATTEMPT_N=1
 [[ -n "$ATTEMPT" ]] && ATTEMPT_N="${ATTEMPT%%/*}"
+# O task-creator grava <N>_task.md para a task N.0; o id completo tambem e aceito. Sem o
+# arquivo, task_kind ficaria vazio e a rota generica venceria em silencio.
 TASK_FILE="$PRD_DIR/${TASK}_task.md"
-if [[ -n "$TASK" && -f "$TASK_FILE" ]]; then
+[[ -f "$TASK_FILE" ]] || TASK_FILE="$PRD_DIR/${TASK%.0}_task.md"
+if [[ -n "$TASK" ]]; then
+  [[ -f "$TASK_FILE" ]] || die "arquivo da task $TASK inexistente em $PRD_DIR (${TASK%.0}_task.md)"
   TASK_KIND="$(sed -n '/^---[[:space:]]*$/,/^---[[:space:]]*$/{s/^task_kind:[[:space:]]*\([a-z][a-z]*\).*/\1/p}' \
     "$TASK_FILE" | head -1)"
   [[ "$TASK_KIND" == vertical || "$TASK_KIND" == enabling ]] ||
@@ -169,6 +173,9 @@ MODEL_FLAG="$(printf '%s' "$KIND_JSON" | jq -r '.model_flag // "--model"')"
 [[ -z "$EFFORT" ]] && EFFORT="$ROUTE_EFFORT"
 [[ -z "$EFFORT" ]] && EFFORT="$(printf '%s' "$KIND_JSON" | jq -r '.effort // empty')"
 mapfile -t KIND_EXTRA_ARGS < <(printf '%s' "$KIND_JSON" | jq -r '(.extra_args // [])[]')
+# Alguns agentes sao detectados prontos antes de a TUI aceitar input e descartam o prompt.
+START_SETTLE_S="${TSG_START_SETTLE_S:-$(printf '%s' "$KIND_JSON" | jq -r '.start_settle_s // 1')}"
+[[ "$START_SETTLE_S" =~ ^[0-9]+$ ]] || die "start_settle_s invalido para $KIND: $START_SETTLE_S"
 
 # O esforco de raciocinio nao tem grafia comum. Tres formas, nesta ordem de resolucao:
 # 1. model_template: o esforco faz parte do proprio nome do modelo (cursor).
@@ -243,6 +250,8 @@ ledger() {
 }
 
 emit() {
+  # Ledger antes do stdout: um leitor que fecha o pipe cedo (| head) mata o script por SIGPIPE.
+  ledger "$1" "$2" "${3:-}"
   printf 'DELEGATE result=%s role=%s kind=%s run_id=%s pane=%s elapsed=%ss%s\n' \
     "$1" "$ROLE" "$KIND" "$RUN_ID" "${PANE_ID:-none}" "$((SECONDS - START_TS))" "${3:+ reason=$3}"
   printf 'ROUTE: kind=%s model=%s effort=%s source=%s%s\n' \
@@ -251,7 +260,6 @@ emit() {
   printf 'VERDICT: %s\nRESULT: %s\n' "$2" "$RESULT_FILE"
   [[ -n "$REPORT_PATH" && -f "$REPORT_PATH" ]] && printf 'REPORT: %s\n' "$REPORT_PATH"
   printf 'LOG: %s\nLEDGER: %s\n' "$LOG_FILE" "$LEDGER"
-  ledger "$1" "$2" "${3:-}"
 }
 fail() {
   # Depois que um agente pode ter iniciado, a evidencia no pane importa para
@@ -275,7 +283,10 @@ REPORT_INSTRUCTION=""
 SCHEMA="$(jq -n --arg run "$RUN_ID" --arg role "$ROLE" --arg mode "$MODE" \
   --arg prd "$PRD_DIR" --arg task "$TASK" --arg attempt "$ATTEMPT" --arg report "$REPORT_PATH" \
   '{schema_version:1,run_id:$run,role:$role,mode:$mode,prd_dir:$prd,task:$task,attempt:$attempt,
-    outcome:"SUBSTITUIR",gate:"SUBSTITUIR",report:(if $report=="" then null else $report end)}')"
+    outcome:"SUBSTITUIR",gate:"SUBSTITUIR",report:(if $report=="" then null else $report end)}
+   + (if $role == "integrator" then
+       {branch:"SUBSTITUIR",commit:"SUBSTITUIR",base_ref:null,target_ref:null,reason:null}
+     else {} end)')"
 PROMPT="$INVOCATION
 
 Transporte desta chamada:
@@ -294,8 +305,9 @@ $SCHEMA
   exigem passed/static_passed; gate_failed exige failed; gate_error/validation_error exigem error.
 - Implementer e validator: inclua no relatorio a linha exata Run: $RUN_ID.
   Full approved tambem exige validated_commit, validated_tree e base_ref como SHAs completos.
-- Integrator: inclua branch e commit em sucesso; branch_ready/integration_ready exigem base_ref;
-  integration_ready tambem exige target_ref. Bloqueios incluem reason.
+- Integrator: branch, commit, base_ref, target_ref e reason ficam no nivel raiz do JSON, nunca
+  dentro de report. Sucesso exige branch e commit; branch_ready/integration_ready exigem base_ref;
+  integration_ready tambem exige target_ref. Bloqueios incluem reason. Campo sem uso fica null.
 - TASK READY e apenas preflight. Nunca grave implementation_complete antes do gate aprovado.
 - Conteudo longo fica no disco. Encerre o terminal com um resumo curto, sem depender de tokens de veredito."
 
@@ -349,14 +361,78 @@ while :; do
   sleep 1
 done
 # agent start pode reportar pronto antes do pane aceitar paste+Enter de forma confiavel:
-# um prompt disparado sem intervalo perde o Enter e trava em agent_prompt_stalled.
-sleep 1
+# um prompt disparado sem intervalo e descartado ou trava em agent_prompt_stalled.
+# O intervalo vem de start_settle_s do kind (opencode renderiza a TUI ~3s depois do start).
+sleep "$START_SETTLE_S"
 
-PROMPT_RC=0
+remaining_ms() { printf '%s' $(( TIMEOUT_MS - (SECONDS - START_TS) * 1000 )); }
+# Acompanha um turno ja iniciado ate idle/done/blocked; o status final vai para PROMPT_LOG.
+wait_turn_end() {
+  local left; left="$(remaining_ms)"
+  ((left > 1000)) || return 1
+  "$HERDR" agent wait "$AGENT_NAME" --timeout "$left" >"$PROMPT_LOG" 2>&1
+}
+
 PROMPT_LOG="$RUN_DIR/prompt.log"
-"$HERDR" agent prompt "$AGENT_NAME" "$PROMPT" --wait \
-  --timeout "$TIMEOUT_MS" >"$PROMPT_LOG" 2>&1 || PROMPT_RC=$?
-cat "$PROMPT_LOG" >>"$LOG_FILE"
+# O prompt carrega --run-id; sem o marcador no pane, o agente comprovadamente nao o recebeu.
+prompt_landed() {
+  "$HERDR" pane read "$PANE_ID" --source recent-unwrapped --lines 400 2>/dev/null |
+    grep -Fq -- "--run-id=$RUN_ID"
+}
+# A entrega do paste e intermitente mesmo apos start_settle_s (agy perdeu 1 em 3 com 8s).
+# Reenviar so e seguro com o agente parado e sem o marcador na tela.
+MAX_SENDS=$((1 + ${TSG_PROMPT_RESENDS:-2}))
+SENDS=0
+while :; do
+  SENDS=$((SENDS + 1))
+  PROMPT_RC=0
+  "$HERDR" agent prompt "$AGENT_NAME" "$PROMPT" --wait \
+    --timeout "$(remaining_ms)" >"$PROMPT_LOG" 2>&1 || PROMPT_RC=$?
+  cat "$PROMPT_LOG" >>"$LOG_FILE"
+  STALLED=0
+  if ((PROMPT_RC != 0)) &&
+     [[ "$(jq -r '.error.code // empty' "$PROMPT_LOG" 2>/dev/null)" == agent_prompt_stalled ]]; then
+    # O Herdr exige working em 5s, sem ajuste. Um agente lento para abrir o turno ja recebeu o
+    # prompt: acompanhe-o em vez de abandonar um worker vivo.
+    STALLED=1
+    RECOVER_LOG="$RUN_DIR/recover.log"
+    if "$HERDR" agent wait "$AGENT_NAME" --until working --until blocked --until "done" \
+         --timeout "${TSG_STALL_RECOVERY_MS:-30000}" >"$RECOVER_LOG" 2>&1; then
+      cat "$RECOVER_LOG" >>"$LOG_FILE"
+      STALLED=0 PROMPT_RC=0
+      if [[ "$(jq -r '.result.agent.agent_status // empty' "$RECOVER_LOG" | tail -1)" == working ]]; then
+        wait_turn_end || PROMPT_RC=1
+        cat "$PROMPT_LOG" >>"$LOG_FILE"
+      else
+        cp "$RECOVER_LOG" "$PROMPT_LOG"
+      fi
+      printf 'stall recuperado: turno observado depois da janela do Herdr\n' >>"$LOG_FILE"
+    else
+      cat "$RECOVER_LOG" >>"$LOG_FILE"
+    fi
+  fi
+  if ((PROMPT_RC == 0)) &&
+     [[ "$(jq -r '.result.agent.agent_status // empty' "$PROMPT_LOG" 2>/dev/null | tail -1)" != blocked ]]; then
+    # A deteccao do agy marca idle entre chamadas de ferramenta. Sem resultado, de uma janela
+    # para o turno voltar a working e acompanhe-o.
+    while [[ ! -e "$RESULT_FILE" ]] && (( $(remaining_ms) > 1000 )); do
+      "$HERDR" agent wait "$AGENT_NAME" --until working \
+        --timeout "${TSG_IDLE_GRACE_MS:-20000}" >/dev/null 2>&1 || break
+      printf 'falso idle: turno retomado, aguardando novamente\n' >>"$LOG_FILE"
+      wait_turn_end || { cat "$PROMPT_LOG" >>"$LOG_FILE"; PROMPT_RC=1; break; }
+      cat "$PROMPT_LOG" >>"$LOG_FILE"
+    done
+  fi
+  # Prompt perdido: stall sem turno, ou turno "concluido" sem resultado nem marcador na tela.
+  if ((SENDS < MAX_SENDS)) && (( $(remaining_ms) > 1000 )) &&
+     { ((STALLED == 1)) || { ((PROMPT_RC == 0)) && [[ ! -e "$RESULT_FILE" ]]; }; } &&
+     ! prompt_landed; then
+    printf 'prompt perdido (sem --run-id no pane): reenvio %s\n' "$SENDS" >>"$LOG_FILE"
+    sleep "$START_SETTLE_S"
+    continue
+  fi
+  break
+done
 if ((PROMPT_RC != 0)); then
   # Timeout/stall nao prova que o prompt nao chegou. Preserve o pane para
   # reconciliar a execucao antes de qualquer nova delegacao.
@@ -379,7 +455,8 @@ jq -e --arg run "$RUN_ID" --arg role "$ROLE" --arg mode "$MODE" --arg prd "$PRD_
   --arg task "$TASK" --arg attempt "$ATTEMPT" --arg report "$REPORT_PATH" '
   def sha: type == "string" and test("^[0-9a-f]{40}([0-9a-f]{24})?$");
   def nonempty: type == "string" and length > 0;
-  .schema_version == 1 and .run_id == $run and .role == $role and .mode == $mode
+  (any(.. | strings; . == "SUBSTITUIR") | not)
+  and .schema_version == 1 and .run_id == $run and .role == $role and .mode == $mode
   and .prd_dir == $prd and .task == $task and .attempt == $attempt
   and (.gate | IN("passed","static_passed","failed","error","not_run"))
   and (if $role == "implementer" then

@@ -60,6 +60,14 @@ if (args[0] === 'pane' && args[1] === 'split') {
     process.exit(1);
   }
   const prompt = args[3];
+  const prompts = readFileSync(process.env.MOCK_CALLS, 'utf8').split('\\n')
+    .filter(Boolean).map(JSON.parse).filter(a => a[0] === 'agent' && a[1] === 'prompt').length;
+  if (process.env.MOCK_SCENARIO === 'prompt_lost_once' && prompts === 1) {
+    // o paste some: o Herdr ve o agente concluir, mas nada chega ao pane
+    console.log(JSON.stringify({result:{agent:{agent_status:'done'}}}));
+    process.exit(0);
+  }
+  writeFileSync(process.env.MOCK_CALLS + '.prompt', prompt);
   const resultPath = prompt.match(/Grave o resultado final em (.*), somente depois/)[1];
   const result = JSON.parse(prompt.match(/\\{\\n[\\s\\S]+?\\n\\}/)[0]);
   const scenario = process.env.MOCK_SCENARIO;
@@ -97,11 +105,25 @@ if (args[0] === 'pane' && args[1] === 'split') {
   if (scenario === 'blocked') {
     result.outcome = 'integration_blocked'; result.reason = 'missing delivery authority';
   }
-  if (scenario !== 'no_result') {
-    writeFileSync(resultPath, scenario === 'partial_json' ? '{' : JSON.stringify(result));
+  if (scenario === 'nested_git') {
+    result.report = { branch: result.branch, commit: result.commit, base_ref: result.base_ref };
+    result.branch = 'SUBSTITUIR'; result.commit = 'SUBSTITUIR';
   }
-  if (result.report && scenario !== 'missing_report') {
-    writeFileSync(result.report, 'Run: ' + (scenario === 'stale_report' ? 'old-run' : result.run_id) + '\\n');
+  const writeResult = () => {
+    writeFileSync(resultPath, scenario === 'partial_json' ? '{' : JSON.stringify(result));
+    if (typeof result.report === 'string' && scenario !== 'missing_report') {
+      writeFileSync(result.report, 'Run: ' + (scenario === 'stale_report' ? 'old-run' : result.run_id) + '\\n');
+    }
+  };
+  if (scenario === 'false_idle') {
+    // o agente parece idle antes de terminar; o resultado so aparece no turno retomado
+    writeFileSync(process.env.MOCK_CALLS + '.pending', JSON.stringify({ resultPath, result }));
+  } else if (scenario !== 'no_result') {
+    writeResult();
+  }
+  if (scenario === 'stalled_then_working') {
+    console.error(JSON.stringify({error:{code:'agent_prompt_stalled'}}));
+    process.exit(1);
   }
   if (scenario === 'timeout_with_result') {
     console.error(JSON.stringify({error:{code:'timeout'}}));
@@ -109,21 +131,42 @@ if (args[0] === 'pane' && args[1] === 'split') {
   }
   console.log(JSON.stringify({result:{agent:{agent_status:
     scenario === 'agent_blocked' ? 'blocked' : 'idle'}}}));
+} else if (args[0] === 'agent' && args[1] === 'wait') {
+  const scenario = process.env.MOCK_SCENARIO;
+  if (args.includes('--until')) {
+    if (!['stalled_then_working', 'false_idle'].includes(scenario)) {
+      console.error(JSON.stringify({error:{code:'timeout'}}));
+      process.exit(1);
+    }
+    if (scenario === 'false_idle') {
+      const { resultPath, result } = JSON.parse(readFileSync(process.env.MOCK_CALLS + '.pending', 'utf8'));
+      writeFileSync(resultPath, JSON.stringify(result));
+      if (typeof result.report === 'string') writeFileSync(result.report, 'Run: ' + result.run_id + '\\n');
+    }
+    console.log(JSON.stringify({result:{agent:{agent_status:'working'}}}));
+  } else {
+    console.log(JSON.stringify({result:{agent:{agent_status:'idle'}}}));
+  }
 } else if (args[0] === 'agent' && args[1] === 'read') {
   console.log('TASK READY');
+} else if (args[0] === 'pane' && args[1] === 'read') {
+  // o pane so mostra o prompt que de fato chegou ao agente
+  try { console.log(readFileSync(process.env.MOCK_CALLS + '.prompt', 'utf8')); } catch {}
 }
 `;
 
 function runDelegate(t, {
   role = 'implementer', mode = 'implement', scenario = 'ok', kind = 'codex',
-  attempt = '1/3', taskKind = null, taskKindField = 'task_kind', routing = null, fix = null, model = null,
-  effort = null, allowNoCalls = false, shellWaitS = null,
+  attempt = '1/3', taskKind = 'vertical', taskKindField = 'task_kind', taskFile = '1_task.md',
+  routing = null, fix = null, model = null, effort = null, allowNoCalls = false, shellWaitS = null,
+  settleS = '0', pipeHead = false,
 } = {}) {
   const f = fix ?? fixture(t);
   const mock = join(f.bin, 'herdr');
   writeFileSync(mock, mockHerdr, { mode: 0o755 });
-  if (taskKind) {
-    writeFileSync(join(f.prd, '1.0_task.md'),
+  // Nome gravado pelo task-creator: 1_task.md para a task 1.0.
+  if (taskFile) {
+    writeFileSync(join(f.prd, taskFile),
       `---\nstatus: pending\n${taskKindField}: ${taskKind}\nblocked_by: []\n---\n\n# 1.0 Fixture\n`);
   }
   const calls = join(f.dir, 'calls.jsonl');
@@ -137,24 +180,29 @@ function runDelegate(t, {
     args.push('--task=1.0');
   }
   const logs = join(f.dir, 'logs');
-  const result = command('bash', args, f.repo, {
-    HERDR_ENV: '1', HERDR_BIN_PATH: mock, MOCK_SCENARIO: scenario, MOCK_CALLS: calls,
-    MOCK_SHA: f.sha, MOCK_TREE: f.tree, TSG_DELEGATE_LOG_DIR: logs,
-    ...(routing ? { TSG_ROUTING_FILE: routing } : {}),
-    ...(shellWaitS ? { TSG_START_SHELL_TIMEOUT_S: shellWaitS } : {}),
-  });
+  const result = command('bash',
+    pipeHead ? ['-c', 'bash "$@" | head -1', 'bash', ...args] : args, f.repo, {
+      HERDR_ENV: '1', HERDR_BIN_PATH: mock, MOCK_SCENARIO: scenario, MOCK_CALLS: calls,
+      MOCK_SHA: f.sha, MOCK_TREE: f.tree, TSG_DELEGATE_LOG_DIR: logs,
+      ...(routing ? { TSG_ROUTING_FILE: routing } : {}),
+      ...(shellWaitS ? { TSG_START_SHELL_TIMEOUT_S: shellWaitS } : {}),
+      ...(settleS !== null ? { TSG_START_SETTLE_S: settleS } : {}),
+    });
   const recorded = existsSync(calls)
     ? readFileSync(calls, 'utf8').trim().split('\n').filter(Boolean).map(JSON.parse)
     : [];
   if (!allowNoCalls) {
-    const retained = !['ok', 'busy_first_3', 'busy_always', 'failed_gate',
-      'infra', 'static', 'blocked'].includes(scenario);
-    assert.equal(recorded.filter(a => a[1] === 'read').length, 1,
+    const retained = !['ok', 'busy_first_3', 'busy_always', 'failed_gate', 'infra', 'static',
+      'blocked', 'stalled_then_working', 'false_idle', 'prompt_lost_once'].includes(scenario);
+    // pane read recent-unwrapped e a checagem de entrega do prompt, nao o diagnostico
+    const diagnostic = a => a[1] === 'read' && !(a[0] === 'pane' && a.includes('recent-unwrapped'));
+    assert.equal(recorded.filter(diagnostic).length, 1,
       'single transcript or diagnostic read');
     assert.equal(recorded.filter(a => a[1] === 'close').length, retained ? 0 : 1,
       'pane cleanup or retention');
   }
-  rmSync(calls, { force: true });
+  result.prompt = existsSync(calls + '.prompt') ? readFileSync(calls + '.prompt', 'utf8') : '';
+  for (const extra of ['', '.prompt', '.pending']) rmSync(calls + extra, { force: true });
   result.fixture = f;
   result.start = recorded.find(a => a[0] === 'agent' && a[1] === 'start') ?? [];
   result.calls = recorded;
@@ -216,6 +264,22 @@ test('preserves the agent after a stalled prompt for reconciliation', t => {
   assert.equal(r.status, 2, r.stdout + r.stderr);
   assert.equal(r.ledger.at(-1).reason, 'agent_prompt_stalled');
   assert.ok(r.calls.some(a => a[0] === 'agent' && a[1] === 'get'));
+  assert.equal(r.calls.filter(a => a[0] === 'agent' && a[1] === 'prompt').length, 3,
+    'a prompt that never reached the pane is resent at most twice');
+});
+
+test('resends a prompt that never reached the pane', t => {
+  const r = runDelegate(t, { scenario: 'prompt_lost_once' });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.match(r.stdout, /VERDICT: implementation_complete/);
+  assert.equal(r.calls.filter(a => a[0] === 'agent' && a[1] === 'prompt').length, 2);
+});
+
+test('never resends a prompt that reached the pane', t => {
+  const r = runDelegate(t, { scenario: 'no_result' });
+  assert.equal(r.status, 2, r.stdout + r.stderr);
+  assert.equal(r.ledger.at(-1).reason, 'result_missing');
+  assert.equal(r.calls.filter(a => a[0] === 'agent' && a[1] === 'prompt').length, 1);
 });
 
 test('returns promptly when an agent is blocked and retains its pane', t => {
@@ -246,7 +310,85 @@ test('integrator can return a concrete operational blocker', t => {
   assert.match(r.stdout, /VERDICT: integration_blocked/);
 });
 
+test('follows a turn that starts after the Herdr stall window', t => {
+  const r = runDelegate(t, { scenario: 'stalled_then_working' });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.match(r.stdout, /VERDICT: implementation_complete/);
+  assert.ok(r.calls.some(a => a[0] === 'agent' && a[1] === 'wait' && a.includes('--until')));
+  assert.ok(r.calls.some(a => a[0] === 'agent' && a[1] === 'wait' && !a.includes('--until')),
+    'waits for the recovered turn to finish');
+});
+
+test('keeps waiting when the agent looked idle before writing its result', t => {
+  const r = runDelegate(t, { scenario: 'false_idle' });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.match(r.stdout, /VERDICT: implementation_complete/);
+});
+
+test('integrator git fields are requested at the top level of the result', t => {
+  const r = runDelegate(t, { role: 'integrator', mode: 'prepare-prd-branch' });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  const schema = JSON.parse(r.prompt.match(/\{\n[\s\S]+?\n\}/)[0]);
+  for (const field of ['branch', 'commit', 'base_ref', 'target_ref', 'reason']) {
+    assert.ok(field in schema, 'schema carries ' + field);
+  }
+  assert.match(r.prompt, /nunca\s+dentro de report/);
+});
+
+test('rejects git fields nested in report instead of the top level', t => {
+  const r = runDelegate(t, { role: 'integrator', mode: 'prepare-prd-branch', scenario: 'nested_git' });
+  assert.equal(r.status, 2, r.stdout + r.stderr);
+  assert.equal(r.ledger.at(-1).reason, 'result_invalid');
+});
+
+test('the ledger is written even when the reader closes stdout early', t => {
+  const r = runDelegate(t, { pipeHead: true });
+  assert.equal(r.ledger.length, 1);
+  assert.equal(r.ledger[0].outcome, 'implementation_complete');
+});
+
 // --- Roteamento por politica e telemetria por chamada ---
+
+test('routing reads task_kind from the N_task.md file the task creator writes', t => {
+  const r = runDelegate(t, { kind: null, taskKind: 'enabling', taskFile: '1_task.md' });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.equal(startedKind(r), 'opencode');
+  assert.equal(r.ledger[0].task_kind, 'enabling');
+});
+
+test('routing also accepts a task file named with the full id', t => {
+  const r = runDelegate(t, { kind: null, taskKind: 'enabling', taskFile: '1.0_task.md' });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.equal(startedKind(r), 'opencode');
+});
+
+test('a missing task file stops the call instead of falling back to the generic route', t => {
+  const r = runDelegate(t, { kind: null, taskFile: null, allowNoCalls: true });
+  assert.equal(r.status, 3);
+  assert.match(r.stderr, /arquivo da task 1\.0 inexistente/);
+  assert.equal(r.calls.length, 0);
+});
+
+test('an invalid start_settle_s in the policy is a usage error', t => {
+  const f = fixture(t);
+  const routing = join(f.dir, 'routing.json');
+  writeFileSync(routing, JSON.stringify({
+    schema_version: 1,
+    kinds: { codex: { start_settle_s: 'soon' } },
+    routes: [{ role: 'implementer', kind: 'codex' }],
+  }));
+  const r = runDelegate(t, { kind: null, fix: f, routing, settleS: null, allowNoCalls: true });
+  assert.equal(r.status, 3);
+  assert.match(r.stderr, /start_settle_s invalido para codex/);
+});
+
+test('the default policy gives slow-to-render TUIs a start settle interval', () => {
+  const policy = JSON.parse(readFileSync(
+    join(root, 'skills/tsg-flow-orchestrator/scripts/routing.default.json'), 'utf8'));
+  for (const kind of ['opencode', 'agy', 'codex']) {
+    assert.ok(policy.kinds[kind].start_settle_s > 1, kind + ' waits longer than the default');
+  }
+});
 
 test('policy routes a vertical task to the generative kind', t => {
   const r = runDelegate(t, { kind: null, taskKind: 'vertical' });
@@ -364,7 +506,7 @@ test('an invalid routing policy stops the call instead of guessing a kind', t =>
     '--mode=implement', '--task=1.0', '--attempt=1/3'], f.repo, {
     HERDR_ENV: '1', HERDR_BIN_PATH: mock, TSG_ROUTING_FILE: routing, MOCK_SCENARIO: 'ok',
     MOCK_CALLS: join(f.dir, 'calls.jsonl'), MOCK_SHA: f.sha, MOCK_TREE: f.tree,
-    TSG_DELEGATE_LOG_DIR: join(f.dir, 'logs'),
+    TSG_DELEGATE_LOG_DIR: join(f.dir, 'logs'), TSG_START_SETTLE_S: '0',
   });
   assert.equal(r.status, 3, r.stdout + r.stderr);
   assert.match(r.stderr, /politica de roteamento invalida/);

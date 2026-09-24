@@ -19,7 +19,8 @@ por projeto, copie para `.tsg-flow/routing.json` no repositório alvo, ou aponte
       "model_template": null,    // opcional; compõe esforço dentro do modelo: {model}/{effort}
       "effort_args": [],         // template do esforço como argumento; {effort} é substituído
       "effort": null,            // esforço padrão do kind
-      "extra_args": []           // argumentos nativos sempre passados a esse kind
+      "extra_args": [],          // argumentos nativos sempre passados a esse kind
+      "start_settle_s": 1        // espera entre start e prompt; TUIs lentas perdem o prompt
     }
   },
   "routes": [

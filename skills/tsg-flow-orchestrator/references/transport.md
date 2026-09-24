@@ -26,7 +26,9 @@ roteamento; o pior caso é consumir uma tentativa.
 
 - **Rota:** primeira entrada de `routes` que casa `role` e, quando declarados, `mode` e `task_kind`.
   `task_kind` vem exclusivamente do campo `task_kind` (`vertical` ou `enabling`) no frontmatter de
-  `{PRD_DIR}/<task>_task.md`, não de uma heurística do script. O campo `kind` é reservado para o
+  `{PRD_DIR}/<N>_task.md` (nome gravado pelo task-creator; `<N>.0_task.md` também é aceito), não
+  de uma heurística do script. Sem o arquivo da task, a chamada para com erro de uso em vez de
+  cair na rota genérica. O campo `kind` é reservado para o
   agente (`--kind`) e não é aceito como sinônimo.
 - **Escalonamento:** `escalation` lista os kinds das tentativas 2 em diante, sem repetir o kind
   base; a última entrada se repete quando as tentativas acabam. Serve para não repetir o mesmo
@@ -70,10 +72,28 @@ reconcilie seus efeitos antes de repetir. Nunca use TASK READY como implementaç
 somente `agent_pane_busy`, por até 20 segundos (ajustável com `TSG_START_SHELL_TIMEOUT_S`).
 Se o shell não ficar disponível, registra `pane process-info` e a tela do pane no LOG.
 Outros erros de start não são repetidos: `agent_not_ready`, por exemplo, indica um agente
-iniciado mas bloqueado durante a inicialização.
+iniciado mas bloqueado durante a inicialização (como o diálogo de confiança de pasta do `claude`
+num diretório novo).
+
+O Herdr declara alguns agentes prontos antes de a TUI aceitar input, e o prompt colado nesse
+intervalo é descartado. Depois do start, o script espera `start_settle_s` do kind (padrão 1;
+`TSG_START_SETTLE_S` sobrescreve). Valores medidos: opencode renderiza a TUI cerca de 3s depois
+do start (6), agy perdeu o prompt com 3s (8), codex perdeu uma vez com 1s (3).
+Nenhum intervalo fixo garante a entrega: com 8s, o agy ainda perdeu 1 prompt em 3. Por isso o
+script confere a chegada pelo marcador `--run-id=<run_id>` no pane. Com o agente parado (stall
+sem turno, ou turno "concluído" sem resultado) e sem o marcador na tela, o prompt comprovadamente
+não chegou, e o script o reenvia até `TSG_PROMPT_RESENDS` vezes (2). Prompt que chegou nunca é
+reenviado.
 
 `agent prompt --wait` aceita os estados padrão do Herdr (`idle`, `done`, `blocked`). Um bloqueio
-é relatado como `agent_blocked`; `agent_prompt_stalled` recebe motivo próprio. Em qualquer falha
+é relatado como `agent_blocked`; `agent_prompt_stalled` recebe motivo próprio.
+O Herdr exige `working` em 5s, sem ajuste; um agente lento para abrir o turno excede essa janela
+com o prompt já aceito. Em stall, o script espera até `TSG_STALL_RECOVERY_MS` (30000) por
+`working`: se o turno aparecer, acompanha-o até o fim; se não, o prompt se perdeu e a falha é
+relatada como `agent_prompt_stalled`.
+A detecção do agy marca `idle` entre chamadas de ferramenta. Se o resultado ainda não existe
+quando o turno parece terminado, o script dá `TSG_IDLE_GRACE_MS` (20000) para o agente voltar a
+`working` e continua aguardando dentro do timeout da chamada. Em qualquer falha
 de transporte depois que um agente pode ter iniciado, o script mantém o pane e informa seu ID
 na linha DELEGATE para diagnóstico. Consulte `agent get <pane-id>`, `agent read <pane-id>` e, se a
 detecção estiver errada, `agent explain <pane-id> --json`. Um timeout ou `agent_prompt_stalled`
