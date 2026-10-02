@@ -420,14 +420,14 @@ Ver template completo em `templates/outputs/security_report.template.md`.
 * `security_report.md` deve ser anexado/referenciado no `qa_report.md` quando ambos existem
 * Findings CRITICAL/HIGH viram entrada automatica em `qa_report.md` como QA-blocker
 
-## Com java-production-readiness
+## Com java
 
-* A secao "Seguranca Minima" do `java-production-readiness` deve apontar para esta skill
+* A secao "Antes de release" da skill `java` deve apontar para esta skill
 * Pre-deploy deve exigir `security_report.md` com zero CRITICAL
 
-## Com java-observability
+## Com a observabilidade da skill `java`
 
-* Findings de A09 (Logging Failures) devem cruzar com a sanitizacao definida em `java-observability`
+* Findings de A09 (Logging Failures) devem cruzar com a sanitizacao definida em `java` (`references/operations.md`, "Dados sensiveis")
 * Se sanitizacao esta documentada mas nao implementada, finding e elevado em severidade
 
 ---
@@ -514,7 +514,7 @@ Ver template completo em `templates/outputs/security_report.template.md`.
 ## Integracao
 - [ ] Referenciado em `qa_report.md` quando aplicavel
 - [ ] Pre-merge/pre-deploy validado contra criterio CRITICAL=0
-- [ ] Findings de logging cruzados com `java-observability`
+- [ ] Findings de logging cruzados com a sanitizacao da skill `java`
 
 ## Rastreabilidade
 - [ ] Versoes de imagens Docker registradas (`tools/tools.json`)

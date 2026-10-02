@@ -35,30 +35,16 @@
     },
     {
       "name": "dotnet",
-      "description": "Suite .NET C# / ASP.NET Core: arquitetura, qualidade, dependencias, observabilidade, performance, production readiness e testes.",
+      "description": "Padrao .NET C# / ASP.NET Core: Clean Architecture, casos de uso, EF Core, outbox RabbitMQ, observabilidade, performance, testes e gates executaveis.",
       "skills": [
-        "./skills/dotnet-index",
-        "./skills/dotnet-architecture",
-        "./skills/dotnet-code-quality",
-        "./skills/dotnet-dependency-config",
-        "./skills/dotnet-observability",
-        "./skills/dotnet-performance",
-        "./skills/dotnet-production-readiness",
-        "./skills/dotnet-testing",
-        "./skills/dotnet-program-setup"
+        "./skills/dotnet"
       ]
     },
     {
       "name": "java",
-      "description": "Suite Java / Spring Boot: arquitetura, qualidade, dependencias, observabilidade, performance, production readiness e testes.",
+      "description": "Padrao Java / Spring Boot: Clean Architecture multi-modulo Maven, casos de uso, JPA/Flyway, outbox RabbitMQ, observabilidade, performance, testes e gates executaveis (enforcer, forbiddenapis, NullAway, ArchUnit).",
       "skills": [
-        "./skills/java-architecture",
-        "./skills/java-code-quality",
-        "./skills/java-dependency-config",
-        "./skills/java-observability",
-        "./skills/java-performance",
-        "./skills/java-production-readiness",
-        "./skills/java-testing"
+        "./skills/java"
       ]
     },
     {

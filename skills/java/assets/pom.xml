@@ -1,0 +1,257 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Root POM of the project: the gates live here so every module inherits them.
+  Replace com.company / project. Versions are a floor, not a ceiling (checked 2026-10-02):
+  raise minor/patch freely, treat a major as a decision. Spring-managed libraries take their
+  version from the Boot parent; never redeclare one in a module.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-parent</artifactId>
+    <version>4.1.1</version>
+    <relativePath/>
+  </parent>
+
+  <groupId>com.company</groupId>
+  <artifactId>project</artifactId>
+  <version>0.0.1-SNAPSHOT</version>
+  <packaging>pom</packaging>
+
+  <modules>
+    <module>domain</module>
+    <module>application</module>
+    <module>infra-persistence</module>
+    <module>infra-messaging</module>
+    <module>api</module>
+    <module>test-support</module>
+    <module>architecture-tests</module>
+  </modules>
+
+  <properties>
+    <java.version>25</java.version>
+    <uuid-creator.version>6.1.1</uuid-creator.version>
+    <springdoc.version>3.1.1</springdoc.version>
+    <archunit.version>1.5.1</archunit.version>
+    <datafaker.version>2.7.0</datafaker.version>
+    <error-prone.version>2.50.0</error-prone.version>
+    <nullaway.version>0.14.2</nullaway.version>
+    <forbiddenapis.version>3.11</forbiddenapis.version>
+    <spotless.version>3.10.3</spotless.version>
+    <palantir-java-format.version>2.101.0</palantir-java-format.version>
+  </properties>
+
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>com.company</groupId>
+        <artifactId>project-domain</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.company</groupId>
+        <artifactId>project-application</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.company</groupId>
+        <artifactId>project-infra-persistence</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.company</groupId>
+        <artifactId>project-infra-messaging</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.company</groupId>
+        <artifactId>project-api</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.company</groupId>
+        <artifactId>project-test-support</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.github.f4b6a3</groupId>
+        <artifactId>uuid-creator</artifactId>
+        <version>${uuid-creator.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.springdoc</groupId>
+        <artifactId>springdoc-openapi-starter-webmvc-api</artifactId>
+        <version>${springdoc.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.tngtech.archunit</groupId>
+        <artifactId>archunit-junit5</artifactId>
+        <version>${archunit.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>net.datafaker</groupId>
+        <artifactId>datafaker</artifactId>
+        <version>${datafaker.version}</version>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+
+  <!-- Every module is @NullMarked (package-info.java), so JSpecify is on every classpath. -->
+  <dependencies>
+    <dependency>
+      <groupId>org.jspecify</groupId>
+      <artifactId>jspecify</artifactId>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+
+      <!-- Forbidden packages fail the build with their reason. Ban a package here in the same
+           commit as the stack table in SKILL.md; the two must not drift. -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-enforcer-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>enforce-standard</id>
+            <goals><goal>enforce</goal></goals>
+            <configuration>
+              <rules>
+                <requireJavaVersion><version>[${java.version},)</version></requireJavaVersion>
+                <requireMavenVersion><version>[3.9,)</version></requireMavenVersion>
+                <banDuplicatePomDependencyVersions/>
+                <bannedDependencies>
+                  <excludes>
+                    <!-- Every member lives in the source: code is read and written by LLMs, and generated
+                         members are invisible to them. Records cover DTOs; domain classes need fine
+                         control (no setters, no builders bypassing create()). -->
+                    <exclude>org.projectlombok:lombok</exclude>
+                    <!-- Reflection mappers fail at runtime. Map by hand; MapStruct only with justified volume. -->
+                    <exclude>org.modelmapper:*</exclude>
+                    <exclude>com.github.dozermapper:*</exclude>
+                    <!-- JUnit 4. -->
+                    <exclude>junit:junit</exclude>
+                    <exclude>org.junit.vintage:*</exclude>
+                    <!-- Tests run on the real database through Testcontainers. -->
+                    <exclude>com.h2database:h2</exclude>
+                    <exclude>org.hsqldb:hsqldb</exclude>
+                    <exclude>org.apache.derby:*</exclude>
+                    <!-- Superseded by @Retryable in Spring Framework core (7.0+). -->
+                    <exclude>org.springframework.retry:spring-retry</exclude>
+                    <!-- Feature-complete upstream. Use HTTP service interfaces (@HttpExchange). -->
+                    <exclude>org.springframework.cloud:spring-cloud-starter-openfeign</exclude>
+                    <!-- Servlet stack on virtual threads. RestClient, not WebClient. -->
+                    <exclude>org.springframework.boot:spring-boot-starter-webflux</exclude>
+                    <!-- Dead. springdoc-openapi. -->
+                    <exclude>io.springfox:*</exclude>
+                    <!-- Boot has native structured logging (logging.structured.format.console). -->
+                    <exclude>net.logstash.logback:logstash-logback-encoder</exclude>
+                  </excludes>
+                </bannedDependencies>
+              </rules>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!-- Forbidden APIs: UUIDv4, clock-less now(), Jackson 2, default-locale/charset calls.
+           See config/forbidden-apis.txt for why each entry is there. -->
+      <plugin>
+        <groupId>de.thetaphi</groupId>
+        <artifactId>forbiddenapis</artifactId>
+        <version>${forbiddenapis.version}</version>
+        <configuration>
+          <bundledSignatures>
+            <bundledSignature>jdk-unsafe</bundledSignature>
+            <bundledSignature>jdk-deprecated</bundledSignature>
+            <bundledSignature>jdk-non-portable</bundledSignature>
+            <bundledSignature>jdk-system-out</bundledSignature>
+          </bundledSignatures>
+          <signaturesFiles>
+            <signaturesFile>${maven.multiModuleProjectDirectory}/config/forbidden-apis.txt</signaturesFile>
+          </signaturesFiles>
+          <!-- One shared file for every module: a class absent from a module's classpath is skipped
+               there. The price: a typo in a class name is skipped too. Prove each new entry fires. -->
+          <ignoreSignaturesOfMissingClasses>true</ignoreSignaturesOfMissingClasses>
+          <failOnUnsupportedJava>false</failOnUnsupportedJava>
+        </configuration>
+        <executions>
+          <execution>
+            <goals>
+              <goal>check</goal>
+              <goal>testCheck</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!-- Null safety as a compile error: Error Prone + NullAway over @NullMarked packages.
+           Needs .mvn/jvm.config (javac internals are exported to Error Prone there). -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <configuration>
+          <compilerArgs>
+            <arg>-XDcompilePolicy=simple</arg>
+            <arg>--should-stop=ifError=FLOW</arg>
+            <arg>-Xplugin:ErrorProne -XepDisableWarningsInGeneratedCode -XepOpt:NullAway:OnlyNullMarked=true -XepOpt:NullAway:JSpecifyMode=true -Xep:NullAway:ERROR</arg>
+            <arg>-parameters</arg>
+          </compilerArgs>
+          <annotationProcessorPaths>
+            <path>
+              <groupId>com.google.errorprone</groupId>
+              <artifactId>error_prone_core</artifactId>
+              <version>${error-prone.version}</version>
+            </path>
+            <path>
+              <groupId>com.uber.nullaway</groupId>
+              <artifactId>nullaway</artifactId>
+              <version>${nullaway.version}</version>
+            </path>
+          </annotationProcessorPaths>
+        </configuration>
+      </plugin>
+
+      <!-- Formatting is checked, not discussed. `mvn spotless:apply` fixes it. -->
+      <plugin>
+        <groupId>com.diffplug.spotless</groupId>
+        <artifactId>spotless-maven-plugin</artifactId>
+        <version>${spotless.version}</version>
+        <configuration>
+          <java>
+            <palantirJavaFormat>
+              <version>${palantir-java-format.version}</version>
+            </palantirJavaFormat>
+            <removeUnusedImports/>
+            <importOrder/>
+          </java>
+        </configuration>
+        <executions>
+          <execution>
+            <goals><goal>check</goal></goals>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!-- *Test runs in `test` (Surefire); *IT runs in `verify` (Failsafe). -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-failsafe-plugin</artifactId>
+        <executions>
+          <execution>
+            <goals>
+              <goal>integration-test</goal>
+              <goal>verify</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+
+    </plugins>
+  </build>
+</project>

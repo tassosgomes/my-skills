@@ -124,7 +124,7 @@ Padrões consistentes quando aplicáveis:
 
 - **Resiliência de cliente HTTP** (timeout, retry com backoff, circuit breaker, `Retry-After`,
   propagação de `traceparent`): é implementação, não contrato. Vive nas skills de stack —
-  `dotnet-dependency-config` e `dotnet-performance` no .NET, `java-dependency-config` no Java.
+  `dotnet` no .NET, `java` no Java.
 - **Estilo de mapeamento de endpoint** (Minimal API, Controller, Route handler): skill de stack.
 - **Geração do OpenAPI a partir do código** (code-first): skill de stack. Seja qual for a origem,
   o YAML resultante é commitado e passa no mesmo ruleset.

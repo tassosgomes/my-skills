@@ -1,5 +1,39 @@
 # Changelog das skills TSG Flow
 
+## 2026-10-02 — Skills Java unificadas em `java`, no molde da `dotnet`
+
+As sete skills `java-*` (architecture, code-quality, dependency-config, observability, performance,
+production-readiness, testing) viram uma só, `skills/java/`, com a mesma forma da `dotnet`: stack
+fechada, gates executáveis em `assets/`, regras não negociáveis e referências sob demanda. O padrão
+é o mesmo — Clean Architecture, um caso de uso por classe, outbox obrigatório, UUIDv7 no domínio —,
+mas escrito nas convenções de Java, não traduzido do C#:
+
+- **Fronteira por módulo Maven e visibilidade**, não por pasta: `api` vê `infra-*` só em escopo
+  `runtime` (import de adapter não compila), pacote por agregado e adapters package-private.
+- **Sem interface por caso de uso e sem dispatcher.** O `Command`/`Query` + `SimpleDispatcher` da
+  `java-architecture` saiu; o Mockito mocka classe, e interface fica para port.
+- **Unit of work é o `@Transactional`.** Sem `IUnitOfWork`; o adapter é
+  `@Transactional(propagation = MANDATORY)` e grava o outbox no `add`/`update`.
+- **Sem `async`/`CancellationToken` traduzido:** código síncrono sobre virtual threads; efeito
+  pós-commit por `AFTER_COMMIT` ou cache manager transaction-aware.
+- **Bean proxiado não é `final`** — o "sealed por padrão" do C# quebraria `@Transactional` em
+  silêncio. A regra do ArchUnit cobra o contrário.
+- **Stack atualizada** para Java 25 e Spring Boot 4.1: Jackson 3, `RestClient` + `@HttpExchange` no
+  lugar de WebClient, `@Retryable` do Spring Framework no lugar de `spring-retry`, OpenTelemetry pelo
+  starter do Boot, Testcontainers 2 com `@ServiceConnection`, JUnit Jupiter 6.
+- **MapStruct deixa de ser obrigatório** (mapeamento manual, como na `dotnet`); Lombok, H2,
+  ModelMapper, OpenFeign e WebFlux entram na lista proibida do `maven-enforcer-plugin`.
+- **Flyway já tem checksum**, então o gate de imutabilidade muda de motivo: ele antecipa para o PR a
+  falha que o `validate` só daria em staging/produção. Migrations `R__` ficam de fora.
+
+Os gates foram verificados num projeto real com JDK 25.0.4 e Boot 4.1.1: cada entrada do
+`forbidden-apis.txt`, cada pacote banido, NullAway e cada regra do ArchUnit falham com uma violação
+plantada; um teste end-to-end com PostgreSQL em Testcontainers confirmou o `INSERT` sem `SELECT`
+prévio (`@Version` nulo), a validação no caso de uso virando 400 e o 405 não virando 500.
+
+As sete skills originais permanecem intactas para comparação por eval; o grupo `java` do
+marketplace e o README já apontam para a nova.
+
 ## 2026-09-24 — Transporte Herdr testado com claude, codex, opencode e agy
 
 Um PRD de duas tasks foi orquestrado de ponta a ponta num repositório sandbox, com integrator
