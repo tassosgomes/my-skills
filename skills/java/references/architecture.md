@@ -31,7 +31,7 @@ time decidiu diferente ou fixou.
 - Limites como constante pública (`NAME_MAX_LENGTH`), reutilizada no `@Size` do Input e no
   `varchar` da migration — o número existe em um lugar só.
 - Acessores no estilo do record (`name()`, não `getName()`): o domínio não é JavaBean, nenhum
-  framework o lê por reflexão.
+  framework o lê por reflexão. Só existe o acessor que alguém consome; setter, nunca.
 - `equals`/`hashCode` de agregado por Id; de value object, o do `record`.
 
 ## Caso de uso

@@ -18,7 +18,7 @@ class CategoryJpaEntity {
 
     @SuppressWarnings("NullAway.Init")        // JPA materialization
     protected CategoryJpaEntity() {}
-    // package-private constructor, getters and update(...)
+    // package-private constructor, getters and update(...) — written out, no Lombok
 }
 ```
 

@@ -127,7 +127,9 @@
                 <banDuplicatePomDependencyVersions/>
                 <bannedDependencies>
                   <excludes>
-                    <!-- Records cover DTOs; Lombok hooks javac internals and breaks on JDK upgrades. -->
+                    <!-- Every member lives in the source: code is read and written by LLMs, and generated
+                         members are invisible to them. Records cover DTOs; domain classes need fine
+                         control (no setters, no builders bypassing create()). -->
                     <exclude>org.projectlombok:lombok</exclude>
                     <!-- Reflection mappers fail at runtime. Map by hand; MapStruct only with justified volume. -->
                     <exclude>org.modelmapper:*</exclude>

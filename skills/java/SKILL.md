@@ -44,7 +44,7 @@ como retorno e não como campo — são pressupostas e não se repetem aqui.
 | Banco em teste | Testcontainers 2 com `@ServiceConnection` | H2, HSQLDB, `@DynamicPropertySource` para container |
 | Arquitetura verificada | ArchUnit (`archunit-junit5`) | review manual como única fronteira |
 | Formatação | Spotless + palantir-java-format | discussão de estilo em review |
-| Boilerplate | `record`, IDE | Lombok |
+| Boilerplate | `record`; o resto escrito explícito no fonte | Lombok |
 
 Versões são piso, não teto: suba minor/patch à vontade, trate major como decisão. Tudo que o Boot
 gerencia herda a versão do `spring-boot-starter-parent` — nunca redeclare. Atualização de
@@ -302,6 +302,11 @@ O que os gates não pegam sozinhos:
 - Chamada a método do próprio bean não passa pelo proxy: `@Transactional`/`@Cacheable` num método
   chamado de dentro da mesma classe não tem efeito.
 - Construtor do bean package-private, sem `@Autowired`.
+- **Todo membro existe no fonte.** Nada de geração de código que o leitor — humano ou LLM — não vê
+  no `.java`: o comportamento é o que está escrito. O custo de escrever não justifica esconder.
+- Explícito não é completo: acessor só existe se alguém o consome. **Agregado não tem setter** — a
+  mudança de estado é um método com nome de negócio (`rename`, `deactivate`) que valida. Coleção
+  exposta sai como `List.copyOf(...)`, nunca a referência interna.
 - Exceção de negócio é unchecked e usa os tipos do projeto (`DomainException`, `UseCaseException`);
   checked exception não faz rollback por padrão. Não lance `RuntimeException`,
   `IllegalArgumentException` ou `IllegalStateException` para regra de negócio.
