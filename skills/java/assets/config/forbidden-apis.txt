@@ -1,0 +1,25 @@
+# Project signatures for de.thetaphi:forbiddenapis, on top of the bundled jdk-unsafe,
+# jdk-deprecated, jdk-non-portable and jdk-system-out.
+# Verified 2026-10-02 against JDK 25.0.4 / Spring Boot 4.1.1: every entry below fails a build.
+# ignoreSignaturesOfMissingClasses is on (one file for every module), so a misspelled class is
+# skipped silently: add an entry only after proving it fails a build.
+
+@defaultMessage Identifiers are UUIDv7, generated in the domain: use Ids.newId()
+java.util.UUID#randomUUID()
+
+@defaultMessage Time comes from the injected java.time.Clock: use now(clock) / clock.instant()
+java.time.Instant#now()
+java.time.LocalDateTime#now()
+java.time.LocalDate#now()
+java.time.OffsetDateTime#now()
+java.time.ZonedDateTime#now()
+java.util.Date#<init>()
+
+@defaultMessage Boot 4 runs on Jackson 3: import tools.jackson.*, not com.fasterxml.jackson.databind.*
+com.fasterxml.jackson.databind.**
+
+@defaultMessage Spring's @Transactional (readOnly, propagation), not the Jakarta one
+jakarta.transaction.Transactional
+
+@defaultMessage RestTemplate is in maintenance: use RestClient or an HTTP service interface (@HttpExchange)
+org.springframework.web.client.RestTemplate#<init>()

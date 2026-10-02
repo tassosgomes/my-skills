@@ -50,15 +50,9 @@
     },
     {
       "name": "java",
-      "description": "Suite Java / Spring Boot: arquitetura, qualidade, dependencias, observabilidade, performance, production readiness e testes.",
+      "description": "Padrao Java / Spring Boot: Clean Architecture multi-modulo Maven, casos de uso, JPA/Flyway, outbox RabbitMQ, observabilidade, performance, testes e gates executaveis (enforcer, forbiddenapis, NullAway, ArchUnit).",
       "skills": [
-        "./skills/java-architecture",
-        "./skills/java-code-quality",
-        "./skills/java-dependency-config",
-        "./skills/java-observability",
-        "./skills/java-performance",
-        "./skills/java-production-readiness",
-        "./skills/java-testing"
+        "./skills/java"
       ]
     },
     {

@@ -31,7 +31,7 @@ npx skills add tassosgomes/my-skills/tsg-flow-prd-creator
 npx skills add tassosgomes/my-skills/tsg-flow-techspec-creator
 npx skills add tassosgomes/my-skills/tsg-flow-task-creator
 npx skills add tassosgomes/my-skills/mermaid
-npx skills add tassosgomes/my-skills/java-architecture
+npx skills add tassosgomes/my-skills/java
 ```
 
 Funciona com qualquer harness suportado pela CLI `skills` (Claude Code, Codex, GitHub Copilot,
@@ -107,12 +107,7 @@ e permanecem com esse namespace nesta etapa.
 
 | Skill | Tipo | Propósito |
 |-------|------|-----------|
-| :star: [java-architecture](#java-architecture) | Normativo | Clean Architecture / Hexagonal, CQRS type-safe, Repository Pattern, multi-módulo Maven |
-| :star: [java-code-quality](#java-code-quality) | Transversal | HARD RULES de naming, métodos, DI, exceptions, records, logging |
-| :star: [java-dependency-config](#java-dependency-config) | Baseline | Dependências e configurações padrão Spring Boot 3+ (JPA, Flyway, MapStruct, Resilience4j) |
-| :star: [java-observability](#java-observability) | Normativo | Logging JSON + OpenTelemetry, tracing com Jaeger, métricas Prometheus, Health Checks |
-| :star: [java-performance](#java-performance) | Code review | JPA otimizado, N+1, QueryDSL, caching (Caffeine/Redis), WebClient, HikariCP |
-| :star: [java-testing](#java-testing) | Normativo | JUnit 5 + AssertJ + Mockito, Testcontainers, Playwright E2E, Dev Containers |
+| :star: [java](#java) | Normativo | Padrão único: Clean Architecture multi-módulo Maven, casos de uso, JPA/Flyway, outbox RabbitMQ, observabilidade, performance, testes e gates executáveis (enforcer, forbiddenapis, NullAway, ArchUnit) |
 
 ### React / Vite / TypeScript
 
@@ -249,95 +244,15 @@ security-audit-workflow/
 
 ---
 
-## java-architecture
+## java
 
-**Papel:** Define padrões obrigatórios de arquitetura, camadas e estrutura de projeto para Spring Boot 3+ / Java 21.
+**Papel:** Padrão único para Java 25 / Spring Boot 4.1 — a decisão, não o tutorial. Substitui as sete skills `java-*`.
 
-**Modelo arquitetural:** Clean Architecture / Hexagonal com 4 camadas — `domain` (puro, sem Spring/JPA), `application` (use cases + transações), `api` (controllers finos) e `infra` (persistência + adapters).
+**Modelo:** Clean Architecture em módulos Maven (`domain`, `application`, `api`, um `infra-*` por tecnologia), pacote por agregado dentro de cada módulo e visibilidade package-private como fronteira. Uma classe concreta por caso de uso (`@UseCase`), sem dispatcher nem interface por caso de uso; modelo JPA separado do domínio; UUIDv7 gerado no domínio; `Clock` injetado; outbox obrigatório com Spring AMQP.
 
-**Pilares normativos:**
-- **Repository Pattern** com port no `domain` e implementação no `infra`; MapStruct obrigatório; nunca expor entidade JPA fora do `infra`.
-- **CQRS type-safe** com `Command<R>` / `Query<R>` e `Dispatcher` resolvendo handlers via `GenericTypeResolver` — proibido lookup por nome de bean ou reflexão frágil.
-- **Tratamento de erros** via `DomainException` base + `@RestControllerAdvice` retornando `ProblemDetail` (RFC 7807); stacktrace nunca exposto.
-- **Result Pattern** restrito a integrações resilientes; fluxo padrão é exception-driven.
+**Gates executáveis (`assets/`):** POM raiz com `maven-enforcer-plugin` (pacotes proibidos), forbiddenapis (`UUID.randomUUID()`, `now()` sem `Clock`, Jackson 2, locale padrão), Error Prone + NullAway sobre JSpecify, Spotless, `architecture-tests` com ArchUnit e o gate de imutabilidade de migrations Flyway — verificados contra JDK 25 e Boot 4.1.1.
 
-**Estrutura multi-módulo Maven:** `domain` → `application` → `api`/`infra` com `pom.xml` por módulo; organização interna por feature/domínio; convenção `OrderEntity` (infra) vs `Order` (domain); proibido prefixo `I` em interfaces.
-
----
-
-## java-code-quality
-
-**Papel:** Skill transversal aplicada após qualquer geração de código Java. Estabelece HARD RULES numeradas (bloqueantes) e soft guidelines (preferenciais).
-
-**Categorias cobertas:**
-- **Global (GR-01..GR-10):** código em inglês, Java 17+, features modernas (records, sealed, switch expressions), `Optional` em vez de `null`, exceptions específicas (nunca `Exception`/`RuntimeException` direto), constructor injection obrigatório, `@Autowired` em field/setter proibido.
-- **Naming (NC-01..NC-08):** PascalCase/camelCase/UPPER_SNAKE_CASE, métodos começam com verbo, sem prefixo `I` em interfaces, `is/has` para booleanos.
-- **Métodos (MD-01..MD-08):** responsabilidade única, máximo 3 parâmetros, sem flag params, Command-Query Separation, máximo 2 níveis de aninhamento, guard clauses.
-- Demais blocos: classes, DI, null handling, exceptions, collections, records, sealed classes, logging, estilo, DTOs, MapStruct, Bean Validation.
-
-**Quando aplicar:** após gerar código, em revisão de PR, ao padronizar naming ou validar clean code.
-
----
-
-## java-dependency-config
-
-**Papel:** Define o baseline de dependências e configuração de infraestrutura para projetos Spring Boot 3+.
-
-**Stack baseline (pom.xml/build.gradle):** Spring Boot Starter Web + JPA + Validation + Actuator, Micrometer Prometheus, PostgreSQL driver, Flyway, WebClient (WebFlux), Resilience4j (retry + circuit breaker), Spring Cache, MapStruct, springdoc-openapi.
-
-**Configurações padronizadas:**
-- **JPA + HikariCP** com pool tunado, `open-in-view: false`, `ddl-auto: validate` em prod.
-- **Flyway migrations** em `db/migration` com convenção `V001__descricao.sql`.
-- **Profiles** dev / test / prod com overrides via `application-<profile>.yml`.
-- **Spotless** para formatação automática.
-
-**Quando acionar:** criação de projeto novo, adição de integração (DB, cache, messaging), configuração de profiles, setup de migrations.
-
----
-
-## java-observability
-
-**Papel:** Skill normativa de observabilidade — auditoria automática para garantir logging, métricas, tracing e health checks corretos.
-
-**Pilares:**
-- **Logging estruturado JSON** com campos obrigatórios (`timestamp`, `level`, `service.name`, `trace.trace_id`, `trace.span_id`, `context`); sanitização de dados sensíveis (LGPD/PCI-DSS); Logback configurado por profile.
-- **Tracing distribuído** com OpenTelemetry + Jaeger; correlação `trace_id`/`span_id` propagada via MDC; spans em pontos críticos (controllers, use cases, integrações externas).
-- **Métricas customizadas** com Micrometer exportando para Prometheus; counters/timers/gauges para regras de negócio.
-- **Health Checks** via Spring Boot Actuator — liveness, readiness e startup probes prontos para Kubernetes; checks customizados para dependências externas.
-
-**Quando acionar:** implementar logging, configurar probes K8s, adicionar métricas, setup de tracing, auditoria pré-produção.
-
----
-
-## java-performance
-
-**Papel:** Guia normativo para revisão de performance — ideal para code review e PR review automático.
-
-**Áreas cobertas:**
-- **JPA/Hibernate:** fetch join para evitar N+1, projeções (interface ou record) para queries de leitura, paginação eficiente (evitar `count` desnecessário), `@EntityGraph` quando aplicável.
-- **Queries dinâmicas:** QueryDSL ou Spring Data Specification (proibido string concatenation).
-- **Caching:** Caffeine para cache local em processos curtos, Redis para cache distribuído entre instâncias; chaves padronizadas; TTL sempre definido.
-- **Batch processing** com `EntityManager` + `flush`/`clear` em janelas controladas.
-- **WebClient** com pool de conexões, timeouts explícitos, retry com backoff via Resilience4j.
-- **HikariCP** com tamanho de pool dimensionado por carga; nunca usar valores default em produção.
-
----
-
-## java-testing
-
-**Papel:** Define a estratégia de testes obrigatória — pode bloquear geração de código sem teste correspondente.
-
-**Camadas de teste:**
-- **Unitários** com JUnit 5 + AssertJ + Mockito; padrão AAA (Arrange-Act-Assert); naming `methodName_Condition_ExpectedBehavior`; cobertura > 70% para lógica de negócio.
-- **Integração** com Spring Boot Test + Testcontainers (PostgreSQL real, nunca H2); fixtures reutilizáveis por feature.
-- **E2E** com Playwright cobrindo os fluxos críticos do usuário.
-
-**Infraestrutura de teste:**
-- Dev Containers para ambiente isolado e reprodutível.
-- `@DynamicPropertySource` para injetar credenciais dos Testcontainers.
-- Helpers/builders para reduzir setup duplicado.
-
-**Quando acionar:** criar/revisar testes, garantir cobertura, configurar Testcontainers, setup de ambiente de teste.
+**Referências sob demanda:** arquitetura, persistência, mensageria, testes, operação e formatos (Monolito Modular com Spring Modulith, Microsserviços).
 
 ---
 
