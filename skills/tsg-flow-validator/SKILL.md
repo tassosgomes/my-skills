@@ -106,6 +106,32 @@ corrigir o teste, nunca enfraquecê-lo ou removê-lo.
 Sem ferramenta de execução ou sem suíte comportamental, declare a limitação explicitamente no
 relatório. Não declare o sensor executado quando ele não rodou.
 
+## Subagentes
+
+Somente quando o pedido de transporte declarar sessão principal (Herdr) e o runtime oferecer
+subagentes. Como subagente nativo (transporte padrão), não tente delegar.
+
+A sessão do Herdr começa zerada; use subagentes para dividir a revisão sem perder o contexto que o
+veredito precisa:
+
+- **full:** uma dimensão por subagente — rastreabilidade por spec, contratos entre tasks,
+  segurança, arquitetura —, cada um com o diff desde a base e o material daquela dimensão.
+- **sensor de discriminação:** uma mutação por subagente, cada um no seu próprio `git worktree`.
+  Rode em paralelo apenas se a suíte for isolada (sem porta, banco ou container compartilhado);
+  caso contrário, em sequência.
+- **focused/revalidation:** em geral dispensa; use para ler spec ou skill extensa quando uma
+  verificação exigir.
+
+Regras:
+
+- O gate e os checks obrigatórios são executados por você; o exit code que decide o veredito vem
+  de comando seu, não de resumo.
+- Achado de subagente é hipótese: confira arquivo e linha antes de registrá-lo como bloqueante.
+  A classificação entre bloqueante e recomendação é sua.
+- Subagentes não editam a árvore real. Ao fim do sensor, você confere que `git status --porcelain`
+  e o HEAD voltaram à linha de base e remove os worktrees.
+- Relatório, resultado e `--result-file` ficam com você.
+
 ## Evidência e resultados
 
 Task: `{PRD_DIR}/N_task_review.md`. PRD: `{PRD_DIR}/prd_review.md`.

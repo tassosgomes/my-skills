@@ -1,5 +1,21 @@
 # Changelog das skills TSG Flow
 
+## 2026-10-03 — Implementer e validator usam subagentes no Herdr
+
+No transporte Herdr, cada worker é uma CLI nova, com contexto zerado e livre para delegar — o que
+um subagente nativo não pode. O `tsg-delegate.sh` agora declara a sessão principal no pedido ao
+implementer e ao validator, e as duas skills ganham uma seção **Subagentes**:
+
+- **Implementer:** subagentes mapeiam convenções, leem specs longas e rodam builds/testes verbosos
+  durante a correção. A edição fica com o worker, e o gate final e os checks obrigatórios são
+  executados por ele.
+- **Validator:** no full, uma dimensão de revisão por subagente; no sensor de discriminação, uma
+  mutação por subagente em worktree próprio, em paralelo só com suíte isolada. Gate e checks
+  continuam com o validator, e todo achado delegado é conferido antes de virar bloqueante.
+
+O sinal é explícito no prompt, não inferido de `HERDR_ENV`: no transporte subagent nada muda, e o
+integrator não recebe a instrução.
+
 ## 2026-10-02 — Skills Java unificadas em `java`, no molde da `dotnet`
 
 As sete skills `java-*` (architecture, code-quality, dependency-config, observability, performance,
