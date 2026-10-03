@@ -14,6 +14,11 @@ Use `--context-file=<path>` para decisões adicionais de uma chamada. O script c
 para o diretório do run antes de iniciar o worker; não misture essas decisões ao plano da task.
 Essa cópia fica retida com os logs, então registre decisões sem credenciais.
 
+O worker do Herdr é uma sessão principal com contexto zerado, ao contrário do subagente nativo, que
+não pode delegar. Por isso o pedido ao implementer e ao validator declara a sessão principal e
+aponta a seção **Subagentes** da skill de papel. O integrator não recebe essa instrução: suas
+operações de git são curtas e sequenciais.
+
 ## Roteamento entre agentes
 
 `--kind` é opcional. Omitido, o kind vem da política, resolvida em `TSG_ROUTING_FILE`,

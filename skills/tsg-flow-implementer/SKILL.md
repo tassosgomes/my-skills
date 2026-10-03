@@ -58,6 +58,28 @@ Confirme objetivo, escopo, contratos, dependências concluídas, critérios, dec
 7. Registre somente arquivos alterados, gate, checks, evidência, suporte adicional e limitações.
    Use design-patterns Check apenas quando a task apresenta pressão real de design.
 
+## Subagentes
+
+Somente quando o pedido de transporte declarar sessão principal (Herdr) e o runtime oferecer
+subagentes. Como subagente nativo (transporte padrão), não tente delegar.
+
+A sessão do Herdr começa zerada; use subagentes para que leitura extensa e saída longa não ocupem
+o contexto que a implementação precisa:
+
+- mapear convenções, pontos de extensão e testes vizinhos antes de editar;
+- ler trechos longos de specs, ADRs ou skills de stack e devolver só o que a task usa;
+- rodar build, lint e testes verbosos durante a correção e devolver exit code, falhas e trecho
+  pertinente.
+
+Regras:
+
+- Subagentes leem e executam; a edição do código fica com você.
+- O gate e os checks obrigatórios do passo 4 são executados por você, na versão final do código.
+  Resumo de subagente não é evidência de aprovação.
+- Dê a cada subagente a task, os caminhos e uma pergunta delimitada, sem a conversa inteira.
+- Relatório, resultado e `--result-file` ficam com você.
+- Task pequena não precisa de delegação: delegue quando a leitura ou a saída dominaria o contexto.
+
 ## Resultados finais
 
 | Resultado | Significado |

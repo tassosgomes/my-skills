@@ -277,6 +277,10 @@ ARGS=("tsg-flow-$ROLE" "--prd-dir=$PRD_DIR" "--mode=$MODE" "--run-id=$RUN_ID" "-
 printf -v INVOCATION '%q ' "${ARGS[@]}"
 CONTEXT_INSTRUCTION=""
 [[ -n "$CONTEXT_COPY" ]] && CONTEXT_INSTRUCTION="- Leia o contexto adicional em $CONTEXT_COPY; ele registra decisoes desta chamada e nao substitui a task aprovada."
+# O worker do Herdr e uma sessao principal com contexto zerado: pode delegar a subagentes,
+# o que um subagente nativo nao pode. O sinal e explicito para a skill nao adivinhar o transporte.
+SUBAGENT_INSTRUCTION=""
+[[ "$ROLE" != "integrator" ]] && SUBAGENT_INSTRUCTION="- Sessao principal (Herdr): se este runtime oferecer subagentes, siga a secao Subagentes da skill."
 REPORT_INSTRUCTION=""
 [[ -n "$REPORT_PATH" ]] && REPORT_INSTRUCTION="- Grave o relatorio em $REPORT_PATH, com a linha Run: $RUN_ID."
 
@@ -291,6 +295,7 @@ PROMPT="$INVOCATION
 
 Transporte desta chamada:
 - Nao faca perguntas; devolva bloqueio operacional se faltar decisao material ou autorizacao.
+$SUBAGENT_INSTRUCTION
 $REPORT_INSTRUCTION
 $CONTEXT_INSTRUCTION
 - Grave o resultado final em $RESULT_FILE, somente depois de terminar a etapa e salvar o relatorio.

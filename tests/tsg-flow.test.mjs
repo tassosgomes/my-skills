@@ -335,6 +335,15 @@ test('integrator git fields are requested at the top level of the result', t => 
   assert.match(r.prompt, /nunca\s+dentro de report/);
 });
 
+test('only implementer and validator workers are told to use subagents', t => {
+  for (const [role, mode, expected] of [['implementer', 'implement', true],
+    ['validator', 'focused', true], ['integrator', 'prepare-prd-branch', false]]) {
+    const r = runDelegate(t, { role, mode });
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    assert.equal(/secao Subagentes da skill/.test(r.prompt), expected, role);
+  }
+});
+
 test('rejects git fields nested in report instead of the top level', t => {
   const r = runDelegate(t, { role: 'integrator', mode: 'prepare-prd-branch', scenario: 'nested_git' });
   assert.equal(r.status, 2, r.stdout + r.stderr);
