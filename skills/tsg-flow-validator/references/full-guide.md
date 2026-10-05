@@ -32,7 +32,9 @@ arquitetural invalida a evidência. Se a base alvo avançar, a integração deve
 Mantenha os relatórios curtos. Saídas de falha têm até 40 linhas; guarde o restante no log da ferramenta.
 Não duplique especificações ou ADRs. No transporte por arquivo, inclua uma linha Run com o run_id
 da chamada e escreva o resultado JSON somente depois de salvar o relatório.
-Um relatório antigo existente não é evidência da tentativa atual.
+Um relatório antigo existente não é evidência da tentativa atual, com uma exceção: na full a partir
+da segunda tentativa, a linha de um componente não alterado pode ser reaproveitada nas condições do
+SKILL.md ("Full a partir da segunda tentativa"), sempre marcada com o run e o commit de origem.
 
 ## Erros
 

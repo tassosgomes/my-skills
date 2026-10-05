@@ -298,6 +298,8 @@ Transporte desta chamada:
 $SUBAGENT_INSTRUCTION
 $REPORT_INSTRUCTION
 $CONTEXT_INSTRUCTION
+- Rode gate, checks e testes em primeiro plano. Nao encerre o turno com processo, shell ou monitor
+  ainda em segundo plano: fim de turno sem o arquivo de resultado conta como falha de transporte.
 - Grave o resultado final em $RESULT_FILE, somente depois de terminar a etapa e salvar o relatorio.
 - Use exatamente a identidade abaixo; substitua outcome e gate pelos valores correspondentes.
 $SCHEMA
@@ -418,11 +420,20 @@ while :; do
   fi
   if ((PROMPT_RC == 0)) &&
      [[ "$(jq -r '.result.agent.agent_status // empty' "$PROMPT_LOG" 2>/dev/null | tail -1)" != blocked ]]; then
-    # A deteccao do agy marca idle entre chamadas de ferramenta. Sem resultado, de uma janela
-    # para o turno voltar a working e acompanhe-o.
+    # A deteccao do agy marca idle entre chamadas de ferramenta, e um agente pode encerrar o
+    # turno com testes ainda em segundo plano e voltar quando eles terminam. Sem resultado,
+    # espere o turno voltar a working ou o arquivo aparecer, ate TSG_RESULT_WAIT_MS no total.
+    RESULT_WAIT_END=$(( SECONDS + ${TSG_RESULT_WAIT_MS:-1800000} / 1000 ))
+    WAIT_NOTED=0
     while [[ ! -e "$RESULT_FILE" ]] && (( $(remaining_ms) > 1000 )); do
-      "$HERDR" agent wait "$AGENT_NAME" --until working \
-        --timeout "${TSG_IDLE_GRACE_MS:-20000}" >/dev/null 2>&1 || break
+      if ! "$HERDR" agent wait "$AGENT_NAME" --until working \
+        --timeout "${TSG_IDLE_GRACE_MS:-20000}" >/dev/null 2>&1; then
+        (( SECONDS < RESULT_WAIT_END )) || break
+        [[ -e "$RESULT_FILE" ]] && break
+        ((WAIT_NOTED)) || printf 'turno parado sem resultado: aguardando processos em segundo plano\n' >>"$LOG_FILE"
+        WAIT_NOTED=1
+        continue
+      fi
       printf 'falso idle: turno retomado, aguardando novamente\n' >>"$LOG_FILE"
       wait_turn_end || { cat "$PROMPT_LOG" >>"$LOG_FILE"; PROMPT_RC=1; break; }
       cat "$PROMPT_LOG" >>"$LOG_FILE"

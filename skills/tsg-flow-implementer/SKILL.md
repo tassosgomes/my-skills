@@ -48,6 +48,10 @@ Confirme objetivo, escopo, contratos, dependências concluídas, critérios, dec
    que o runner reserva para filtro sem match. Exit `0` com saída divergente de `gate_expect`
    também reprova. Se instruções locais exigirem o wrapper `rtk`, use `rtk proxy` para preservar
    os argumentos originais dos comandos de gate e check.
+   Rode gate e checks em primeiro plano e **nunca encerre o turno com processo, shell ou monitor
+   ainda rodando em segundo plano**: o transporte trata fim de turno sem resultado como falha.
+   Suítes de componentes diferentes podem rodar em paralelo, no máximo duas, cada uma com seus
+   próprios contêineres; nunca duas execuções da mesma suíte ao mesmo tempo.
 5. Use compute para builds/testes pesados e infra para serviços compartilhados quando essas
    instruções existirem no projeto. Preserve cwd, revisão e ambiente de execução.
 6. Corrija falhas de código da própria task e repita as verificações afetadas por até três

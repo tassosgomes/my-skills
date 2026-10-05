@@ -54,6 +54,9 @@ comandos, dependências, ambiente e evidência, não apenas um mesmo SHA.
 Execute checks em primeiro plano. Se uma ferramenta retornar uma sessão ou processo assíncrono,
 aguarde sua conclusão e registre o exit code antes do veredito. Falha de um check não dispensa os
 demais checks independentes; dependência indisponível é `VALIDATION ERROR`.
+**Nunca encerre o turno com processo, shell ou monitor ainda rodando em segundo plano.** O
+transporte trata o fim de turno sem `--result-file` como falha, e a espera continua sem dono.
+Espere a conclusão dentro do mesmo turno, escreva o relatório e o resultado, e só então termine.
 Se instruções locais exigirem o wrapper `rtk`, use `rtk proxy` para preservar os argumentos
 originais dos comandos de gate e check.
 
@@ -72,6 +75,33 @@ originais dos comandos de gate e check.
   Execute o **sensor de discriminação** (abaixo). Consulte design-patterns Review se disponível e
   pertinente; recomendações de refatoração não bloqueiam por preferência. Não crie abstrações nem
   aplique correções.
+
+### Full a partir da segunda tentativa: só o que mudou
+
+Rodar de novo a matriz inteira depois de uma correção pontual custa horas e não acrescenta prova
+sobre o que não mudou. Na tentativa 2 em diante, reaproveite a evidência da full anterior
+**por componente**, quando todas estas condições valem:
+
+1. A full anterior deste PRD está no `prd_review.md`, com `Run`, `validated_commit` e matriz por
+   componente, e o mesmo `base_ref` (a base não avançou).
+2. `git diff --name-only <validated_commit anterior>..HEAD` não toca o componente. Mapeie arquivos a
+   componentes pelos `paths` dos workflows de CI.
+3. A mudança não toca nada compartilhado que entra no build ou nos testes de vários componentes
+   (`Directory.Build.*`, `Directory.Packages.props`, `global.json`, `nuget.config`, `contracts/`,
+   `src/contract-testing/`, compose, `.github/`). Se tocar, rode a matriz inteira.
+
+Componente alterado: rode todos os passos obrigatórios dele, inclusive a suíte completa e a
+cobertura. Componente não alterado: copie a linha da matriz anterior com o run e o commit de origem,
+marcada **reaproveitada**. Nunca reaproveite resultado reprovado ou de execução contaminada. Em caso
+de dúvida sobre o mapeamento, rode o componente. No sensor, repita os sobreviventes da tentativa
+anterior e as mutações das fatias cujos arquivos mudaram; as demais ficam reaproveitadas com a origem.
+
+### Ordem e paralelismo das suítes
+
+Suítes de **componentes diferentes** podem rodar em paralelo, no máximo duas por vez, cada uma com
+seus próprios contêineres; comece pela mais longa. Nunca rode duas execuções da mesma suíte, nem
+duas suítes que compartilhem contêineres, banco ou porta. Falha que só aparece sob concorrência
+deve ser confirmada numa execução isolada antes de virar bloqueante ou de ser descartada.
 
 Quebra de jornada exigida pelo PRD, contrato ou check obrigatório do CI é bloqueante, mesmo que
 surja inicialmente como recomendação. Se o CI já falhava na base, registre a comparação; a full

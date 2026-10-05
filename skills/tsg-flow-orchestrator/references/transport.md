@@ -97,8 +97,12 @@ com o prompt já aceito. Em stall, o script espera até `TSG_STALL_RECOVERY_MS` 
 `working`: se o turno aparecer, acompanha-o até o fim; se não, o prompt se perdeu e a falha é
 relatada como `agent_prompt_stalled`.
 A detecção do agy marca `idle` entre chamadas de ferramenta. Se o resultado ainda não existe
-quando o turno parece terminado, o script dá `TSG_IDLE_GRACE_MS` (20000) para o agente voltar a
-`working` e continua aguardando dentro do timeout da chamada. Em qualquer falha
+quando o turno parece terminado, o script espera, em janelas de `TSG_IDLE_GRACE_MS` (20000), o
+agente voltar a `working` ou o arquivo de resultado aparecer, por até `TSG_RESULT_WAIT_MS`
+(1800000, 30 min) no total e sempre dentro do timeout da chamada. A janela longa cobre o agente que
+encerra o turno com testes em segundo plano e volta quando eles terminam; o pedido ao worker proíbe
+esse comportamento, e a espera é só a rede de segurança. Um worker que de fato parou sem resultado
+só é declarado `result_missing` ao fim dela. Em qualquer falha
 de transporte depois que um agente pode ter iniciado, o script mantém o pane e informa seu ID
 na linha DELEGATE para diagnóstico. Consulte `agent get <pane-id>`, `agent read <pane-id>` e, se a
 detecção estiver errada, `agent explain <pane-id> --json`. Um timeout ou `agent_prompt_stalled`

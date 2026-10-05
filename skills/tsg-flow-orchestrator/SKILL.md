@@ -77,7 +77,11 @@ o histórico mínimo anterior no estado/relatório.
    Passo obrigatório sem evidência impede aprovação; limitação de ambiente é erro de validação.
 4. Em rejeição atribuída a task, delegue reopen-task; execute fix, focused/revalidation e checkpoint.
    Para lacuna sem dono, reporte planejamento insuficiente sem inventar task no orquestrador.
-5. Conte ciclos de correção full com o mesmo limite e preserve evidências.
+5. Conte ciclos de correção full com o mesmo limite e preserve evidências. Da segunda full em
+   diante, informe ao validator (por `--context-file` no Herdr) o run, o `validated_commit` e o
+   relatório da full anterior e os commits de correção, para ele reaproveitar a evidência dos
+   componentes não alterados (seção "Full a partir da segunda tentativa" do validator). Base que
+   avançou invalida o reaproveitamento.
 6. Após FULL VALIDATION APROVADA, persista validated_commit/tree e delegue complete-prd.
 7. REVALIDATION REQUIRED por alteração da base/código invalida aprovação: prepare integração e
    valide o resultado novamente. Não conte mudança externa da base como defeito de implementação.
