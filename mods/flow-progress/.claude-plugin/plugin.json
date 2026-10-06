@@ -1,0 +1,9 @@
+{
+  "name": "flow-progress",
+  "version": "0.1.0",
+  "description": "Faixa acima do prompt com tasks concluídas/total e a fase atual do TSG Flow (dev, review, bloqueada, integração).",
+  "types": "./types/index.d.ts",
+  "author": {
+    "name": "Tasso Silva Gomes"
+  }
+}

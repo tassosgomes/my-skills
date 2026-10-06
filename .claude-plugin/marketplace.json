@@ -53,6 +53,11 @@
       "skills": [
         "./skills/react"
       ]
+    },
+    {
+      "name": "flow-progress",
+      "description": "Mod do Claude Code: faixa acima do prompt com tasks concluídas/total e fase atual do TSG Flow (desenvolvimento, review, bloqueada, integração).",
+      "source": "./mods/flow-progress"
     }
   ]
 }

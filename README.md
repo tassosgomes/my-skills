@@ -54,6 +54,45 @@ continua instalando skills avulsas normalmente.
 
 ---
 
+## Mods
+
+`mods/` guarda mods do Claude Code (plugins de hooks que desenham painéis, faixas e status na própria
+interface). Não são skills: não passam pelo `npx skills`.
+
+| Mod | Propósito |
+|-----|-----------|
+| [flow-progress](mods/flow-progress) | Faixa acima do prompt com tasks concluídas/total e a fase atual do TSG Flow: ⚙ desenvolvimento, 🔍 review, ⛔ bloqueada, 🔀 integração |
+
+### Instalação dos mods
+
+Pelo marketplace deste repositório, dentro do Claude Code:
+
+```text
+/plugin marketplace add tassosgomes/my-skills
+/plugin install flow-progress@my-skills
+```
+
+Para testar a partir de um clone local, sem instalar:
+
+```bash
+claude --plugin-dir mods/flow-progress
+```
+
+### flow-progress
+
+Exemplo da faixa: `prd-xyz ████░░░░░░ 4/10 🔍 review (task 5.0)`.
+
+- **PRD ativo:** o `tasks/prd-*/flow-state.json` modificado por último, relido a cada 3 segundos.
+  Rode o Claude Code na raiz do projeto que contém `tasks/`.
+- **Realizado/total:** checkboxes do `tasks.md`.
+- **Fase:** `status:` do frontmatter de `<num>_task.md` (`in_progress`, `validating`, `blocked`, `done`).
+  Com todas as tasks `done`, mostra integração até o `phase` do `flow-state.json` indicar conclusão.
+- A faixa some quando não há PRD em orquestração; o botão **Ocultar** a esconde na sessão.
+
+Testes: `claude plugin test mods/flow-progress`. Validação: `claude plugin validate mods/flow-progress`.
+
+---
+
 ## Visão geral das skills
 
 > :star: Skills de minha autoria.
