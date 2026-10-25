@@ -31,7 +31,7 @@ retrabalho detectado só na revisão full — continua sendo registro manual por
 ## Testes determinísticos locais
 
 ```bash
-rtk proxy node --test tests/tsg-flow.test.mjs
+node --test tests/tsg-flow.test.mjs
 ```
 
 As fixtures usam Git temporário e um substituto de Herdr, sem modelos ou serviços reais.

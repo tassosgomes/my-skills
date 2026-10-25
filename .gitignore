@@ -10,3 +10,4 @@ _repos/*
 !/docs/diagrams/tsg-flow-pipeline.md
 opencode.json
 .env
+.testes

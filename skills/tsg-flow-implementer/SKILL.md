@@ -46,8 +46,7 @@ Confirme objetivo, escopo, contratos, dependências concluídas, critérios, dec
    **Não altere o comando.** Um gate que não roda por ambiente é `GATE ERROR`, não um gate
    adaptado. O exit code é o veredito: `0` aprova, qualquer outro reprova — inclusive os códigos
    que o runner reserva para filtro sem match. Exit `0` com saída divergente de `gate_expect`
-   também reprova. Se instruções locais exigirem o wrapper `rtk`, use `rtk proxy` para preservar
-   os argumentos originais dos comandos de gate e check.
+   também reprova.
    Rode gate e checks em primeiro plano e **nunca encerre o turno com processo, shell ou monitor
    ainda rodando em segundo plano**: o transporte trata fim de turno sem resultado como falha.
    Suítes de componentes diferentes podem rodar em paralelo, no máximo duas, cada uma com seus

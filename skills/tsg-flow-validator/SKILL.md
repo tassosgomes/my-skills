@@ -57,8 +57,6 @@ demais checks independentes; dependência indisponível é `VALIDATION ERROR`.
 **Nunca encerre o turno com processo, shell ou monitor ainda rodando em segundo plano.** O
 transporte trata o fim de turno sem `--result-file` como falha, e a espera continua sem dono.
 Espere a conclusão dentro do mesmo turno, escreva o relatório e o resultado, e só então termine.
-Se instruções locais exigirem o wrapper `rtk`, use `rtk proxy` para preservar os argumentos
-originais dos comandos de gate e check.
 
 ## Modos
 
