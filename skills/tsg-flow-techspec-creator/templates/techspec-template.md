@@ -56,6 +56,17 @@ Diagrama mermaid/ascii quando as relações não couberem bem em texto.
 > e geração de tipos são **decisões de projeto**, não de feature: vivem na skill de arquitetura da
 > stack ou no baseline arquitetural. Registre aqui apenas o desvio justificado do padrão.
 
+#### Referência visual *(somente se houver Figma ou mockup aprovado)*
+
+Sem Figma nem mockup, escreva só `Sem referência visual aprovada.` e omita a tabela: as tasks não
+terão conferência visual. Com referência, uma linha por tela e por estado que o design mostra
+(vazio, erro, sem permissão, carregando). Quando o design for aprovado, exporte cada frame como PNG
+para `tasks/prd-<slug>/design/`, para que a conferência não dependa de acesso ao Figma.
+
+| Fatia | Tela / estado | Referência | Largura | Cenário |
+|---|---|---|---|---|
+| [V-XX] | [tela, estado] | [node id do Figma ou `design/<arquivo>.png`] | [px] | [rota, perfil e dados que reproduzem o estado] |
+
 ---
 
 ## Mapa de Fatias Verticais

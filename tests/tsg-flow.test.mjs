@@ -661,3 +661,56 @@ test('a model template without a model falls back to the discard path', t => {
   assert.match(r.stdout, /effort high ignorado: cursor nao expoe esforco/);
   assert.equal(r.ledger[0].effort, null);
 });
+
+const validatePlan = join(root, 'skills/tsg-flow-task-creator/scripts/validate_plan.py');
+
+function visualPlan(t, { techspecVisual = '', taskVisual = '', fatia = 'V-01' } = {}) {
+  const dir = mkdtempSync(join(tmpdir(), 'tsg-flow-plan-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  writeFileSync(join(dir, 'techspec.md'),
+    `# TechSpec\n\n### Bloco Frontend\n\n#### Referência visual\n\n${techspecVisual}\n\n## Mapa\n`);
+  writeFileSync(join(dir, 'tasks.md'), '# Plano\n\n- [ ] 1.0 Roles\n\n| RF-01 | 1.0 |\n');
+  writeFileSync(join(dir, '1_task.md'), [
+    '---', 'status: pending', 'task_kind: vertical', 'blocked_by: []',
+    'gate: "pnpm --filter admin exec vitest run roles"', 'gate_expect: "6 testes passam"', '---', '',
+    '# 1.0 Roles', '', `**Fatia:** ${fatia} · **Cobre:** RF-01`, '',
+    '## Comportamento', '', 'Lista as roles.', '', taskVisual, '',
+    '## Pronto quando', '', '- [ ] a lista aparece', ''].join('\n'));
+  return command('python3', [validatePlan, dir], dir);
+}
+
+const visualTable = '| Fatia | Tela / estado | Referência | Largura | Cenário |\n|---|---|---|---|---|\n' +
+  '| V-01 | Roles, lista | `8:19` | 1440 | /acessos/roles, perfil completo |';
+const taskTable = '## Referência visual\n\n| Tela / estado | Referência | Largura | Cenário |\n' +
+  '|---|---|---|---|\n| Roles, lista | `8:19` | 1440 | /acessos/roles, perfil completo |';
+
+test('a plan without Figma or mockups needs no visual reference', t => {
+  const r = visualPlan(t, { techspecVisual: 'Sem referência visual aprovada.' });
+  assert.equal(r.status, 0, r.stdout);
+});
+
+test('a screen task must list the frames the TechSpec assigns to its slice', t => {
+  const r = visualPlan(t, { techspecVisual: visualTable });
+  assert.equal(r.status, 1, r.stdout);
+  assert.match(r.stdout, /a fatia V-01 tem referência visual na TechSpec/);
+});
+
+test('a screen task listing its frames passes', t => {
+  const r = visualPlan(t, { techspecVisual: visualTable, taskVisual: taskTable });
+  assert.equal(r.status, 0, r.stdout);
+});
+
+test('every TechSpec frame must be delivered by some task', t => {
+  const r = visualPlan(t, { techspecVisual: visualTable, fatia: 'V-02' });
+  assert.equal(r.status, 1, r.stdout);
+  assert.match(r.stdout, /referência visual 8:19 da TechSpec não está em nenhuma task/);
+});
+
+test('a frame id does not match a longer id', t => {
+  const r = visualPlan(t, {
+    techspecVisual: visualTable,
+    taskVisual: taskTable.replace('`8:19`', '`8:190`'),
+  });
+  assert.equal(r.status, 1, r.stdout);
+  assert.match(r.stdout, /referência visual 8:19 da TechSpec não está em nenhuma task/);
+});

@@ -140,6 +140,11 @@ Toda task recebe validator focused no perfil standard.
 12. Se o PRD exige smoke e o ambiente ainda não o permite, planeje o menor habilitador necessário
     para configuração, dados/migrations e isolamento de recursos aplicáveis. O critério da fatia
     deve comprovar a jornada observável, incluindo o destino de links públicos quando existirem.
+13. Quando a TechSpec tem **Referência visual** (Figma ou mockup), toda task que entrega uma dessas
+    telas traz a seção **Referência visual** com as linhas que ela entrega, e todo frame aparece em
+    alguma task. O cenário reproduz o estado sem backend real sempre que o projeto permitir (modo
+    simulado, API fake). Sem Figma nem mockup, a seção não existe e a conferência visual não se
+    aplica.
 
 ## Cobertura
 
@@ -149,7 +154,8 @@ segurança, migração de dados) exige justificativa — não invente task artif
 
 `validate_plan.py` verifica a paridade `tasks.md` ↔ arquivos e a tabela de cobertura; o julgamento
 de que a fatia é a certa continua sendo seu. Quando o plano traz **Verificação herdada**, o script
-também exige **Verificações do projeto** em cada task.
+também exige **Verificações do projeto** em cada task. Quando a TechSpec tem **Referência visual**,
+exige a seção nas tasks dessas fatias e que todo frame esteja em alguma task.
 
 ## Checklist antes do handoff
 
@@ -165,3 +171,4 @@ também exige **Verificações do projeto** em cada task.
 - [ ] Nenhuma task lista arquivos a criar.
 - [ ] Todo RF, RN e US do PRD está na tabela de cobertura.
 - [ ] Nenhuma fatia full-stack foi dividida por camada.
+- [ ] Com referência visual na TechSpec, cada task com tela lista seus frames e cenários.

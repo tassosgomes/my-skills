@@ -66,6 +66,16 @@ originais dos comandos de gate e check.
   Se a task altera cliente de rede ou composição de dependências, confira evidência que exercita o
   adaptador real e a partida da aplicação. Abra trechos das specs/contrato/ADRs somente quando uma
   verificação exigir.
+- **conferência visual (focused e revalidation):** somente se a task tem a seção **Referência
+  visual** (Figma ou mockup); sem ela, não se aplica. Use as capturas do implementer se forem do
+  código atual; senão, capture você mesmo cada cenário na largura indicada. Compare com o PNG em
+  `{PRD_DIR}/design/` ou, na falta dele, com o frame no Figma. Não faça diff de pixel: fontes, dados
+  de exemplo e antialiasing geram falso positivo.
+  - **Bloqueia:** estrutura ou hierarquia diferente, texto diferente do aprovado, estado previsto
+    ausente, elemento que transborda o container ou texto cortado.
+  - **Recomendação:** diferença pequena de espaçamento, alinhamento ou tom.
+  - Sem navegador ou sem acesso à referência: registre a limitação. A conferência não feita não
+    aprova nem reprova; o relatório diz que ela não rodou.
 - **revalidation:** execute evidências, confira bloqueios anteriores e regressões no diff novo.
   Acrescente uma seção de revalidação ao relatório; não rederive observações sem mudança relevante.
 - **full:** revise diff desde a base preparada, rastreabilidade de todas as specs selecionadas,

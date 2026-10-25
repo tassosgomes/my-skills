@@ -52,14 +52,23 @@ Confirme objetivo, escopo, contratos, dependências concluídas, critérios, dec
    ainda rodando em segundo plano**: o transporte trata fim de turno sem resultado como falha.
    Suítes de componentes diferentes podem rodar em paralelo, no máximo duas, cada uma com seus
    próprios contêineres; nunca duas execuções da mesma suíte ao mesmo tempo.
-5. Use compute para builds/testes pesados e infra para serviços compartilhados quando essas
+5. **Conferência visual**, somente se a task tem a seção **Referência visual** (Figma ou mockup).
+   Sem ela, pule este passo. Depois do gate, abra cada cenário da tabela no navegador (Playwright),
+   na largura indicada, e salve a captura em `{PRD_DIR}/evidence/<task>/<tela-estado>.png`.
+   Na mesma página, verifique que nenhum elemento transborda o container
+   (`scrollWidth > clientWidth` em cards, células, botões e links) nem tem texto cortado.
+   Compare cada captura com a referência: o PNG em `{PRD_DIR}/design/` quando existir, senão o
+   frame pelo Figma quando houver acesso. Corrija estrutura, textos e estados divergentes antes de
+   concluir. Sem navegador ou sem acesso à referência, registre a limitação no relatório e não
+   declare a conferência feita.
+6. Use compute para builds/testes pesados e infra para serviços compartilhados quando essas
    instruções existirem no projeto. Preserve cwd, revisão e ambiente de execução.
-6. Corrija falhas de código da própria task e repita as verificações afetadas por até três
+7. Corrija falhas de código da própria task e repita as verificações afetadas por até três
    ciclos nesta chamada. Pare antes desse limite se faltar decisão material, se o ambiente
    impedir a verificação ou se não houver progresso. A chamada inteira é uma tentativa do
    orquestrador; uma falha persistente ao final consome essa tentativa. Exit 1 é reprovação;
    exit 2 é infraestrutura/uso, não tentativa de convergência.
-7. Registre somente arquivos alterados, gate, checks, evidência, suporte adicional e limitações.
+8. Registre somente arquivos alterados, gate, checks, capturas, evidência, suporte adicional e limitações.
    Use design-patterns Check apenas quando a task apresenta pressão real de design.
 
 ## Subagentes

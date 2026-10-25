@@ -35,7 +35,9 @@ Exija aprovação focused ou revalidation da mesma task e da revisão de código
 que o código é o revisado, compare os arquivos alterados com os do relatório de revisão; não
 reexecute o gate.
 Atualize checkbox e `status: done`. Inclua código/testes autorizados, task, resumo, review e, quando
-afetados pela task, ADRs e índice em `docs/adr/`. Liste staged/unstaged antes do commit.
+afetados pela task, ADRs e índice em `docs/adr/`. As referências exportadas em `{PRD_DIR}/design/`
+entram no commit; as capturas da conferência visual em `{PRD_DIR}/evidence/` não. Liste
+staged/unstaged antes do commit.
 Crie checkpoint e retorne `CHECKPOINT OK`, branch e commit. Não faça pergunta de continuidade.
 
 ## reopen-task

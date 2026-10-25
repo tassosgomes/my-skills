@@ -50,6 +50,15 @@ Arquivos a criar não são listados — a estrutura vem da skill de arquitetura 
 - **modificar:** `[caminho]` ([o que muda])
 - **ref:** `[caminho]` ([interface, invariante ou padrão a respeitar])
 
+## Referência visual
+
+Somente quando a TechSpec tem **Referência visual** (Figma ou mockup) para esta fatia; sem ela,
+apague esta seção. Copie as linhas das telas e estados que esta task entrega.
+
+| Tela / estado | Referência | Largura | Cenário |
+|---|---|---|---|
+| [tela, estado] | [node id ou `design/<arquivo>.png`] | [px] | [rota, perfil e dados] |
+
 ## Verificações do projeto
 
 Liste os checks obrigatórios aplicáveis aos componentes alterados, conforme o CI ou os scripts

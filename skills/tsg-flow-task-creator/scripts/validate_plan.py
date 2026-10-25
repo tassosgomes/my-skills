@@ -4,7 +4,8 @@
 Verifica invariantes que antes viviam como checkbox em cada arquivo de task:
 frontmatter completo, contrato de gate coerente com o tipo da fatia, dependências
 sem ciclo nem referência futura, paridade entre tasks.md e os arquivos, cobertura
-de todo requisito e seção de checks em planos que declaram verificação herdada.
+de todo requisito, seção de checks em planos que declaram verificação herdada e, quando a
+TechSpec tem referência visual (Figma ou mockup), a conferência visual nas tasks com tela.
 
 Uso:
     python3 <skill-dir>/scripts/validate_plan.py tasks/prd-<slug>/
@@ -102,6 +103,48 @@ def detectar_ciclo(grafo):
     return None
 
 
+def corpo_da_secao(texto, titulo):
+    """Corpo da seção cujo cabeçalho (## a ####) começa por `titulo`, até o próximo cabeçalho."""
+    inicio = re.search(rf"^#{{2,4}}\s+{re.escape(titulo)}[^\n]*$", texto, re.MULTILINE)
+    if not inicio:
+        return None
+    resto = texto[inicio.end():]
+    fim = re.search(r"^#{1,4}\s", resto, re.MULTILINE)
+    return resto[:fim.start()] if fim else resto
+
+
+def linhas_de_tabela(texto):
+    """Células das linhas de dados de tabelas Markdown (sem cabeçalho nem separador)."""
+    linhas, anterior_era_tabela = [], False
+    for linha in (texto or "").splitlines():
+        linha = linha.strip()
+        if not linha.startswith("|"):
+            anterior_era_tabela = False
+            continue
+        celulas = [c.strip() for c in linha.strip("|").split("|")]
+        separador = all(re.fullmatch(r":?-{3,}:?", c) for c in celulas if c)
+        if not anterior_era_tabela or separador:
+            anterior_era_tabela = True  # cabeçalho ou separador
+            continue
+        if any(celulas) and not PLACEHOLDER.search(linha):
+            linhas.append(celulas)
+    return linhas
+
+
+def referencias_visuais(prd_dir):
+    """Linhas (fatias, referência) da Referência visual da TechSpec; vazio sem Figma ou mockup."""
+    techspec = prd_dir / "techspec.md"
+    if not techspec.exists():
+        return []
+    corpo = corpo_da_secao(techspec.read_text(encoding="utf-8"), "Referência visual")
+    refs = []
+    for celulas in linhas_de_tabela(corpo):
+        if len(celulas) < 3 or not celulas[2] or celulas[2] in ("—", "-"):
+            continue
+        refs.append((set(re.findall(r"V-\d+", celulas[0])), celulas[2].strip("`")))
+    return refs
+
+
 def checar(prd_dir):
     erros, avisos = [], []
     arquivos = sorted(prd_dir.glob("*_task.md"))
@@ -116,6 +159,9 @@ def checar(prd_dir):
         erros.append("tasks.md ausente")
 
     tasks, grafo = {}, {}
+    refs_visuais = referencias_visuais(prd_dir)
+    fatias_com_tela = set().union(*(fatias for fatias, _ in refs_visuais)) if refs_visuais else set()
+    texto_visual_das_tasks = ""
 
     for arquivo in arquivos:
         texto = arquivo.read_text(encoding="utf-8")
@@ -171,6 +217,16 @@ def checar(prd_dir):
             erros.append(f"{rotulo}: plano declara Verificação herdada, mas task não lista "
                          "Verificações do projeto")
 
+        if refs_visuais:
+            linha_fatia = re.search(r"^\*\*Fatia:\*\*([^\n]*)", corpo, re.MULTILINE)
+            fatias = set(re.findall(r"V-\d+", linha_fatia.group(1))) if linha_fatia else set()
+            visual = corpo_da_secao(corpo, "Referência visual")
+            if fatias & fatias_com_tela and not linhas_de_tabela(visual):
+                erros.append(f"{rotulo}: a fatia {', '.join(sorted(fatias & fatias_com_tela))} tem "
+                             "referência visual na TechSpec, mas a task não tem seção "
+                             "## Referência visual com as telas e cenários")
+            texto_visual_das_tasks += visual or ""
+
         grafo[tid] = parse_lista(fm.get("blocked_by", ""))
 
     for tid, deps in grafo.items():
@@ -180,6 +236,10 @@ def checar(prd_dir):
             elif ordem(dep) > ordem(tid):
                 erros.append(f"task {tid}: dependência futura de {dep} "
                              f"(só pode depender de task anterior)")
+
+    for _, ref in refs_visuais:
+        if not re.search(rf"(?<![\w:/.-]){re.escape(ref)}(?![\w:/.-])", texto_visual_das_tasks):
+            erros.append(f"referência visual {ref} da TechSpec não está em nenhuma task")
 
     ciclo = detectar_ciclo(grafo)
     if ciclo:

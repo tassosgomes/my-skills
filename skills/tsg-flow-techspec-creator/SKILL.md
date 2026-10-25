@@ -39,6 +39,7 @@ Um documento por feature, cobrindo backend, frontend ou ambos.
   TechSpec catalogação, armazenamento definitivo ou atualização do acervo; isso cabe à plataforma.
 - Quando disponíveis: `vision.md`, `context/domain-map.md`, `context/architecture-baseline.md`,
   `domains/<dominio>/domain.md`, capacidade em `backlog/capabilities.md`, designs e ADRs.
+- Figma ou mockups de tela, quando existirem. Não são obrigatórios: muitas features não têm.
 - Saída: `tasks/prd-<slug>/techspec.md`. Respeite caminhos já definidos pelo projeto.
 
 ## Escopo do documento
@@ -146,6 +147,8 @@ preferível a fabricação.
 - [ ] Links públicos e dados sensíveis, quando presentes, foram seguidos até o destino e pelos
       locais de persistência relevantes.
 - [ ] Evidências de integração têm ambiente e pré-requisitos executáveis identificados.
+- [ ] Com Figma ou mockup aprovado, **Referência visual** liga cada tela e estado a um frame, uma
+      largura e um cenário reproduzível. Sem eles, a seção declara a ausência.
 
 ## Entrega
 
