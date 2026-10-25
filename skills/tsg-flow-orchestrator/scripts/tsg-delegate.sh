@@ -281,13 +281,22 @@ CONTEXT_INSTRUCTION=""
 # o que um subagente nativo nao pode. O sinal e explicito para a skill nao adivinhar o transporte.
 SUBAGENT_INSTRUCTION=""
 [[ "$ROLE" != "integrator" ]] && SUBAGENT_INSTRUCTION="- Sessao principal (Herdr): se este runtime oferecer subagentes, siga a secao Subagentes da skill."
+# O integrator confia na aprovacao registrada: rodar gate e checks no checkpoint so repete a revisao.
+RUN_INSTRUCTION="- Rode gate, checks e testes em primeiro plano. Nao encerre o turno com processo, shell ou monitor
+  ainda em segundo plano: fim de turno sem o arquivo de resultado conta como falha de transporte."
+IDENTITY_INSTRUCTION="- Use exatamente a identidade abaixo; substitua outcome e gate pelos valores correspondentes."
+if [[ "$ROLE" == "integrator" ]]; then
+  RUN_INSTRUCTION="- Nao rode gate, checks, testes nem build: a aprovacao registrada ja os comprovou. Faca apenas
+  as operacoes Git e de estado do modo, em primeiro plano."
+  IDENTITY_INSTRUCTION="- Use exatamente a identidade abaixo; substitua outcome e os campos Git. gate fica not_run."
+fi
 REPORT_INSTRUCTION=""
 [[ -n "$REPORT_PATH" ]] && REPORT_INSTRUCTION="- Grave o relatorio em $REPORT_PATH, com a linha Run: $RUN_ID."
 
 SCHEMA="$(jq -n --arg run "$RUN_ID" --arg role "$ROLE" --arg mode "$MODE" \
   --arg prd "$PRD_DIR" --arg task "$TASK" --arg attempt "$ATTEMPT" --arg report "$REPORT_PATH" \
   '{schema_version:1,run_id:$run,role:$role,mode:$mode,prd_dir:$prd,task:$task,attempt:$attempt,
-    outcome:"SUBSTITUIR",gate:"SUBSTITUIR",report:(if $report=="" then null else $report end)}
+    outcome:"SUBSTITUIR",gate:(if $role == "integrator" then "not_run" else "SUBSTITUIR" end),report:(if $report=="" then null else $report end)}
    + (if $role == "integrator" then
        {branch:"SUBSTITUIR",commit:"SUBSTITUIR",base_ref:null,target_ref:null,reason:null}
      else {} end)')"
@@ -298,10 +307,9 @@ Transporte desta chamada:
 $SUBAGENT_INSTRUCTION
 $REPORT_INSTRUCTION
 $CONTEXT_INSTRUCTION
-- Rode gate, checks e testes em primeiro plano. Nao encerre o turno com processo, shell ou monitor
-  ainda em segundo plano: fim de turno sem o arquivo de resultado conta como falha de transporte.
+$RUN_INSTRUCTION
 - Grave o resultado final em $RESULT_FILE, somente depois de terminar a etapa e salvar o relatorio.
-- Use exatamente a identidade abaixo; substitua outcome e gate pelos valores correspondentes.
+$IDENTITY_INSTRUCTION
 $SCHEMA
 - Implementer outcomes: implementation_complete, task_blocked, gate_failed, gate_error.
 - Validator outcomes: approved, rejected, validation_error.

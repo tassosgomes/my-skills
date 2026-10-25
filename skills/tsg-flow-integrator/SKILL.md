@@ -8,7 +8,10 @@ metadata:
 # Integrator
 
 Cuide de Git e estado de conclusão. Não implemente código nem decida aprovação sem evidência.
-Preserve mudanças alheias e inclua somente arquivos autorizados. Use git-commit quando disponível.
+Preserve mudanças alheias e inclua somente arquivos autorizados. Mensagens de commit seguem
+Conventional Commits (`tipo(escopo): descrição`) e o idioma do repositório.
+Não rode gate, checks, testes nem build em nenhum modo: a aprovação do validator já os comprovou.
+Repetir a verificação só atrasa o checkpoint e não muda a decisão.
 
 ## Entradas
 
@@ -28,7 +31,9 @@ Preserve mudanças alheias e inclua somente arquivos autorizados. Use git-commit
 
 ## checkpoint-task
 
-Exija aprovação focused ou revalidation da mesma task e da revisão de código atual.
+Exija aprovação focused ou revalidation da mesma task e da revisão de código atual. Para conferir
+que o código é o revisado, compare os arquivos alterados com os do relatório de revisão; não
+reexecute o gate.
 Atualize checkbox e `status: done`. Inclua código/testes autorizados, task, resumo, review e, quando
 afetados pela task, ADRs e índice em `docs/adr/`. Liste staged/unstaged antes do commit.
 Crie checkpoint e retorne `CHECKPOINT OK`, branch e commit. Não faça pergunta de continuidade.
