@@ -37,7 +37,7 @@ Exemplo reproduzível em ambiente isolado, quando `uv` estiver disponível (exec
 do projeto, substituindo o slug; as dependências não são adicionadas ao projeto):
 
 ```bash
-uv run --with jsonschema --with pyyaml python - tasks/prd-[slug]/data-contract.yaml <<'PY'
+uv run --with jsonschema --with pyyaml python - work/[slug]/data-contract.yaml <<'PY'
 import json
 import sys
 import urllib.request

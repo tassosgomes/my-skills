@@ -2,7 +2,7 @@
 
 ## Especificações temporárias
 
-Grave `tasks/prd-<slug>/techspec.draft.md` com status `Em Revisão`. Preserve a versão aprovada
+Grave `work/<slug>/techspec.draft.md` com status `Em Revisão`. Preserve a versão aprovada
 durante updates. Releia o draft, confira rastreabilidade e apresente resumo e link.
 Após aprovação das decisões novas, promova para `techspec.md`, status `Aprovado`.
 Aprovação explícita já concedida para o mesmo escopo pode ser registrada sem uma nova pergunta.
@@ -36,7 +36,7 @@ verifique colisões antes de salvar. O TSG Flow standard não executa essas escr
 
 ## Links e retenção
 
-Na TechSpec em `tasks/prd-<slug>/`, use `../../docs/adr/adr-NNN.md`. Recalcule caminhos relativos
+Na TechSpec em `work/<slug>/`, use `../../docs/adr/adr-NNN.md`. Recalcule caminhos relativos
 se a especificação estiver em outro diretório. Dentro de `docs/adr/`, links entre ADRs são locais.
 
 A remoção/arquivamento do PRD não remove ADRs. Contratos de integração registram o acordo daquela

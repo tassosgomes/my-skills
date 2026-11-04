@@ -8,7 +8,7 @@ metadata:
 # Implementer
 
 Implemente uma task por chamada, na branch do PRD. Não crie branch, commit, merge ou PR nem altere
-`tasks.md`, status da task ou `flow-state.json`. Preserve mudanças alheias.
+`tasks.md`, status da task, `run-state.json` ou `docs/product/flow-state.json`. Preserve mudanças alheias.
 
 ## Entradas
 

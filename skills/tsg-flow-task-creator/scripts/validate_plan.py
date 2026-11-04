@@ -8,8 +8,8 @@ de todo requisito, seção de checks em planos que declaram verificação herdad
 TechSpec tem referência visual (Figma ou mockup), a conferência visual nas tasks com tela.
 
 Uso:
-    python3 <skill-dir>/scripts/validate_plan.py tasks/prd-<slug>/
-    python3 <skill-dir>/scripts/validate_plan.py tasks/prd-<slug>/ --strict
+    python3 <skill-dir>/scripts/validate_plan.py work/<slug>/
+    python3 <skill-dir>/scripts/validate_plan.py work/<slug>/ --strict
 
 Saída: 0 aprovado, 1 erros (ou avisos com --strict), 2 erro de uso.
 """
@@ -269,7 +269,7 @@ def checar(prd_dir):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Gate estrutural do plano TSG Flow")
-    parser.add_argument("prd_dir", help="diretório tasks/prd-<slug>/")
+    parser.add_argument("prd_dir", help="diretório work/<slug>/")
     parser.add_argument("--strict", action="store_true", help="trata avisos como erros")
     args = parser.parse_args(argv)
 

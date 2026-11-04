@@ -15,7 +15,7 @@ Quando o texto e o ruleset divergirem, o ruleset é a versão executável — co
 - Campos JSON em `camelCase`.
 
 > **Exceção de idioma.** Um projeto pode adotar o idioma do domínio nos paths quando isso estiver
-> registrado no `context/architecture-baseline.md` ou numa ADR aceita. Sem esse registro, a norma
+> registrado no `docs/product/architecture-baseline.md` ou numa ADR aceita. Sem esse registro, a norma
 > é inglês. O ruleset não verifica idioma — só kebab-case —, então a divergência precisa ser
 > decidida explicitamente, nunca por omissão.
 

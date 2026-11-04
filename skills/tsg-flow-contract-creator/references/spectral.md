@@ -32,7 +32,7 @@ No clone deste repositório:
 
 ```bash
 npx --yes @stoplight/spectral-cli lint \
-  tasks/prd-[slug]/api-contract.yaml \
+  work/[slug]/api-contract.yaml \
   --ruleset skills/tsg-flow-contract-creator/rulesets/openapi.yaml \
   --fail-severity=error
 ```
@@ -42,7 +42,7 @@ Quando a skill estiver instalada em outro diretório, passe o caminho absoluto p
 
 ```bash
 npx --yes @stoplight/spectral-cli lint \
-  tasks/prd-[slug]/api-contract.yaml \
+  work/[slug]/api-contract.yaml \
   --ruleset /caminho/da/skill/tsg-flow-contract-creator/rulesets/openapi.yaml \
   --fail-severity=error
 ```

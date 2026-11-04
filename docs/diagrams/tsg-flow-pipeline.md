@@ -6,31 +6,31 @@ consome essas tarefas uma por vez, protegendo cada entrega com gate, validação
 ```mermaid
 %%{init: {"theme":"base","flowchart":{"curve":"linear"}}}%%
 flowchart LR
-    subgraph definition["Definição e planejamento"]
-        vision["Vision<br/>visão macro"]:::definition
+    subgraph product["tsg-flow-product · docs/product/"]
+        vision["Visão"]:::definition
         domainMap["Domain Map<br/>bounded contexts"]:::definition
-        architectureBaseline["Architecture Baseline<br/>regras estruturais"]:::definition
-        capabilityBacklog["Capability Backlog<br/>(opcional)"]:::definition
-        domain["Domain<br/>um domínio"]:::definition
+        architectureBaseline["Baseline<br/>regras estruturais"]:::definition
+        capabilityBacklog["Backlog<br/>capacidades CAP"]:::definition
+        vision --> domainMap --> architectureBaseline --> capabilityBacklog
+    end
+
+    subgraph next["tsg-flow-next · por capacidade · work/&lt;cap&gt;/"]
+        domain["Domain doc<br/>(2+ PRDs no domínio)"]:::definition
         prd["PRD<br/>o quê e por quê"]:::definition
-        apiDecision{"Feature expõe API?"}:::decision
-        contract["Contract<br/>OpenAPI 3.1"]:::apiDoc
-        techspec["TechSpec<br/>backend / geral"]:::definition
-        frontend["Frontend TechSpec<br/>(Contract se houver API)"]:::frontend
+        apiDecision{"Integração nova<br/>ou alterada?"}:::decision
+        contract["Contrato<br/>OpenAPI / AsyncAPI / ODCS"]:::apiDoc
+        techspec["TechSpec<br/>backend, frontend ou full-stack"]:::definition
         tasks["Tasks<br/>fatias verticais"]:::definition
 
-        vision --> domainMap --> architectureBaseline
-        architectureBaseline --> domain
-        architectureBaseline --> capabilityBacklog --> domain
-        domain --> prd --> apiDecision
-        apiDecision -->|sim| contract
+        domain -.-> prd
+        prd --> apiDecision
+        apiDecision -->|sim| contract --> techspec
         apiDecision -->|não| techspec
-        contract --> techspec
-        prd -.->|contexto obrigatório| frontend
-        contract --> frontend
         techspec --> tasks
-        frontend -.->|se houver frontend| tasks
     end
+
+    capabilityBacklog --> domain
+    capabilityBacklog --> prd
 
     subgraph execution["Execução por task"]
         orchestrator["Orchestrator<br/>coordena"]:::execution
@@ -65,7 +65,6 @@ flowchart LR
     adrs["docs/adr/<br/>decisões duráveis"]:::apiDoc
     architectureBaseline -.->|consulta / registra decisões| adrs
     techspec -.-> adrs
-    frontend -.-> adrs
 
     tasks --> orchestrator
     repo --> gate
@@ -78,7 +77,6 @@ flowchart LR
     classDef definition fill:#dbeafe,stroke:#2563eb,color:#172554
     classDef decision fill:#fef3c7,stroke:#d97706,color:#451a03
     classDef apiDoc fill:#dcfce7,stroke:#16a34a,color:#14532d
-    classDef frontend fill:#f3e8ff,stroke:#9333ea,color:#581c87
     classDef execution fill:#e0e7ff,stroke:#4f46e5,color:#1e1b4b
     classDef validation fill:#ffedd5,stroke:#ea580c,color:#431407
     classDef gate fill:#ccfbf1,stroke:#0f766e,color:#134e4a
@@ -88,13 +86,14 @@ flowchart LR
 
 ## Legenda
 
-- **Contract** é opcional na trilha de features sem API.
-- **Architecture Baseline** consolida as regras estruturais do sistema depois do Domain Map.
-- **Capability Backlog** é opcional e ajuda a priorizar capacidades antes do detalhamento dos domínios
-  e das features.
-- **Frontend TechSpec** exige contrato quando há API; UI local pode declarar N/A.
-- **ADRs** ficam em `docs/adr/`, com numeração global, e sobrevivem à remoção do PRD.
-- **Gate** é preparado uma vez por repositório e depois executado pelos agentes de implementação e
-  validação.
+- **Três pontos de entrada:** `tsg-flow-product` (uma vez por produto), `tsg-flow-next` (por
+  capacidade, até o plano aprovado) e `tsg-flow-orchestrator` (execução).
+- **Durável em `docs/`, entrega em `work/`.** Estado de produto em `docs/product/flow-state.json`;
+  estado de execução em `work/<cap>/run-state.json`.
+- **Domain doc** só nasce quando o domínio tem 2+ PRDs no horizonte visível; senão as regras vão no PRD.
+- **Contrato** sai do PRD e antecede a TechSpec; feature sem integração declara N/A.
+- **TechSpec e tasks** são dispensadas em escopo Médio, que segue o fluxo direto do projeto.
+- **ADRs** ficam em `docs/adr/`, com numeração global, e sobrevivem à remoção do diretório da entrega.
+- **Gate** é o comando real do projeto, executado pelos agentes de implementação e validação.
 - **Full validation** ocorre depois dos checkpoints e da preparação da integração; mudança posterior
   de base ou código exige nova validação.

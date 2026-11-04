@@ -1,6 +1,6 @@
 # API Contract — [Nome da Feature]
 
-> **Gerado a partir de:** `tasks/prd-[nome-funcionalidade]/prd.md`  
+> **Gerado a partir de:** `work/[nome-funcionalidade]/prd.md`  
 > **Data:** [data]  
 > **Status:** Rascunho | Em Revisão | Aprovado  
 > **Versão do contrato:** 1.0.0

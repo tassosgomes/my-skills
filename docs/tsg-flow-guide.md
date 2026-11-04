@@ -6,7 +6,8 @@ Comece pela [ordem de execução](tsg-flow-execution-order.md). O
 ## Instalação e escopo
 
 `skills/` é a fonte canônica. O grupo tsg-flow em
-[marketplace.json](../.claude-plugin/marketplace.json) contém as 15 skills.
+[marketplace.json](../.claude-plugin/marketplace.json) contém as 10 skills: três pontos de entrada (`tsg-flow-product`,
+`tsg-flow-next`, `tsg-flow-orchestrator`) e as etapas e workers que eles encadeiam.
 Instale também somente as skills de tecnologia necessárias ao projeto. As instruções do projeto,
 manifests, CI e código determinam a stack; skills instaladas não a determinam.
 
@@ -16,27 +17,8 @@ o fluxo direto do repositório.
 
 ## Organização dos artefatos
 
-```text
-vision.md                              # direção do produto, reutilizável
-context/domain-map.md                  # fronteiras de domínio
-context/architecture-baseline.md       # princípios e restrições estruturais
-backlog/capabilities.md                 # priorização por capacidade (opcional)
-domains/<dominio>/domain.md             # regras e features do domínio
-docs/
-  adr/
-    index.md                           # catálogo global de decisões
-    adr-001.md                         # Proposed/Accepted/Withdrawn/Superseded
-  product-decisions/                    # decisões duráveis de produto
-  api/                                 # exemplo de contrato durável, se adotado pelo projeto
-tasks/prd-<slug>/
-  prd.md
-  techspec.md                          # backend, frontend ou full-stack; escopo no cabeçalho
-  tasks.md
-  1.0_task.md
-  1.0_task_review.md
-  prd_review.md
-  flow-state.json                     # retomada durante a execução
-```
+Duas raízes: durável em `docs/`, entrega em `work/`. A árvore completa e os donos dos dois arquivos
+de estado estão na [ordem de execução](tsg-flow-execution-order.md#3-onde-cada-coisa-mora).
 
 Drafts de especificação usam .draft.md no diretório da feature. A versão aprovada permanece
 disponível durante updates. Aprovações explícitas já dadas para o mesmo escopo continuam válidas;
@@ -63,7 +45,7 @@ O índice mínimo é:
 
 Cada ADR explica contexto, escopo, restrições, decisão, alternativas pertinentes e consequências.
 O PRD pode aparecer como origem histórica (slug/commit), mas não pode ser a única explicação.
-Links entre ADRs são locais. Em uma TechSpec em tasks/prd-<slug>/, links para decisões usam
+Links entre ADRs são locais. Em uma TechSpec em work/<slug>/, links para decisões usam
 `../../docs/adr/adr-NNN.md`.
 
 Em sessões concorrentes, serialize a reserva dos IDs ou use o mecanismo de coordenação do projeto.
@@ -80,7 +62,7 @@ orientam novas entregas e migrações autorizadas; não movem automaticamente ar
 
 ### Arquivamento do planejamento
 
-PRDs e tasks podem ser arquivados/removidos em operação posterior autorizada. Antes disso, confirme:
+O diretório da entrega em work/ pode ser arquivado/removido em operação posterior autorizada. Antes disso, confirme:
 
 - ADRs e decisões de produto têm contexto autocontido em docs/.
 - Contratos usados por geração de tipos, mocks, testes ou documentação permanecem no local canônico.
@@ -122,7 +104,7 @@ Toda task recebe gate e validator focused.
 
 ## Execução, estado e tentativas
 
-Orchestrator é dono de in_progress, validating, blocked e flow-state.json. Integrator é dono de done,
+Orchestrator é dono de in_progress, validating, blocked e run-state.json. Integrator é dono de done,
 checkbox e commits. Implementer altera código; validator produz evidência sem corrigir.
 
 O estado persistido registra branch, bases, checkpoint, task, tentativas, fase e último resultado.

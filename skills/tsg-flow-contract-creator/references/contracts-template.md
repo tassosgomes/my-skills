@@ -1,6 +1,6 @@
 # Contratos de integração — [feature]
 
-> PRD: `tasks/prd-[slug]/prd.md`  
+> PRD: `work/[slug]/prd.md`  
 > Data: [data]  
 > Estado do conjunto: [Em Revisão | Aprovado para implementação | Não aplicável]
 

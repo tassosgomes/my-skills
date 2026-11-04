@@ -1,8 +1,17 @@
+---
+tsg_artifact: domain-map
+product: [nome-do-produto]
+version: 0.1
+status: draft
+updated: [YYYY-MM-DD]
+sources: docs/product/vision.md@[versão]
+---
+
 # Domain Map
 
 ## Visão geral
 
-[Problema e fluxos de valor extraídos de vision.md; limites desta decomposição.]
+[Problema e fluxos de valor extraídos da visão; limites desta decomposição.]
 
 ## Domínios
 

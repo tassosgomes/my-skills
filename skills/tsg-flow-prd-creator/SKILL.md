@@ -1,6 +1,6 @@
 ---
 name: tsg-flow-prd-creator
-description: Cria ou atualiza o PRD de uma capacidade, com requisitos de produto, escopo da fatia e critérios de aceite. Use para definir o quê e por quê antes da TechSpec; não para implementar código ou planejar um produto inteiro.
+description: Cria ou atualiza o PRD de uma capacidade do backlog ou de uma feature isolada, com requisitos de produto, escopo da fatia e critérios de aceite. Use para definir o quê e por quê antes da TechSpec — inclusive direto, sem visão nem backlog, quando a atividade é menor; não para implementar código ou planejar um produto inteiro.
 metadata:
   group: tsg-flow
 ---
@@ -18,12 +18,13 @@ longo do tempo, quando entra primeiro em fatia mínima.
 ## Entradas e saída
 
 - ID da capacidade (`CAP-XXX`) e o escopo da fatia a entregar, ou ideia/`_idea.md` em modo standalone.
-- **Todos** os domain docs que a capacidade atravessa — `domains/<dominio>/domain.md`, um por
+- **Todos** os domain docs que a capacidade atravessa — `docs/product/domains/<dominio>.md`, um por
   domínio tocado. Domínio sem domain doc é normal: ele rende um PRD só, e as regras dele nascem aqui.
-- Quando disponíveis: `vision.md`, `context/domain-map.md`, `backlog/capabilities.md`,
-  `context/architecture-baseline.md` e `docs/product-decisions/index.md`.
-- Saída: `tasks/prd-<slug>/prd.md`; revisão: `prd.draft.md` no mesmo diretório. Grave o frontmatter
-  (`tsg_artifact: prd`, a capacidade e as origens com versão) e registre o artefato em `flow-state.json`.
+- Quando disponíveis: `docs/product/vision.md`, `docs/product/domain-map.md`, `docs/product/capabilities.md`,
+  `docs/product/architecture-baseline.md` e `docs/product-decisions/index.md`.
+- Saída: `work/<slug>/prd.md`; revisão: `prd.draft.md` no mesmo diretório. Grave o frontmatter
+  (`tsg_artifact: prd`, a capacidade e as origens com versão) e, quando o projeto tiver
+  `docs/product/flow-state.json`, registre o artefato na capacidade. Feature isolada não tem estado.
 - Respeite caminhos fornecidos. IDs de capacidade, RN e termos upstream devem ser preservados.
 
 ## Processo

@@ -5,11 +5,11 @@ metadata:
   group: tsg-flow
   pipeline_stage: tasks
   requires:
-    - "tasks/prd-[slug]/prd.md"
-    - "tasks/prd-[slug]/techspec.md aprovada"
+    - "work/[slug]/prd.md"
+    - "work/[slug]/techspec.md aprovada"
   produces:
-    - "tasks/prd-[slug]/tasks.md"
-    - "tasks/prd-[slug]/<num>_task.md"
+    - "work/[slug]/tasks.md"
+    - "work/[slug]/<num>_task.md"
 ---
 
 # Task Creator
@@ -57,7 +57,7 @@ Não implemente código nesta skill.
 5. Rode o gate estrutural antes de apresentar o plano:
 
    ```
-   python3 <skill-dir>/scripts/validate_plan.py tasks/prd-<slug>/
+   python3 <skill-dir>/scripts/validate_plan.py work/<slug>/
    ```
 
    `<skill-dir>` é o diretório desta skill. Não invoque `python3 scripts/...` a partir da raiz do

@@ -26,7 +26,7 @@ Repetir a verificação só atrasa o checkpoint e não muda a decisão.
 1. Confira árvore, branch e trabalho preexistente; não incorpore mudanças alheias.
 2. Crie/reutilize uma branch `feature/<slug>` por PRD.
 3. Capture branch e merge-base com a base alvo. Na retomada, use o base_ref persistido em
-   `flow-state.json`; não recalcule silenciosamente um diff menor.
+   `run-state.json`; não recalcule silenciosamente um diff menor.
 4. Não crie commit nesta operação. Retorne `BRANCH READY`, branch e base_ref.
 
 ## checkpoint-task
@@ -61,7 +61,7 @@ Exija todas as tasks done, relatório full aprovado e código correspondente ao 
 Confirme que a base alvo ainda corresponde ao target_ref preparado.
 Se base ou implementação mudou, retorne `REVALIDATION REQUIRED`; não publique nem faça merge.
 
-Somente relatórios do fluxo e flow-state podem ter mudado depois da revisão. Confira o diff desses
+Somente relatórios do fluxo e run-state podem ter mudado depois da revisão. Confira o diff desses
 arquivos e não aceite código, configuração ou ADR nova como simples metadado de aprovação.
 Faça commit final apenas desses relatórios autorizados. Não rebaseie depois da aprovação full.
 

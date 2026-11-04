@@ -23,14 +23,14 @@ este orquestrador. Não repita aprovação humana já explícita para o mesmo pl
 
 ## Inicialização e retomada
 
-1. Leia `tasks.md`, próxima task e `flow-state.json` se existente.
+1. Leia `tasks.md`, próxima task e `run-state.json` se existente.
 2. Confira a spec selecionada, a aprovação do plano e que cada task declara `gate` e
    `gate_expect` executáveis. Task `vertical` exige comando de teste com seletor e expectativa
    quantificada; `enabling` exige a evidência estática descrita. Confira os checks do projeto
    atribuídos aos componentes alterados. Em plano legado sem esse mapa, descubra o CI ou os
    comandos de verificação do projeto atual antes de delegar e registre a lacuna.
 3. Delegue `prepare-prd-branch` ao integrator; capture branch, base e último checkpoint.
-4. Persista estado mínimo em `{PRD_DIR}/flow-state.json`: branch, original_base_ref, base_ref,
+4. Persista estado mínimo em `{PRD_DIR}/run-state.json`: branch, original_base_ref, base_ref,
    target_ref, last_checkpoint, task ativa, tentativa, full_attempt, fase e último resultado.
    Leia [references/full-guide.md](references/full-guide.md) ao inicializar/retomar para o schema.
 5. Reconcilie estado com Git, checkbox e frontmatter antes de qualquer repetição. Em divergência,
@@ -90,7 +90,7 @@ o histórico mínimo anterior no estado/relatório.
 
 ## Estados e propriedade
 
-pending: Task Creator. in_progress/validating/blocked e flow-state: Orchestrator.
+pending: Task Creator. in_progress/validating/blocked e run-state: Orchestrator.
 done, checkbox e commits: Integrator. Implementer/validator não alteram estado do fluxo.
 Falha de commit não autoriza avançar com status done sem checkpoint; reconcilie os arquivos.
 

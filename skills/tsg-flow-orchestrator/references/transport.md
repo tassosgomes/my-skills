@@ -5,7 +5,7 @@ aguarda conclusão e valida um JSON em diretório exclusivo por run_id.
 
 ```text
 <caminho-da-skill>/scripts/tsg-delegate.sh --role=validator \
-  --prd-dir=tasks/prd-exemplo --task=1.0 --mode=focused --attempt=1/3
+  --prd-dir=work/cap-001-exemplo --task=1.0 --mode=focused --attempt=1/3
 ```
 
 Para full, omita task e forneça --base-ref. Integrator aceita todos os modos do seu SKILL.md,

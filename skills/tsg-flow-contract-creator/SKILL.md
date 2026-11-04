@@ -7,13 +7,13 @@ metadata:
   consumed_by:
     - planning
   requires:
-    - "tasks/prd-[slug]/prd.md"
+    - "work/[slug]/prd.md"
   produces:
-    - "tasks/prd-[slug]/contracts.md"
-    - "tasks/prd-[slug]/api-contract.yaml (quando HTTP)"
-    - "tasks/prd-[slug]/api-contract.md (quando HTTP)"
-    - "tasks/prd-[slug]/asyncapi-contract.yaml (quando mensageria)"
-    - "tasks/prd-[slug]/data-contract.yaml (quando dados)"
+    - "work/[slug]/contracts.md"
+    - "work/[slug]/api-contract.yaml (quando HTTP)"
+    - "work/[slug]/api-contract.md (quando HTTP)"
+    - "work/[slug]/asyncapi-contract.yaml (quando mensageria)"
+    - "work/[slug]/data-contract.yaml (quando dados)"
 ---
 
 # Integration Contract Creator
@@ -25,7 +25,7 @@ PRDs podem evoluí-lo.
 
 ## Limite de responsabilidade
 
-- Os artefatos são entregues em `tasks/prd-[slug]/`, ou na pasta de trabalho do PRD já adotada.
+- Os artefatos são entregues em `work/[slug]/`, ou na pasta de trabalho do PRD já adotada.
 - Contratos anteriores e documentos fornecidos pelo projeto são entradas: registre caminho/URL,
   versão e revisão ou data consultada. Não assuma que o último PRD encontrado representa produção.
 - Ao evoluir uma integração, produza o acordo do PRD atual e registre diferenças e consumidores

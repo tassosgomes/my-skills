@@ -29,7 +29,7 @@ function fixture(t) {
     const r = command('git', args, repo);
     assert.equal(r.status, 0, r.stderr);
   }
-  const prd = join(repo, 'tasks', 'prd-example');
+  const prd = join(repo, 'work', 'cap-001-example');
   mkdirSync(prd, { recursive: true });
   const sha = command('git', ['rev-parse', 'HEAD'], repo).stdout.trim();
   const tree = command('git', ['rev-parse', 'HEAD^{tree}'], repo).stdout.trim();
@@ -713,4 +713,82 @@ test('a frame id does not match a longer id', t => {
   });
   assert.equal(r.status, 1, r.stdout);
   assert.match(r.stdout, /referência visual 8:19 da TechSpec não está em nenhuma task/);
+});
+
+const validateState = join(root, 'skills/tsg-flow-next/scripts/validate_state.py');
+
+const fm = (type, version, sources = '') =>
+  ['---', `tsg_artifact: ${type}`, 'product: demo', `version: ${version}`, 'status: approved',
+    'updated: 2026-11-04', `sources: ${sources}`, '---', ''].join('\n');
+
+// The backlog body uses the exact labels the product skill documents for the gate.
+const backlogBody = [
+  '# Backlog de Capacidades', '', '### Domínio: Identidade', '',
+  '#### CAP-001 — Cadastro', '', '- **Dependências:** nenhuma', '- **Fase:** MVP', '',
+  '#### CAP-002 — Login', '', '- **Dependências:** CAP-001', '- **Fase:** MVP', ''].join('\n');
+
+function productState(t, { legacy = false, visionVersion = '1.0' } = {}) {
+  const repo = mkdtempSync(join(tmpdir(), 'tsg-flow-state-'));
+  t.after(() => rmSync(repo, { recursive: true, force: true }));
+  const p = join(repo, 'docs', 'product');
+  mkdirSync(p, { recursive: true });
+  const v = 'docs/product/vision.md@1.0';
+  const m = 'docs/product/domain-map.md@1.0';
+  const b = 'docs/product/architecture-baseline.md@1.0';
+  writeFileSync(join(p, 'vision.md'), fm('vision', visionVersion));
+  writeFileSync(join(p, 'domain-map.md'), fm('domain-map', '1.0', v));
+  writeFileSync(join(p, 'architecture-baseline.md'), fm('architecture-baseline', '1.0', `${v}, ${m}`));
+  writeFileSync(join(p, 'capabilities.md'), fm('capability-backlog', '1.0', `${v}, ${m}, ${b}`) + backlogBody);
+  const state = {
+    schema: 'tsg-flow-state/1', product: 'demo', updated: '2026-11-04',
+    artifacts: {
+      vision: 'docs/product/vision.md', 'domain-map': 'docs/product/domain-map.md',
+      'architecture-baseline': 'docs/product/architecture-baseline.md',
+      'capability-backlog': 'docs/product/capabilities.md',
+    },
+    capability_stages: ['backlog', 'domain', 'prd', 'contract', 'techspec', 'tasks',
+      'in_progress', 'done', 'descartada'],
+    capabilities: [{ id: 'CAP-001', stage: 'done', mvp_order: 1 },
+      { id: 'CAP-002', stage: 'backlog', mvp_order: 2 }],
+  };
+  writeFileSync(join(legacy ? repo : p, 'flow-state.json'), JSON.stringify(state));
+  return repo;
+}
+
+test('the gate reads product state from docs/product', t => {
+  const repo = productState(t);
+  const r = command('python3', [validateState, repo], repo);
+  assert.equal(r.status, 0, r.stdout);
+  assert.doesNotMatch(r.stdout, /layout legado/);
+});
+
+test('the gate parses the backlog format the product skill documents', t => {
+  const repo = productState(t);
+  const r = command('python3', [validateState, repo, '--capability', 'CAP-002'], repo);
+  assert.match(r.stdout, /CAP-002 — Login/);
+  assert.match(r.stdout, /dominio\s+Identidade/);
+  assert.match(r.stdout, /CAP-001\s+done/);
+  assert.match(r.stdout, /VEREDITO: SIM/);
+});
+
+test('a stale source is reported against the docs/product path', t => {
+  const repo = productState(t, { visionVersion: '1.1' });
+  const r = command('python3', [validateState, repo], repo);
+  assert.equal(r.status, 1, r.stdout);
+  assert.match(r.stdout, /DESATUALIZADO docs\/product\/domain-map\.md .* docs\/product\/vision\.md v1\.0/);
+});
+
+test('a root flow-state.json still works and is flagged as legacy', t => {
+  const repo = productState(t, { legacy: true });
+  const r = command('python3', [validateState, repo], repo);
+  assert.equal(r.status, 0, r.stdout);
+  assert.match(r.stdout, /AVISO layout legado/);
+});
+
+test('without any product state the gate is a usage error', t => {
+  const repo = mkdtempSync(join(tmpdir(), 'tsg-flow-state-'));
+  t.after(() => rmSync(repo, { recursive: true, force: true }));
+  const r = command('python3', [validateState, repo], repo);
+  assert.equal(r.status, 2);
+  assert.match(r.stderr, /docs\/product\/flow-state\.json nao encontrado/);
 });

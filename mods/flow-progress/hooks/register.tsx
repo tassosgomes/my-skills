@@ -18,21 +18,31 @@ const LABEL: Record<Phase, string> = {
   idle: '⏸ aguardando',
 }
 
-// The newest `tasks/prd-*/flow-state.json` is the PRD being orchestrated.
-async function scan($: any): Promise<Progress | null> {
-  const entries = await $.fs.list('tasks').catch(() => [])
-  let best: { dir: string; mtime: number } | null = null
+// The newest run state is the PRD being orchestrated: `work/*/run-state.json`, or the legacy
+// `tasks/prd-*/flow-state.json` for projects that started before the layout change.
+const LAYOUTS = [
+  { root: 'work', prefix: '', file: 'run-state.json' },
+  { root: 'tasks', prefix: 'prd-', file: 'flow-state.json' },
+]
 
-  for (const entry of entries) {
-    if (entry.kind !== 'directory' || !entry.name.startsWith('prd-')) continue
-    const dir = `tasks/${entry.name}`
-    const stat = await $.fs.stat(`${dir}/flow-state.json`).catch(() => null)
-    if (stat && (!best || stat.mtimeMs > best.mtime)) best = { dir, mtime: stat.mtimeMs }
+async function scan($: any): Promise<Progress | null> {
+  let best: { dir: string; name: string; file: string; mtime: number } | null = null
+
+  for (const layout of LAYOUTS) {
+    const entries = await $.fs.list(layout.root).catch(() => [])
+    for (const entry of entries) {
+      if (entry.kind !== 'directory' || !entry.name.startsWith(layout.prefix)) continue
+      const dir = `${layout.root}/${entry.name}`
+      const stat = await $.fs.stat(`${dir}/${layout.file}`).catch(() => null)
+      if (stat && (!best || stat.mtimeMs > best.mtime)) {
+        best = { dir, name: entry.name, file: layout.file, mtime: stat.mtimeMs }
+      }
+    }
   }
   if (!best) return null
 
   const state: FlowState | null = await $.fs
-    .read(`${best.dir}/flow-state.json`)
+    .read(`${best.dir}/${best.file}`)
     .then((t: string) => JSON.parse(t))
     .catch(() => null)
   const checklist: TaskInfo[] = await $.fs
@@ -51,7 +61,7 @@ async function scan($: any): Promise<Progress | null> {
     }),
   )
 
-  return summarize(best.dir.replace('tasks/', ''), tasks, state)
+  return summarize(best.name, tasks, state)
 }
 
 export const register: Register = on => {

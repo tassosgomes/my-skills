@@ -18,7 +18,7 @@ product: code-4-coders
 version: 1.1
 status: approved
 updated: 2026-09-20
-sources: vision.md@1.1
+sources: docs/product/vision.md@1.1
 ---
 ```
 
@@ -57,7 +57,9 @@ domain doc (domínio de uma capacidade só) e uma TechSpec de UI sem API não te
 
 ## `flow-state.json`
 
-Na raiz do projeto.
+Em `docs/product/flow-state.json`. Todo caminho dentro dele, e em `sources`, é relativo à raiz do
+projeto. Não confundir com o `run-state.json` do orchestrator, que vive no diretório de trabalho de
+uma entrega e guarda só o estado de execução dela.
 
 ```json
 {
@@ -66,10 +68,10 @@ Na raiz do projeto.
   "updated": "2026-09-20",
 
   "artifacts": {
-    "vision": "vision.md",
-    "domain-map": "context/domain-map.md",
-    "architecture-baseline": "context/architecture-baseline.md",
-    "capability-backlog": "backlog/capabilities.md"
+    "vision": "docs/product/vision.md",
+    "domain-map": "docs/product/domain-map.md",
+    "architecture-baseline": "docs/product/architecture-baseline.md",
+    "capability-backlog": "docs/product/capabilities.md"
   },
 
   "foundation": {
@@ -78,14 +80,15 @@ Na raiz do projeto.
     "platform_ready": false
   },
 
-  "capability_stages": ["backlog", "domain", "prd", "techspec", "contract",
+  "capability_stages": ["backlog", "domain", "prd", "contract", "techspec",
                         "tasks", "in_progress", "done", "descartada"],
   "capabilities": [
-    { "id": "CAP-001", "stage": "backlog", "mvp_order": 1, "artifacts": {} }
+    { "id": "CAP-001", "stage": "prd", "mvp_order": 1,
+      "artifacts": { "prd": "work/cap-001-cadastro-aluno/prd.md" } }
   ],
 
   "next_actions": [
-    { "id": "NA1", "what": "...", "skill": "tsg-flow-domain-creator", "blocked_by": [] }
+    { "id": "NA1", "what": "...", "skill": "tsg-flow-next", "blocked_by": [] }
   ],
   "open_decisions": [
     { "id": "OD2", "ref": "vision.md A1", "what": "...", "owner": "negócio", "blocks": ["CAP-028"] }

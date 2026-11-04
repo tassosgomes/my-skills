@@ -5,12 +5,14 @@ Responde mecanicamente a duas perguntas que hoje exigem reler todos os documento
 "este artefato ainda reflete suas origens?" e "onde eu parei e o que falta?".
 
 A verdade de versao, status e origem de cada artefato mora no frontmatter do
-proprio arquivo. O flow-state.json guarda so o que nao cabe em documento algum:
+proprio arquivo. O docs/product/flow-state.json guarda so o que nao cabe em documento algum:
 quais artefatos sao esperados, o progresso por capacidade, as proximas acoes, as
 decisoes em aberto e o estado da fundacao. Nada e duplicado entre os dois.
 
+Todo caminho no estado e em `sources` e relativo a raiz do projeto.
+
 Uso:
-    python3 scripts/validate_state.py                      # gate: 0 aprovado, 1 reprovado
+    python3 scripts/validate_state.py [raiz]               # gate: 0 aprovado, 1 reprovado
     python3 scripts/validate_state.py --status             # onde o fluxo parou
     python3 scripts/validate_state.py --capability CAP-001 # veredito de uma capacidade
     python3 scripts/validate_state.py --strict             # avisos viram erros
@@ -38,6 +40,8 @@ PIPELINE = {
     "techspec": ["prd"],
     "tasks": ["prd", "techspec"],
 }
+
+ESTADO = "docs/product/flow-state.json"
 
 # artefatos de nivel produto, na ordem em que aparecem no fluxo
 NIVEL_PRODUTO = ["vision", "domain-map", "architecture-baseline", "capability-backlog"]
@@ -72,7 +76,7 @@ def ler_frontmatter(texto):
 
 
 def parse_sources(valor):
-    """'vision.md@1.1, context/domain-map.md@1.0' -> [(caminho, versao)]"""
+    """'docs/product/vision.md@1.1, docs/product/domain-map.md@1.0' -> [(caminho, versao)]"""
     itens = []
     for bruto in (valor or "").split(","):
         bruto = bruto.strip()
@@ -388,9 +392,13 @@ def main(argv=None):
     args = parser.parse_args(argv)
 
     raiz = Path(args.raiz).resolve()
-    arquivo = raiz / "flow-state.json"
+    arquivo = raiz / ESTADO
+    legado = None
+    if not arquivo.is_file() and (raiz / "flow-state.json").is_file():
+        arquivo = raiz / "flow-state.json"
+        legado = (f"layout legado: estado em flow-state.json na raiz; o canonico e {ESTADO}")
     if not arquivo.is_file():
-        print(f"validate_state: flow-state.json nao encontrado em {raiz}", file=sys.stderr)
+        print(f"validate_state: {ESTADO} nao encontrado em {raiz}", file=sys.stderr)
         return 2
     try:
         estado = json.loads(arquivo.read_text(encoding="utf-8"))
@@ -399,6 +407,8 @@ def main(argv=None):
         return 2
 
     artefatos, backlog, erros, avisos = checar(raiz, estado)
+    if legado:
+        avisos.insert(0, legado)
 
     if args.capability:
         return imprimir_capacidade(args.capability.upper(), estado, artefatos, backlog, erros)

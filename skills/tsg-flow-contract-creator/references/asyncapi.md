@@ -26,7 +26,7 @@ uma aplicação remetente; seus nomes, payload e garantias não são defaults de
 Com a CLI compatível instalada, execute para cada documento gerado:
 
 ```bash
-asyncapi validate tasks/prd-[slug]/asyncapi-contract.yaml
+asyncapi validate work/[slug]/asyncapi-contract.yaml
 ```
 
 Registre versão da CLI, comando e resultado; corrija erros e revise avisos. Verifique também

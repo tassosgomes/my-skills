@@ -5,9 +5,9 @@ metadata:
   group: tsg-flow
   pipeline_stage: techspec
   requires:
-    - "tasks/prd-[slug]/prd.md"
+    - "work/[slug]/prd.md"
   produces:
-    - "tasks/prd-[slug]/techspec.md"
+    - "work/[slug]/techspec.md"
     - "docs/adr/adr-NNN.md (quando houver decisão nova)"
 ---
 
@@ -31,16 +31,16 @@ Um documento por feature, cobrindo backend, frontend ou ambos.
 
 ## Entradas
 
-- `tasks/prd-<slug>/prd.md` aprovado, ou aprovação equivalente registrada pelo usuário.
+- `work/<slug>/prd.md` aprovado, ou aprovação equivalente registrada pelo usuário.
 - Quando a feature consome ou altera HTTP, mensagens ou dados compartilhados: `contracts.md`
   e contratos aplicáveis aprovados para a implementação do PRD. Aceite `api-contract.yaml`
   diretamente em PRDs existentes sem índice. Sem integração, registre a não aplicabilidade.
 - Contratos registram o acordo daquele PRD e podem ser evoluídos por outros. Não atribua à
   TechSpec catalogação, armazenamento definitivo ou atualização do acervo; isso cabe à plataforma.
-- Quando disponíveis: `vision.md`, `context/domain-map.md`, `context/architecture-baseline.md`,
-  `domains/<dominio>/domain.md`, capacidade em `backlog/capabilities.md`, designs e ADRs.
+- Quando disponíveis: `docs/product/vision.md`, `docs/product/domain-map.md`, `docs/product/architecture-baseline.md`,
+  `docs/product/domains/<dominio>.md`, capacidade em `docs/product/capabilities.md`, designs e ADRs.
 - Figma ou mockups de tela, quando existirem. Não são obrigatórios: muitas features não têm.
-- Saída: `tasks/prd-<slug>/techspec.md`. Respeite caminhos já definidos pelo projeto.
+- Saída: `work/<slug>/techspec.md`. Respeite caminhos já definidos pelo projeto.
 
 ## Escopo do documento
 

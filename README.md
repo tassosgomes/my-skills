@@ -44,7 +44,7 @@ HTTPS com `gh auth login` / `GITHUB_TOKEN`.
 O repositório declara grupos de skills em [`.claude-plugin/marketplace.json`](.claude-plugin/marketplace.json):
 `tsg-flow`, `flow-qa`, `java` e `react`. Rodando `npx skills add tassosgomes/my-skills`
 sem `-s`, o picker interativo agrupa as skills por família e permite selecionar um grupo inteiro
-de uma vez (ex.: todo o `tsg-flow`, para não instalar `tsg-flow-implementer` sem `tsg-flow-orchestrator`).
+de uma vez (ex.: todo o `tsg-flow`, para não instalar `tsg-flow-next` sem as etapas que ela encadeia).
 Cada `SKILL.md` do grupo também documenta a família no próprio frontmatter (`metadata.group`) —
 é só uma convenção legível para humanos, quem decide o agrupamento real no instalador é o
 `marketplace.json`.
@@ -82,11 +82,11 @@ claude --plugin-dir mods/flow-progress
 
 Exemplo da faixa: `prd-xyz ████░░░░░░ 4/10 🔍 review (task 5.0)`.
 
-- **PRD ativo:** o `tasks/prd-*/flow-state.json` modificado por último, relido a cada 3 segundos.
-  Rode o Claude Code na raiz do projeto que contém `tasks/`.
+- **PRD ativo:** o `work/*/run-state.json` modificado por último, relido a cada 3 segundos (o
+  layout antigo, `tasks/prd-*/flow-state.json`, ainda é lido). Rode o Claude Code na raiz do projeto.
 - **Realizado/total:** checkboxes do `tasks.md`.
 - **Fase:** `status:` do frontmatter de `<num>_task.md` (`in_progress`, `validating`, `blocked`, `done`).
-  Com todas as tasks `done`, mostra integração até o `phase` do `flow-state.json` indicar conclusão.
+  Com todas as tasks `done`, mostra integração até o `phase` do `run-state.json` indicar conclusão.
 - A faixa some quando não há PRD em orquestração; o botão **Ocultar** a esconde na sessão.
 
 Testes: `claude plugin test mods/flow-progress`. Validação: `claude plugin validate mods/flow-progress`.
@@ -101,18 +101,17 @@ Testes: `claude plugin test mods/flow-progress`. Validação: `claude plugin val
 
 | Skill | Etapa | Propósito |
 |-------|-------|-----------|
-| :star: [tsg-flow-vision-creator](skills/tsg-flow-vision-creator/) | Vision | Define a visão macro e os limites do sistema |
-| :star: [tsg-flow-domain-decomposer](skills/tsg-flow-domain-decomposer/) | Domain Map | Decompõe a visão em bounded contexts conceituais |
-| :star: [tsg-flow-architecture-baseline](skills/tsg-flow-architecture-baseline/) | Baseline | Define restrições arquiteturais reutilizáveis |
-| :star: [tsg-flow-capability-backlog](skills/tsg-flow-capability-backlog/) | Capacidades | Prioriza MVP e evolução por capacidades de negócio |
-| :star: [tsg-flow-domain-creator](skills/tsg-flow-domain-creator/) | Domain | Detalha um domínio, suas features e regras de negócio |
+| :star: [tsg-flow-product](skills/tsg-flow-product/) | Produto | Visão, Domain Map, baseline arquitetural e backlog de capacidades em `docs/product/`, uma etapa por vez |
+| :star: [tsg-flow-next](skills/tsg-flow-next/) | Por capacidade | Verifica pré-requisitos, declara a fatia e encadeia domain doc, PRD, contrato, TechSpec e tasks até o plano aprovado |
 | :star: [tsg-flow-prd-creator](skills/tsg-flow-prd-creator/) | PRD | Conduz discovery e cria requisitos de produto rastreáveis |
 | :star: [tsg-flow-contract-creator](skills/tsg-flow-contract-creator/) | Integration Contracts | Define contratos OpenAPI, AsyncAPI e ODCS para a implementação da feature |
 | :star: [tsg-flow-techspec-creator](skills/tsg-flow-techspec-creator/) | TechSpec | Traduz o PRD em fatias, contratos e decisões — backend, frontend ou full-stack |
 | :star: [tsg-flow-task-creator](skills/tsg-flow-task-creator/) | Tasks | Gera tasks verticais, rastreáveis e prontas para agentes |
 
-O fluxo de execução utiliza ainda `tsg-flow-orchestrator`, `tsg-flow-implementer`,
-`tsg-flow-validator` e `tsg-flow-integrator`. A `flow-qa` pertence ao pipeline de QA, fora do
+São três pontos de entrada: `tsg-flow-product` (uma vez por produto), `tsg-flow-next` (por
+capacidade) e `tsg-flow-orchestrator` (execução, que coordena `tsg-flow-implementer`,
+`tsg-flow-validator` e `tsg-flow-integrator`). As demais são etapas que a `next` encadeia.
+Artefatos duráveis ficam em `docs/`, os de cada entrega em `work/<cap>-<slug>/`. A `flow-qa` pertence ao pipeline de QA, fora do
 TSG Flow.
 
 ### Pipeline de QA

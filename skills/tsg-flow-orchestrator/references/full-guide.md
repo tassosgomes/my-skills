@@ -2,10 +2,12 @@
 
 Leia ao iniciar/retomar um PRD. O SKILL.md define o ciclo; esta referência define sua memória operacional.
 
-## flow-state.json
+## run-state.json
 
-O orquestrador mantém `{PRD_DIR}/flow-state.json`, escrito atomicamente por arquivo temporário e rename
-ou mecanismo de edição equivalente. Não contém credenciais nem transcripts completos.
+O orquestrador mantém `{PRD_DIR}/run-state.json`, escrito atomicamente por arquivo temporário e rename
+ou mecanismo de edição equivalente. Não contém credenciais nem transcripts completos. Não é o
+`docs/product/flow-state.json` do nível de produto: o orquestrador não escreve nele; a `tsg-flow-next`
+lê este arquivo para reconciliar o stage da capacidade.
 
 ```json
 {
@@ -29,6 +31,9 @@ ou mecanismo de edição equivalente. Não contém credenciais nem transcripts c
   "history": []
 }
 ```
+
+`phase` termina em `complete` quando o integrator devolve PRD COMPLETE. É o sinal que a
+`tsg-flow-next` usa para marcar a capacidade como done.
 
 Registre a delegação pendente antes de lançá-la: run_id quando disponível, papel, modo, task e
 tentativa. Após retorno, armazene outcome e caminho do resultado/relatório. Avance a fase só depois

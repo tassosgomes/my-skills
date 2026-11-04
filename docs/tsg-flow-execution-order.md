@@ -36,47 +36,77 @@ está errada — revise antes de executar.
 
 ## 2. Escolha o ponto de entrada
 
+São três, um por nível:
+
 | Situação | Comece por |
 |---|---|
-| Correção pequena, ajuste pontual ou manutenção bem delimitada | Fluxo direto do projeto, com planejamento breve se necessário |
-| Feature isolada com contexto suficiente | PRD |
-| Feature cujo PRD e specs já estão aprovados | Tasks, ou Orchestrator se o plano também estiver pronto |
-| Produto amplo sem fronteiras claras | Vision → Domain Map |
-| Evolução de produto já documentado | Reutilize documentos válidos; atualize somente a etapa cujas premissas mudaram |
+| Correção pequena, ajuste pontual ou manutenção bem delimitada | Fluxo direto do projeto |
+| Feature isolada com contexto suficiente | `tsg-flow-prd-creator`, sem estado de produto |
+| Produto amplo sem fronteiras claras, ou premissa de produto que mudou | `tsg-flow-product` |
+| Avançar ou retomar uma capacidade do backlog | `tsg-flow-next` |
+| Plano de tasks aprovado | `tsg-flow-orchestrator` |
 
 A ordem expressa dependências, não uma obrigação de recriar todos os documentos em cada feature.
 
-## 3. Definição do produto — normalmente uma vez, depois por mudança de premissas
+## 3. Onde cada coisa mora
 
-| Ordem | Skill | Entrada | Saída e próximo uso |
-|---|---|---|---|
-| 1 | tsg-flow-vision-creator | Problema, públicos e escopo macro | vision.md |
-| 2 | tsg-flow-domain-decomposer | Visão | context/domain-map.md |
-| 3 | tsg-flow-architecture-baseline | Visão + Domain Map + arquitetura/ADRs existentes | context/architecture-baseline.md |
-| 4, opcional | tsg-flow-capability-backlog | Visão + Domain Map; baseline quando existir | backlog/capabilities.md com IDs CAP |
-| 5, por domínio necessário | tsg-flow-domain-creator | Visão + domínio selecionado no mapa + capacidades pertinentes | domains/<dominio>/domain.md |
+Duas raízes, com uma regra: o que é durável fica em `docs/`, o que é de uma entrega fica em `work/`.
 
-O baseline define restrições consumidas pelas TechSpecs. O backlog é útil para priorizar MVP e fases.
-Não detalhe todos os domínios antes de iniciar a primeira capacidade: comece pelos necessários à entrega.
+```text
+docs/
+  product/
+    flow-state.json            # progresso por capacidade, decisões em aberto, fundação
+    vision.md
+    domain-map.md
+    architecture-baseline.md
+    capabilities.md
+    domains/<dominio>.md       # só para domínio com 2+ PRDs no horizonte
+  adr/                         # decisões arquiteturais, numeração global
+  product-decisions/           # decisões duráveis de produto
+work/
+  <cap-id>-<slug>/             # uma entrega; feature isolada usa só <slug>
+    prd.md  contracts.md  api-contract.yaml  techspec.md  tasks.md  <num>_task.md
+    run-state.json             # estado de execução do orchestrator
+    <num>_task_review.md  prd_review.md  design/  evidence/
+```
 
-## 4. Planejamento — por feature
+Há dois arquivos de estado, de donos diferentes: `docs/product/flow-state.json` é da
+`tsg-flow-next`; `work/<dir>/run-state.json` é do orchestrator. A `next` lê o segundo para marcar a
+capacidade como em execução ou concluída.
 
-| Ordem | Skill | Quando executar |
+## 4. Definição do produto — `tsg-flow-product`
+
+Uma vez por produto, depois por mudança de premissa. Uma etapa por invocação, parando na aprovação.
+
+| Etapa | Saída | Origens |
 |---|---|---|
-| 6 | tsg-flow-prd-creator | Definir comportamento, escopo e critérios de aceite da capacidade/feature |
-| 7, condicional | tsg-flow-contract-creator | Criar/alterar API compartilhada. Reutilize contrato canônico já aprovado |
-| 8, condicional | tsg-flow-techspec-creator | Escopo Grande/Complexo. Declare Backend, Frontend ou Full-stack no cabeçalho — um único documento |
-| 9 | tsg-flow-task-creator | Consumir PRD e todas as specs necessárias aprovadas; gerar um único plano |
+| Visão | `docs/product/vision.md` | — |
+| Domain Map | `docs/product/domain-map.md` | visão |
+| Baseline arquitetural | `docs/product/architecture-baseline.md` | visão, Domain Map |
+| Backlog de capacidades | `docs/product/capabilities.md` com IDs `CAP` | visão, Domain Map, baseline |
 
-Para frontend com API, o contrato antecede a etapa 8. Para frontend sem API, declare N/A e dispense a
-etapa 7. Escopo Pequeno/Médio dispensa a etapa 8 inteira (ver o dimensionamento na seção 1).
-Quando o frontend depende de decisões do backend, resolva o backend primeiro. Serialize escritas nas ADRs e no diretório compartilhado.
+As quatro são obrigatórias nesta rota: o gate exige cada origem, e a `next` não trabalha sem backlog.
+Quem não precisa delas está na rota de feature isolada.
 
-As etapas 3, 8a e 8b reutilizam ADRs pertinentes. Decisões arquiteturais novas ficam em
-`docs/adr/adr-NNN.md`, com numeração global; nunca dentro do diretório temporário do PRD.
-Leia o [ciclo e retenção das ADRs](tsg-flow-guide.md#adrs-sobrevivem-ao-prd).
+## 5. Planejamento por capacidade — `tsg-flow-next`
 
-## 5. Preparação do repositório
+A `next` verifica pré-requisitos, declara fatia e tamanho, e encadeia até o plano aprovado:
+
+| Etapa | Quando | Quem |
+|---|---|---|
+| Domain doc | domínio com 2+ PRDs no horizonte visível | a própria `next` |
+| PRD | sempre | `tsg-flow-prd-creator` |
+| Contrato | integração HTTP, mensageria ou dados compartilhados criada ou alterada | `tsg-flow-contract-creator` |
+| TechSpec | Grande ou Complexo; declare Backend, Frontend ou Full-stack no cabeçalho | `tsg-flow-techspec-creator` |
+| Tasks | Grande ou Complexo | `tsg-flow-task-creator` |
+
+O contrato sai do PRD e antecede a TechSpec. Para frontend sem API, declare N/A e dispense o
+contrato. Quando o frontend depende de decisões do backend, resolva o backend primeiro.
+
+Decisões arquiteturais novas ficam em `docs/adr/adr-NNN.md`, com numeração global; nunca dentro de
+`work/`. Leia o [ciclo e retenção das ADRs](tsg-flow-guide.md#adrs-sobrevivem-ao-prd).
+
+## 6. Preparação do repositório
 
 Não existe script de gate a gerar. Cada task declara em `gate` o **comando real do projeto** — o
 mesmo que o CI executa — e o exit code do comando é o veredito.
@@ -87,12 +117,12 @@ teste** (`--minimum-expected-tests` no Microsoft.Testing.Platform, exit 5 no pyt
 em Jest, Vitest, Surefire e Gradle). Onde o runner sair `0` com zero testes, quantifique a
 expectativa em `gate_expect` para que a divergência reprove.
 
-## 6. Execução — ponto de entrada único
+## 7. Execução — `tsg-flow-orchestrator`
 
 Depois de revisar/aprovar o plano e autorizar a implementação:
 
 ```text
-tsg-flow-orchestrator --prd-dir=tasks/prd-exemplo --profile=standard --delivery=branch
+tsg-flow-orchestrator --prd-dir=work/cap-001-exemplo --profile=standard --delivery=branch
 ```
 
 Este exemplo termina na branch local. Use delivery=pr ou delivery=merge quando esse destino estiver
@@ -114,11 +144,11 @@ como se tivesse sido revisado anteriormente.
 Os workers não devem ser chamados manualmente por rotina. Use-os diretamente apenas para operação
 delimitada cujo contexto e pré-condições estejam disponíveis.
 
-## 7. Retomada e encerramento
+## 8. Retomada e encerramento
 
-Retome o Orchestrator com o mesmo prd-dir. Ele lê flow-state.json, tasks e Git e reconcilia a operação
-interrompida. Não reinicie do Vision nem gere o plano inteiro outra vez por trocar de conversa.
+Retome o Orchestrator com o mesmo prd-dir. Ele lê run-state.json, tasks e Git e reconcilia a operação
+interrompida. Ao fim, a `tsg-flow-next` traz o resultado para o estado de produto. Não reinicie do Vision nem gere o plano inteiro outra vez por trocar de conversa.
 
-Após a entrega, mantenha ADRs e documentação operacional em docs/. PRD e tasks podem ser arquivados
-em uma operação separada, preservando contratos consumidos por tooling e links ativos.
+Após a entrega, mantenha ADRs e documentação operacional em docs/. O diretório em work/ pode ser
+arquivado em uma operação separada, preservando contratos consumidos por tooling e links ativos.
 Veja o [guia de contratos e retenção](tsg-flow-guide.md).

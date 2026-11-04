@@ -61,4 +61,4 @@ Toda linha do PRD precisa aparecer aqui. Lacuna é bloqueio de handoff, não obs
 | RN-04 | 2.0 |
 | US-01 | 1.0 |
 
-> Verificado por `python3 scripts/validate_plan.py tasks/prd-<slug>/` antes do handoff.
+> Verificado por `python3 scripts/validate_plan.py work/<slug>/` antes do handoff.

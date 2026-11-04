@@ -19,7 +19,7 @@ da autoridade existente. Não use reset/checkout destrutivo nem finalize rebase 
 ## Finalização
 
 Compare o conteúdo atual com validated_commit/tree. Somente prd_review.md, N_task_review.md e
-flow-state.json pertencentes ao PRD podem ter mudado como evidência; confira esses diffs.
+run-state.json pertencentes ao PRD podem ter mudado como evidência; confira esses diffs.
 Nenhum código, config, lockfile, contrato ou ADR pode ser incluído sem revisão correspondente.
 Após commit de evidência, valide que a diferença continua restrita a essa lista.
 

@@ -5,7 +5,7 @@ info:
   description: |
     API para [descrição da funcionalidade].
     
-    **Contrato gerado a partir do PRD:** `tasks/prd-[nome-funcionalidade]/prd.md`
+    **Contrato gerado a partir do PRD:** `work/[nome-funcionalidade]/prd.md`
     **Data de geração:** [data]
     
     ## Premissas Adotadas

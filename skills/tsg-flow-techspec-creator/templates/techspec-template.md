@@ -2,7 +2,7 @@
 
 > **Escopo:** [Backend | Frontend | Full-stack]
 > **Modo:** [Standalone | Pipeline | API-First]
-> **PRD de origem:** `tasks/prd-[slug]/prd.md`
+> **PRD de origem:** `work/[slug]/prd.md`
 > **Contratos de integração:** `contracts.md` e documentos aplicáveis (OpenAPI/AsyncAPI/ODCS); aceite `api-contract.yaml` em PRDs existentes | `N/A — [motivo]`
 > **Data:** [YYYY-MM-DD]
 > **Status:** [Rascunho | Em Revisão | Aprovado]
@@ -61,7 +61,7 @@ Diagrama mermaid/ascii quando as relações não couberem bem em texto.
 Sem Figma nem mockup, escreva só `Sem referência visual aprovada.` e omita a tabela: as tasks não
 terão conferência visual. Com referência, uma linha por tela e por estado que o design mostra
 (vazio, erro, sem permissão, carregando). Quando o design for aprovado, exporte cada frame como PNG
-para `tasks/prd-<slug>/design/`, para que a conferência não dependa de acesso ao Figma.
+para `work/<slug>/design/`, para que a conferência não dependa de acesso ao Figma.
 
 | Fatia | Tela / estado | Referência | Largura | Cenário |
 |---|---|---|---|---|
@@ -254,6 +254,6 @@ ADRs herdadas e novas. Nenhuma ADR nova é necessária quando o desenho apenas a
 existentes.
 
 > ADRs vivem em `docs/adr/`, com status `Proposed` durante revisão e `Accepted` após aprovação.
-> Links partem de `tasks/prd-<slug>/`; recalcule se o diretório for outro.
+> Links partem de `work/<slug>/`; recalcule se o diretório for outro.
 
 - [ADR-NNN: Título](../../docs/adr/adr-NNN.md) — [decisão e por que importa para esta feature]

@@ -4,14 +4,14 @@ product: [nome-do-produto]
 version: 1.0
 status: draft
 updated: [YYYY-MM-DD]
-sources: vision.md@[versão], context/domain-map.md@[versão], backlog/capabilities.md@[versão]
+sources: docs/product/vision.md@[versão], docs/product/domain-map.md@[versão], docs/product/capabilities.md@[versão]
 ---
 
 # Domain Document — [Nome do Domínio]
 
 > Detalha o bounded context de **um** domínio do Domain Map. Não decide prioridade, ordem nem
-> escopo de entrega — isso é do backlog de capacidades e do PRD. Forneça este arquivo junto com o
-> `vision.md` ao iniciar um PRD de capacidade que toque este domínio.
+> escopo de entrega — isso é do backlog de capacidades e do PRD. Acompanha todo PRD de capacidade
+> que toque este domínio.
 
 **Domínio:** [Nome, exatamente como no Domain Map]
 **Capacidades atendidas:** [CAP-XXX, CAP-YYY — só os IDs; prioridade e fase vivem no backlog]
@@ -60,7 +60,7 @@ Herde do Domain Map: o campo "O que não faz" já traz a maior parte disto.]
 ## 4. Capacidades Atendidas (Capabilities Served)
 
 > Quais capacidades do backlog este domínio serve. **Só referência.** Prioridade, fase, dependência
-> entre capacidades e ordem de implementação vivem em `backlog/capabilities.md`, que é o único
+> entre capacidades e ordem de implementação vivem em `docs/product/capabilities.md`, que é o único
 > documento que enxerga através dos domínios. Não reproduza nada disso aqui: uma ordem proposta por
 > um domínio isolado contradiz a ordem do backlog na primeira dependência cruzada.
 
@@ -147,6 +147,5 @@ Herde do Domain Map: o campo "O que não faz" já traz a maior parte disto.]
 
 ---
 
-*Domain Doc gerado com a skill `tsg-flow-domain-creator`. Para criar o PRD de uma capacidade que
-toca este domínio, use `tsg-flow-prd-creator` fornecendo o `vision.md`, este arquivo, os demais
-domain docs que a capacidade atravessa e o ID da capacidade.*
+*Gerado pela `tsg-flow-next`. Acompanha os PRDs das capacidades que tocam este domínio, junto
+com os demais domain docs que cada capacidade atravessa.*

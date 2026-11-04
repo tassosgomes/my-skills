@@ -1,5 +1,38 @@
 # Changelog das skills TSG Flow
 
+## 2026-11-04 — Três pontos de entrada e duas raízes de artefato
+
+O fluxo tinha 14 skills, saídas em seis raízes e dois `flow-state.json` de schemas diferentes. Agora
+são 10 skills e três pontos de entrada:
+
+- **`tsg-flow-product`** absorve vision-creator, domain-decomposer, architecture-baseline e
+  capability-backlog. Um `SKILL.md` com as regras comuns (frontmatter, `sources`, draft, gate) e uma
+  referência por etapa, carregada sob demanda.
+- **`tsg-flow-next`** absorve a domain-creator e passa a encadear até as tasks — PRD, contrato,
+  TechSpec e tasks, parando em cada aprovação — e termina no comando do orchestrator. Antes ela
+  parava no PRD, e o restante era chamado à mão.
+- **`tsg-flow-orchestrator`** não muda de papel; seu estado vira `run-state.json`.
+
+Artefatos: o que é durável fica em `docs/` (`docs/product/` para visão, Domain Map, baseline,
+backlog, domain docs e `flow-state.json`), e o de cada entrega em `work/<cap>-<slug>/`, que
+substitui `tasks/prd-<slug>/`. `docs/adr/` e `docs/product-decisions/` não mudam. O gate lê
+`docs/product/flow-state.json` e ainda aceita o arquivo na raiz, com aviso de layout legado. O mod
+`flow-progress` lê `work/*/run-state.json` e ainda aceita o layout antigo.
+
+Contradições corrigidas no caminho:
+
+- Backlog e baseline eram "opcionais" na documentação e na skill do backlog, mas obrigatórios no
+  gate. Na rota de produto agora são obrigatórios, como o gate já exigia; feature isolada não usa
+  estado de produto.
+- `capability_stages` punha `techspec` antes de `contract`, embora o contrato saia do PRD e alimente
+  a TechSpec.
+- O formato de capacidade da skill do backlog (`Dependências:`, `Fase recomendada:`) não batia com o
+  parser do gate (`**Dependências:**`, `**Fase:**`, `#### CAP-001 — `). A referência nova documenta
+  o formato que o gate lê, e há teste para isso.
+- O template da visão listava caminhos de domain doc para todos os domínios, contra a regra de só
+  escrever domain doc com dois ou mais PRDs no domínio. A visão passa a numerar capacidades `CNN`,
+  que é o que o backlog rastreia.
+
 ## 2026-11-04 — Skills `java-*` e `flow-qa-*` descontinuadas
 
 As sete skills `java-*` saem do repositório; a `java` é o único padrão Java / Spring Boot. As três
