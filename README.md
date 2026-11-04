@@ -26,7 +26,7 @@ npx skills add tassosgomes/my-skills/<nome-da-skill>
 Exemplos:
 
 ```bash
-npx skills add tassosgomes/my-skills/flow-qa-orchestrator
+npx skills add tassosgomes/my-skills/flow-qa
 npx skills add tassosgomes/my-skills/tsg-flow-prd-creator
 npx skills add tassosgomes/my-skills/tsg-flow-techspec-creator
 npx skills add tassosgomes/my-skills/tsg-flow-task-creator
@@ -112,16 +112,14 @@ Testes: `claude plugin test mods/flow-progress`. Validação: `claude plugin val
 | :star: [tsg-flow-task-creator](skills/tsg-flow-task-creator/) | Tasks | Gera tasks verticais, rastreáveis e prontas para agentes |
 
 O fluxo de execução utiliza ainda `tsg-flow-orchestrator`, `tsg-flow-implementer`,
-`tsg-flow-validator` e `tsg-flow-integrator`. As skills `flow-qa-*` pertencem ao pipeline de QA
-e permanecem com esse namespace nesta etapa.
+`tsg-flow-validator` e `tsg-flow-integrator`. A `flow-qa` pertence ao pipeline de QA, fora do
+TSG Flow.
 
 ### Pipeline de QA
 
 | Skill | Tipo | Propósito |
 |-------|------|-----------|
-| :star: [flow-qa-orchestrator](#flow-qa-orchestrator) | Orquestrador | Coordena pipeline de QA E2E (entrevista → plano → execução → relatório) |
-| :star: [flow-qa-task-runner](#flow-qa-task-runner) | Subagente | Executa testes de uma user story (UI/API/DB) com fidelidade total |
-| :star: [flow-qa-report-builder](#flow-qa-report-builder) | Consolidador | Gera relatório final consolidado (Markdown/PDF) da sessão de QA |
+| :star: [flow-qa](#flow-qa) | Workflow | Rodada independente de QA: plano a partir dos requisitos, execução UI/API/persistência, evidências e relatório |
 
 ### Documentação
 
@@ -156,59 +154,22 @@ e permanecem com esse namespace nesta etapa.
 
 ---
 
-## flow-qa-orchestrator
+## flow-qa
 
-**Papel:** QA Lead que conduz uma sessão completa de testes a partir de um PRD/TechSpec.
+**Papel:** QA independente que valida requisitos pelo comportamento observável — o esperado vem do
+PRD/TechSpec, nunca do código nem dos testes do implementer. Substitui as três skills `flow-qa-*`
+(orchestrator, task-runner, report-builder).
 
-**Fluxo (8 fases):**
-1. **Recebimento** — lê PRD/techspec e identifica user stories, endpoints, fluxos.
-2. **Entrevista** — extrai expectativas do usuário (escopo, ambiente, auth, banco, formato do relatório).
-3. **Análise & Planejamento** — monta tasks por user story (`qa_task_NN_<slug>`), identifica dependências e fases (paralelo/sequencial).
-4. **Aprovação do plano** — apresenta o plano e aguarda revisão.
-5. **Autorização de execução** — exige confirmação explícita antes de iniciar.
-6. **Setup** — cria `qa-evidence/`, grava `qa_test_plan.md` em disco (plano aprovado completo) e `qa_session.json` (sem credenciais hardcoded; só nomes de env vars). O plano é sempre persistido antes de qualquer subagente ser disparado.
-7. **Execução** — dispara `flow-qa-task-runner` por task, respeitando dependências.
-8. **Consolidação** — chama `flow-qa-report-builder` para gerar o relatório final.
+**Fases:** Discover → Plan (`qa_test_plan.md`, casos `CT-NN` amarrados a requisito, aprovado antes
+de executar) → Prepare (`qa-evidence/`, `qa_session.json` só com nomes de env vars) → Execute (UI,
+API, persistência) → Evaluate (`PASS | FAIL | BLOCKED | NOT_EXECUTED`) → Report (`qa_report.md`).
 
-**Regras-chave:** não escreve código de produção, não sugere correções, não inicia sem aprovação, não expande escopo por conta própria.
+**Automação de UI:** `none`, `ephemeral` (Playwright dentro de `qa-evidence/`, padrão) ou `persist`
+(na suíte já existente do projeto, só quando há valor claro de regressão).
 
-> **Relatório em PDF:** para gerar o `qa_report_consolidated.pdf` o `flow-qa-report-builder` depende da skill `pdf`. Instale-a com `npx skills add pdf` caso queira saída em PDF além de Markdown.
-
----
-
-## flow-qa-task-runner
-
-**Papel:** QA Engineer que executa os testes de **uma única** user story.
-
-**Capacidades:**
-- **API** via cURL (request/response logado em `requests.log`).
-- **UI** via Playwright (screenshots em momentos críticos, vídeos, console do browser).
-- **Banco** via Docker CLI (PostgreSQL/MySQL/MongoDB) para validar persistência.
-
-**Fluxo:** lê `qa_session.json` → planeja casos (happy path + bordas + negativos em `test_plan.md`) → autentica se necessário → executa cada CT → gera `qa_report_task_NN.md`.
-
-**Gate anti-jeitinho (regra absoluta):** proibido modificar testes para forçar PASS, usar `try/catch` silencioso, ignorar assertions, alterar dados no banco para validar, ou sugerir correções de código. Ao falhar: para imediatamente, captura todas as evidências, registra expected vs actual com precisão.
-
-**Retry:** apenas para instabilidade de rede/timeout (máx 2 retentativas, 2s entre elas). Nunca para erro de lógica de negócio.
-
----
-
-## flow-qa-report-builder
-
-**Papel:** Último passo do pipeline QA — escreve o relatório executivo consolidado.
-
-**Inputs:** `qa_session.json` + lista de `qa_report_task_NN.md` + formato (`markdown` | `pdf` | `ambos`).
-
-**Estrutura do relatório (`qa_report_consolidated.md`):**
-- **Sumário executivo** — métricas agregadas + resultado binário (APROVADO só se zero falhas).
-- **Features testadas** — tabela com status por task.
-- **Escopo excluído** — registra o que foi acordado não testar.
-- **Resultado por feature** — casos executados, status, evidências.
-- **Detalhes das falhas** — expected vs actual, erro completo, console do browser, caminhos de evidência (screenshot/vídeo/log).
-- **Recomendações de investigação** — aponta o que investigar (sem sugerir como corrigir).
-- **Índice de evidências** — árvore de arquivos.
-
-**Regras:** nunca omite falha, nunca suaviza linguagem ("falhou" é "falhou"), nunca sugere correções, sempre cita evidências com caminho específico.
+**Regras-chave:** aprovado só com zero `FAIL` e zero `BLOCKED`; retry apenas para falha transitória
+de infraestrutura, registrado; nunca altera a aplicação, enfraquece assertions ou sugere correção.
+PDF só quando pedido e com a skill `pdf` disponível.
 
 ---
 

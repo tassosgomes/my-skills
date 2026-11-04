@@ -1,5 +1,12 @@
 # Changelog das skills TSG Flow
 
+## 2026-11-04 — Skills `java-*` e `flow-qa-*` descontinuadas
+
+As sete skills `java-*` saem do repositório; a `java` é o único padrão Java / Spring Boot. As três
+`flow-qa-*` (orchestrator, task-runner, report-builder) também saem; a `flow-qa` cobre a rodada
+inteira — plano, execução UI/API/persistência, evidências e relatório — numa skill só. O grupo
+`flow-qa` do `marketplace.json` passa a instalar só `skills/flow-qa`.
+
 ## 2026-10-03 — Implementer e validator usam subagentes no Herdr
 
 No transporte Herdr, cada worker é uma CLI nova, com contexto zerado e livre para delegar — o que

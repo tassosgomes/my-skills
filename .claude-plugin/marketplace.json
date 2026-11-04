@@ -26,11 +26,9 @@
     },
     {
       "name": "flow-qa",
-      "description": "Pipeline de QA E2E: orquestracao, execucao por user story e consolidacao de relatorio.",
+      "description": "Rodada independente de QA E2E: plano a partir dos requisitos, execucao UI/API/persistencia com evidencias e relatorio.",
       "skills": [
-        "./skills/flow-qa-orchestrator",
-        "./skills/flow-qa-task-runner",
-        "./skills/flow-qa-report-builder"
+        "./skills/flow-qa"
       ]
     },
     {
