@@ -6,28 +6,30 @@ set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 HERDR="${HERDR_BIN_PATH:-herdr}"
-ROLE="" KIND="" PRD_DIR="" TASK="" MODE="" ATTEMPT="" BASE_REF="" CONTEXT_FILE=""
+ROLE="" KIND="" PROFILE="" PRD_DIR="" TASK="" MODE="" ATTEMPT="" BASE_REF="" CONTEXT_FILE=""
 MODEL="" TIMEOUT_MS=900000 READ_LINES=200 RATIO=0.4 KEEP_PANE=0
 START_SHELL_TIMEOUT_S="${TSG_START_SHELL_TIMEOUT_S:-20}"
 DELIVERY="" RESULT_FILE="" PANE_ID="" LEDGER="" CONTEXT_COPY="" AGENT_STARTED=0
 ROUTE_SOURCE="explicit" ROUTE_NOTE="" ROUTE_MODEL="" ROUTE_EFFORT=""
-EFFORT="" TASK_KIND="" MODEL_FLAG="--model"
+EFFORT="" TASK_KIND="" MODEL_FLAG="--model" MODEL_ID="" PROFILE_EXTRA_JSON="[]"
 
 die() { printf 'tsg-delegate: %s\n' "$1" >&2; exit 3; }
 usage() {
-  printf '%s\n' 'tsg-delegate.sh --role=implementer|validator|integrator [--kind=KIND]' \
+  printf '%s\n' 'tsg-delegate.sh --role=implementer|validator|integrator [--kind=KIND|--agent-profile=NOME]' \
     '  --prd-dir=PATH [--task=N] [--mode=MODE] [--attempt=N/MAX] [--base-ref=SHA]' \
     '  [--delivery=branch|pr|merge] [--model=NAME] [--effort=LEVEL]' \
     '  [--context-file=PATH] [--timeout-ms=N] [--lines=N] [--keep-pane]' \
     '' \
-    'Sem --kind, o kind vem da politica de roteamento: TSG_ROUTING_FILE,' \
-    '<repo>/.tsg-flow/routing.json ou scripts/routing.default.json, nessa ordem.'
+    'Sem --kind nem --agent-profile, o agente vem da politica de roteamento: TSG_ROUTING_FILE,' \
+    '<repo>/.tsg-flow/routing.json ou scripts/routing.default.json, nessa ordem.' \
+    '--agent-profile usa um perfil da politica (agente + modelo + esforco) sem escalonamento.'
 }
 
 for arg in "$@"; do
   case "$arg" in
     --role=*) ROLE="${arg#*=}" ;;
     --kind=*) KIND="${arg#*=}" ;;
+    --agent-profile=*) PROFILE="${arg#*=}" ;;
     --prd-dir=*) PRD_DIR="${arg#*=}" ;;
     --task=*) TASK="${arg#*=}" ;;
     --mode=*) MODE="${arg#*=}" ;;
@@ -51,6 +53,8 @@ done
 [[ "$START_SHELL_TIMEOUT_S" =~ ^[1-9][0-9]*$ ]] || die "TSG_START_SHELL_TIMEOUT_S invalido"
 [[ "$RATIO" =~ ^0\.[0-9]*[1-9][0-9]*$ ]] || die "ratio deve estar entre 0 e 1"
 [[ -z "$KIND" || "$KIND" =~ ^[a-zA-Z0-9_-]+$ ]] || die "kind invalido"
+[[ -z "$PROFILE" || "$PROFILE" =~ ^[a-zA-Z0-9_.-]+$ ]] || die "profile invalido"
+[[ -n "$KIND" && -n "$PROFILE" ]] && die "use --kind ou --agent-profile, nao os dois"
 [[ -z "$EFFORT" || "$EFFORT" =~ ^[a-z][a-z0-9_-]*$ ]] || die "effort invalido"
 [[ -z "$TASK" || "$TASK" =~ ^[0-9]+(\.[0-9]+)?$ ]] || die "task invalida"
 [[ -z "$ATTEMPT" || "$ATTEMPT" =~ ^[1-9][0-9]*/[1-9][0-9]*$ ]] || die "attempt invalido"
@@ -122,57 +126,103 @@ if [[ -n "$TASK" ]]; then
     die "task_kind ausente ou invalido em $TASK_FILE (use vertical|enabling)"
 fi
 
-if [[ -z "$KIND" ]]; then
-  PEER_KIND=""
+# Perfil: nome da politica que aponta para um agente (kind) com modelo, esforco e argumentos
+# proprios — dois perfis podem usar o mesmo agente com modelos diferentes. O kind continua sendo
+# o agente real passado ao Herdr; a grafia da CLI (flag de modelo, esforco, settle) mora nele.
+# Nome que nao e perfil e tratado como kind puro, o que mantem validas as politicas antigas.
+if [[ -n "$PROFILE" ]]; then
+  ROUTE_JSON="$(jq -c --arg p "$PROFILE" '(.profiles // {})[$p] // empty' "$ROUTING_FILE")" ||
+    die "falha ao avaliar $ROUTING_FILE"
+  [[ -n "$ROUTE_JSON" ]] || die "perfil inexistente na politica: $PROFILE"
+  KIND="$(printf '%s' "$ROUTE_JSON" | jq -r '.kind // empty')"
+  [[ -n "$KIND" ]] || die "perfil $PROFILE sem kind"
+  ROUTE_MODEL="$(printf '%s' "$ROUTE_JSON" | jq -r '.model // empty')"
+  ROUTE_EFFORT="$(printf '%s' "$ROUTE_JSON" | jq -r '.effort // empty')"
+  PROFILE_EXTRA_JSON="$(printf '%s' "$ROUTE_JSON" | jq -c '.extra_args // []')"
+elif [[ -z "$KIND" ]]; then
+  PEER_KIND="" PEER_MODEL=""
   if [[ -n "$TASK" && -f "$LEDGER" ]]; then
-    PEER_KIND="$(jq -rs --arg prd "$PRD_DIR" --arg task "$TASK" '
+    PEER="$(jq -rs --arg prd "$PRD_DIR" --arg task "$TASK" '
       [ .[] | select(.role == "implementer" and .prd_dir == $prd and .task == $task
-                     and (.kind | type) == "string") ] | last | .kind // empty' \
-      "$LEDGER" 2>/dev/null)" || PEER_KIND=""
+                     and (.kind | type) == "string") ] | last
+      | if . == null then empty else "\(.kind)\t\(.model_id // .model // "")" end' \
+      "$LEDGER" 2>/dev/null)" || PEER=""
+    PEER_KIND="${PEER%%$'\t'*}"
+    [[ "$PEER" == *$'\t'* ]] && PEER_MODEL="${PEER#*$'\t'}"
   fi
   ROUTE_JSON="$(jq -c --arg role "$ROLE" --arg mode "$MODE" --arg tkind "$TASK_KIND" \
-    --arg peer "$PEER_KIND" --argjson attempt "$ATTEMPT_N" '
-    def matches($r): ($r.role == $role)
-      and (($r.mode // null) == null or $r.mode == $mode)
-      and (($r.task_kind // null) == null or $r.task_kind == $tkind);
-    ([ .routes[] | select(matches(.)) ] | first) as $route
+    --arg peer_kind "$PEER_KIND" --arg peer_model "$PEER_MODEL" --arg call_model "$MODEL" \
+    --argjson attempt "$ATTEMPT_N" '
+    . as $root
+    | def rung($n):
+        if (($root.profiles // {})[$n]) != null
+        then ($root.profiles[$n] + { profile: $n })
+        else { profile: null, kind: $n } end;
+      # Identidade de um revisor para a anti-afinidade. by=kind (padrao, regra original): o
+      # agente. by=model: agente + modelo efetivo, para quem so tem um agente poder revisar
+      # com outro modelo dele. Esforco nao muda a identidade: mesmo modelo, mesmo ponto cego.
+      def ident($r):
+        if (($root.anti_affinity // {}).by // "kind") == "model"
+        then "\($r.kind)/\(if $call_model != "" then $call_model
+                          else ($r.model // ($root.kinds[$r.kind].model // "")) end)"
+        else $r.kind end;
+      def matches($r): ($r.role == $role)
+        and (($r.mode // null) == null or $r.mode == $mode)
+        and (($r.task_kind // null) == null or $r.task_kind == $tkind);
+    ([ $root.routes[] | select(matches(.)) ] | first) as $route
     | if $route == null then { kind: null, note: "sem rota" }
-      else ([$route.kind] + ($route.escalation // (.escalation // {})[$role] // [])) as $ladder
-      | (if $attempt <= 1 then $route.kind
+      else ($route.profile // $route.kind) as $base
+      | ([$base] + ($route.escalation // ($root.escalation // {})[$role] // [])) as $ladder
+      | (if $attempt <= 1 then $base
          else $ladder[[$attempt - 1, ($ladder | length) - 1] | min] end) as $escalated
-      | (.anti_affinity // {}) as $aa
+      | ($root.anti_affinity // {}) as $aa
+      | (if $peer_kind == "" then ""
+         elif ($aa.by // "kind") == "model" then "\($peer_kind)/\($peer_model)"
+         else $peer_kind end) as $peer
       | (if ($aa.enabled // false)
             and ((($aa.roles // []) | index($role)) != null)
-            and $peer != "" and $escalated == $peer
-         then ([ (($aa.preference // [])[]) | select(. != $peer) ] | first) // $escalated
+            and $peer != "" and ident(rung($escalated)) == $peer
+         then ([ (($aa.preference // [])[]) | select(ident(rung(.)) != $peer) ] | first)
+              // $escalated
          else $escalated end) as $final
-      | { kind: $final,
-          model: (if $final == $route.kind then ($route.model // null) else null end),
-          effort: (if $final == $route.kind then ($route.effort // null) else null end),
-          note: ([ (if $escalated != $route.kind
+      | rung($final) as $r
+      # model/effort declarados na rota valem so para o degrau base; um perfil carrega os seus.
+      | { kind: ($r.kind // null), profile: $r.profile,
+          model: (if $final == $base and ($route.model // null) != null then $route.model
+                  else ($r.model // null) end),
+          effort: (if $final == $base and ($route.effort // null) != null then $route.effort
+                   else ($r.effort // null) end),
+          extra: ($r.extra_args // []),
+          note: ([ (if $escalated != $base
                     then "escalonado da tentativa \($attempt)" else empty end),
                    (if $final != $escalated
                     then "anti-afinidade com implementer \($peer)" else empty end) ]
                  | join("; ")) }
       end' "$ROUTING_FILE")" || die "falha ao avaliar $ROUTING_FILE"
   KIND="$(printf '%s' "$ROUTE_JSON" | jq -r '.kind // empty')"
-  [[ -n "$KIND" ]] || die "roteamento nao resolveu kind para role=$ROLE mode=$MODE; use --kind"
-  # O modelo da rota vale para o kind da rota. Trocado o kind por escalonamento ou
-  # anti-afinidade, o modelo antigo nao existe no agente novo: cai no padrao do kind.
+  [[ -n "$KIND" ]] || die "roteamento nao resolveu kind para role=$ROLE mode=$MODE; use --kind ou --agent-profile"
+  PROFILE="$(printf '%s' "$ROUTE_JSON" | jq -r '.profile // empty')"
+  # O modelo da rota vale para o degrau base. Trocado o degrau por escalonamento ou
+  # anti-afinidade, vale o modelo do perfil novo, ou o padrao do kind quando nao ha perfil.
   ROUTE_MODEL="$(printf '%s' "$ROUTE_JSON" | jq -r '.model // empty')"
   ROUTE_EFFORT="$(printf '%s' "$ROUTE_JSON" | jq -r '.effort // empty')"
+  PROFILE_EXTRA_JSON="$(printf '%s' "$ROUTE_JSON" | jq -c '.extra // []')"
   ROUTE_NOTE="$(printf '%s' "$ROUTE_JSON" | jq -r '.note // ""')"
   ROUTE_SOURCE="policy"
 fi
+[[ "$KIND" =~ ^[a-zA-Z0-9_-]+$ ]] || die "kind invalido resolvido pela politica: $KIND"
 
 KIND_JSON="$(jq -c --arg kind "$KIND" '(.kinds[$kind] // {})' "$ROUTING_FILE")"
 MODEL_FLAG="$(printf '%s' "$KIND_JSON" | jq -r '.model_flag // "--model"')"
-# Precedencia: valor da chamada, valor da rota, padrao do kind. Vale para modelo e esforco.
+# Precedencia: valor da chamada, perfil (ou rota), padrao do kind. Vale para modelo e esforco.
 [[ -z "$MODEL" ]] && MODEL="$ROUTE_MODEL"
 [[ -z "$MODEL" ]] && MODEL="$(printf '%s' "$KIND_JSON" | jq -r '.model // empty')"
 [[ -z "$EFFORT" ]] && EFFORT="$ROUTE_EFFORT"
 [[ -z "$EFFORT" ]] && EFFORT="$(printf '%s' "$KIND_JSON" | jq -r '.effort // empty')"
 mapfile -t KIND_EXTRA_ARGS < <(printf '%s' "$KIND_JSON" | jq -r '(.extra_args // [])[]')
+mapfile -t PROFILE_EXTRA_ARGS < <(printf '%s' "$PROFILE_EXTRA_JSON" | jq -r '.[]')
+# Modelo antes de compor o esforco no nome (model_template): e a identidade da anti-afinidade.
+MODEL_ID="$MODEL"
 # Alguns agentes sao detectados prontos antes de a TUI aceitar input e descartam o prompt.
 START_SETTLE_S="${TSG_START_SETTLE_S:-$(printf '%s' "$KIND_JSON" | jq -r '.start_settle_s // 1')}"
 [[ "$START_SETTLE_S" =~ ^[0-9]+$ ]] || die "start_settle_s invalido para $KIND: $START_SETTLE_S"
@@ -235,7 +285,8 @@ ledger() {
     gate="$(jq -r '.gate // empty' "$RESULT_FILE" 2>/dev/null)"
   jq -nc --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg run "$RUN_ID" --arg role "$ROLE" \
     --arg mode "$MODE" --arg prd "$PRD_DIR" --arg task "$TASK" --arg attempt "$ATTEMPT" \
-    --arg task_kind "$TASK_KIND" --arg kind "$KIND" --arg model "$MODEL" \
+    --arg task_kind "$TASK_KIND" --arg kind "$KIND" --arg profile "$PROFILE" \
+    --arg model "$MODEL" --arg model_id "$MODEL_ID" \
     --arg effort "$EFFORT" \
     --arg route "$ROUTE_SOURCE" --arg note "$ROUTE_NOTE" --arg context "$CONTEXT_COPY" --arg result "$result" \
     --arg outcome "$outcome" --arg gate "$gate" --arg reason "$reason" \
@@ -243,7 +294,8 @@ ledger() {
     def opt: if . == "" then null else . end;
     { ts: $ts, run_id: $run, role: $role, mode: $mode, prd_dir: $prd,
       task: ($task | opt), task_kind: ($task_kind | opt), attempt: ($attempt | opt),
-      kind: $kind, model: ($model | opt), effort: ($effort | opt),
+      kind: $kind, profile: ($profile | opt), model: ($model | opt),
+      model_id: ($model_id | opt), effort: ($effort | opt),
       route: $route, route_note: ($note | opt), context_file: ($context | opt),
       result: $result, outcome: $outcome, gate: ($gate | opt),
       elapsed_s: $elapsed, reason: ($reason | opt) }' >>"$LEDGER" 2>/dev/null || true
@@ -254,8 +306,8 @@ emit() {
   ledger "$1" "$2" "${3:-}"
   printf 'DELEGATE result=%s role=%s kind=%s run_id=%s pane=%s elapsed=%ss%s\n' \
     "$1" "$ROLE" "$KIND" "$RUN_ID" "${PANE_ID:-none}" "$((SECONDS - START_TS))" "${3:+ reason=$3}"
-  printf 'ROUTE: kind=%s model=%s effort=%s source=%s%s\n' \
-    "$KIND" "${MODEL:-default}" "${EFFORT:-default}" "$ROUTE_SOURCE" \
+  printf 'ROUTE: kind=%s model=%s effort=%s source=%s profile=%s%s\n' \
+    "$KIND" "${MODEL:-default}" "${EFFORT:-default}" "$ROUTE_SOURCE" "${PROFILE:-none}" \
     "${ROUTE_NOTE:+ note=$ROUTE_NOTE}"
   printf 'VERDICT: %s\nRESULT: %s\n' "$2" "$RESULT_FILE"
   [[ -n "$REPORT_PATH" && -f "$REPORT_PATH" ]] && printf 'REPORT: %s\n' "$REPORT_PATH"
@@ -339,6 +391,7 @@ AGENT_ARGS=()
 [[ -n "$MODEL" ]] && AGENT_ARGS+=("$MODEL_FLAG" "$MODEL")
 ((${#EFFORT_ARGS[@]} > 0)) && AGENT_ARGS+=("${EFFORT_ARGS[@]}")
 ((${#KIND_EXTRA_ARGS[@]} > 0)) && AGENT_ARGS+=("${KIND_EXTRA_ARGS[@]}")
+((${#PROFILE_EXTRA_ARGS[@]} > 0)) && AGENT_ARGS+=("${PROFILE_EXTRA_ARGS[@]}")
 if [[ -n "${TSG_AGENT_EXTRA_ARGS:-}" ]]; then
   # Argumentos simples separados por espaco; sem eval, globbing ou expansao de comandos.
   read -r -a EXTRA_ARGS <<<"$TSG_AGENT_EXTRA_ARGS"

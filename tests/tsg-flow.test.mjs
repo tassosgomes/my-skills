@@ -161,7 +161,7 @@ function runDelegate(t, {
   role = 'implementer', mode = 'implement', scenario = 'ok', kind = 'codex',
   attempt = '1/3', taskKind = 'vertical', taskKindField = 'task_kind', taskFile = '1_task.md',
   routing = null, fix = null, model = null, effort = null, allowNoCalls = false, shellWaitS = null,
-  settleS = '0', pipeHead = false,
+  settleS = '0', pipeHead = false, profile = null,
 } = {}) {
   const f = fix ?? fixture(t);
   const mock = join(f.bin, 'herdr');
@@ -174,7 +174,8 @@ function runDelegate(t, {
   const calls = join(f.dir, 'calls.jsonl');
   const args = [delegate, '--role=' + role, '--prd-dir=' + f.prd,
     '--mode=' + mode, '--attempt=' + attempt];
-  if (kind) args.push('--kind=' + kind);
+  if (kind && !profile) args.push('--kind=' + kind);
+  if (profile) args.push('--agent-profile=' + profile);
   if (model) args.push('--model=' + model);
   if (effort) args.push('--effort=' + effort);
   if (mode === 'full') args.push('--base-ref=' + f.sha);
@@ -451,14 +452,17 @@ test('a second attempt escalates instead of repeating the same kind', t => {
   assert.match(second.stdout, /note=escalonado/);
 });
 
-test('review does not reuse the kind that implemented the task', t => {
+test('review does not reuse the model that implemented the task', t => {
+  // A politica padrao compara agente + modelo: claude/sonnet implementou, claude/opus revisa.
   const impl = runDelegate(t, { kind: 'claude', taskKind: 'vertical' });
   const review = runDelegate(t, {
     role: 'validator', mode: 'focused', kind: null, fix: impl.fixture,
   });
   assert.equal(review.status, 0, review.stdout + review.stderr);
-  assert.equal(startedKind(review), 'codex');
+  assert.equal(startedKind(review), 'claude');
+  assert.ok(review.start.includes('claude-opus-5'), review.start.join(' '));
   assert.match(review.stdout, /anti-afinidade/);
+  assert.match(review.stdout, /profile=claude-opus-max/);
 });
 
 test('the ledger records route, kind and outcome per call', t => {
@@ -860,4 +864,141 @@ test('every relative link inside v2 resolves', () => {
       assert.ok(existsSync(join(base, target)), file + ' -> ' + target);
     }
   }
+});
+
+// --- Perfis: agente + modelo + esforco sob um nome da politica --------------------------
+
+function profilePolicy(f, extra = {}) {
+  const routing = join(f.dir, 'routing.json');
+  writeFileSync(routing, JSON.stringify({
+    schema_version: 1,
+    kinds: {
+      codex: { model_flag: '--model', effort_args: ['-c', 'effort={effort}'], extra_args: ['--kind-arg'] },
+      claude: { model_flag: '--model', model: 'claude-default', effort_args: ['--effort', '{effort}'] },
+    },
+    profiles: {
+      'codex-lua': { kind: 'codex', model: 'gpt-lua', effort: 'medium' },
+      'codex-sol': { kind: 'codex', model: 'gpt-sol', effort: 'high', extra_args: ['--profile-arg'] },
+      'codex-sol-xhigh': { kind: 'codex', model: 'gpt-sol', effort: 'xhigh' },
+      'claude-opus': { kind: 'claude', model: 'claude-opus', effort: 'max' },
+    },
+    routes: [
+      { role: 'implementer', profile: 'codex-lua', escalation: ['codex-sol'] },
+      { role: 'validator', profile: 'codex-sol' },
+    ],
+    ...extra,
+  }));
+  return routing;
+}
+
+const afterDash = r => r.start.slice(r.start.indexOf('--'));
+
+test('a profile route opens its agent with the profile model and effort', t => {
+  const f = fixture(t);
+  const routing = profilePolicy(f);
+  const r = runDelegate(t, { kind: null, fix: f, routing });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.equal(startedKind(r), 'codex');
+  assert.deepEqual(afterDash(r), ['--', '--model', 'gpt-lua', '-c', 'effort=medium', '--kind-arg']);
+  assert.match(r.stdout, /ROUTE: kind=codex model=gpt-lua effort=medium source=policy profile=codex-lua/);
+  assert.equal(r.ledger[0].profile, 'codex-lua');
+  assert.equal(r.ledger[0].model_id, 'gpt-lua');
+});
+
+test('escalation can stay on the same agent with a stronger model', t => {
+  const f = fixture(t);
+  const routing = profilePolicy(f);
+  const r = runDelegate(t, { kind: null, fix: f, routing, attempt: '2/3' });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.equal(startedKind(r), 'codex');
+  assert.deepEqual(afterDash(r),
+    ['--', '--model', 'gpt-sol', '-c', 'effort=high', '--kind-arg', '--profile-arg']);
+  assert.match(r.stdout, /profile=codex-sol note=escalonado da tentativa 2/);
+});
+
+test('anti-affinity by model lets the same agent review with another model', t => {
+  const f = fixture(t);
+  const routing = profilePolicy(f, { anti_affinity: {
+    enabled: true, roles: ['validator'], by: 'model', preference: ['codex-lua', 'claude-opus'] } });
+  runDelegate(t, { kind: null, profile: 'codex-sol', fix: f, routing });
+  const review = runDelegate(t, { role: 'validator', mode: 'focused', kind: null, fix: f, routing });
+  assert.equal(review.status, 0, review.stdout + review.stderr);
+  assert.equal(startedKind(review), 'codex');
+  assert.ok(review.start.includes('gpt-lua'), review.start.join(' '));
+  assert.match(review.stdout, /anti-afinidade com implementer codex\/gpt-sol/);
+});
+
+test('anti-affinity by model does not count an effort change as another reviewer', t => {
+  const f = fixture(t);
+  const routing = profilePolicy(f, { anti_affinity: {
+    enabled: true, roles: ['validator'], by: 'model', preference: ['codex-sol-xhigh', 'codex-lua'] } });
+  runDelegate(t, { kind: null, profile: 'codex-sol', fix: f, routing });
+  const review = runDelegate(t, { role: 'validator', mode: 'focused', kind: null, fix: f, routing });
+  assert.ok(review.start.includes('gpt-lua'), review.start.join(' '));
+  assert.match(review.stdout, /profile=codex-lua/);
+});
+
+test('anti-affinity without by keeps the strict rule: never the same agent', t => {
+  const f = fixture(t);
+  const routing = profilePolicy(f, { anti_affinity: {
+    enabled: true, roles: ['validator'], preference: ['codex-lua', 'claude-opus'] } });
+  runDelegate(t, { kind: null, profile: 'codex-sol', fix: f, routing });
+  const review = runDelegate(t, { role: 'validator', mode: 'focused', kind: null, fix: f, routing });
+  assert.equal(startedKind(review), 'claude');
+  assert.match(review.stdout, /profile=claude-opus/);
+});
+
+test('an explicit profile is used as is, without escalation', t => {
+  const f = fixture(t);
+  const routing = profilePolicy(f);
+  const r = runDelegate(t, { kind: null, profile: 'claude-opus', fix: f, routing, attempt: '3/3' });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.equal(startedKind(r), 'claude');
+  assert.deepEqual(afterDash(r), ['--', '--model', 'claude-opus', '--effort', 'max']);
+  assert.match(r.stdout, /source=explicit profile=claude-opus/);
+  assert.doesNotMatch(r.stdout, /escalonado/);
+});
+
+test('an explicit model still wins over the profile model', t => {
+  const f = fixture(t);
+  const routing = profilePolicy(f);
+  const r = runDelegate(t, { kind: null, profile: 'codex-lua', model: 'gpt-override', fix: f, routing });
+  assert.ok(r.start.includes('gpt-override'), r.start.join(' '));
+  assert.equal(r.start.includes('gpt-lua'), false);
+});
+
+test('an unknown profile is a usage error', t => {
+  const f = fixture(t);
+  const routing = profilePolicy(f);
+  const r = runDelegate(t, { kind: null, profile: 'nao-existe', fix: f, routing, allowNoCalls: true });
+  assert.equal(r.status, 3);
+  assert.match(r.stderr, /perfil inexistente na politica: nao-existe/);
+});
+
+test('kind and profile together are a usage error', t => {
+  const r = command('bash', [delegate, '--role=implementer', '--prd-dir=/tmp', '--kind=codex',
+    '--agent-profile=codex-lua'], root);
+  assert.equal(r.status, 3);
+  assert.match(r.stderr, /use --kind ou --agent-profile, nao os dois/);
+});
+
+test('a profile without kind is a usage error', t => {
+  const f = fixture(t);
+  const routing = profilePolicy(f, { profiles: { quebrado: { model: 'x' } } });
+  const r = runDelegate(t, { kind: null, profile: 'quebrado', fix: f, routing, allowNoCalls: true });
+  assert.equal(r.status, 3);
+  assert.match(r.stderr, /perfil quebrado sem kind/);
+});
+
+test('every name in the default policy resolves to a profile or a kind', () => {
+  const policy = JSON.parse(readFileSync(
+    join(root, 'skills', delegateSkill, 'scripts/routing.default.json'), 'utf8'));
+  const known = n => n in policy.profiles || n in policy.kinds;
+  for (const [name, p] of Object.entries(policy.profiles)) assert.ok(p.kind in policy.kinds, name);
+  const names = [
+    ...policy.routes.flatMap(r => [r.profile ?? r.kind, ...(r.escalation ?? [])]),
+    ...Object.values(policy.escalation).flat(),
+    ...policy.anti_affinity.preference,
+  ];
+  for (const n of names) assert.ok(known(n), n);
 });

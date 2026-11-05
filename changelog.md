@@ -1,5 +1,25 @@
 # Changelog das skills TSG Flow
 
+## 2026-11-04 — Perfis de roteamento: o mesmo agente com modelos diferentes
+
+O `kind` fazia dois papéis: o agente que o Herdr abre e a configuração de modelo e esforço. Com isso
+só existia um codex por política, a escada de escalonamento não podia subir dentro do mesmo agente
+(`codex` barato → `codex` forte) e o modelo da rota se perdia ao escalonar.
+
+Agora a política tem `profiles`: um nome seu que aponta para um `kind` com `model`, `effort` e
+`extra_args` próprios. Rotas, escalonamento e preferência da anti-afinidade citam perfis; o `kind`
+continua guardando a grafia da CLI. `--agent-profile=<nome>` impõe um perfil, como `--kind` impõe um agente.
+Ledger e linha ROUTE registram `profile`, e o ledger também registra `model_id`.
+
+A anti-afinidade ganha `by`. Com `model` (o da política padrão), a identidade do revisor é agente +
+modelo, e quem só tem um agente contra-valida com outro modelo dele; esforço diferente não conta como
+outro revisor. Com `by` omitido vale a regra antiga, só pelo agente, para políticas existentes não
+mudarem de comportamento. Nome que não é perfil vale como kind puro, o que mantém válidas as
+políticas sem perfis.
+
+Aplicado igual na v1 e na v2 do orchestrator, para a comparação entre as duas continuar medindo só a
+unificação.
+
 ## 2026-11-04 — `tsg-flow-orchestrator-v2` para comparação lado a lado
 
 Cópia experimental do orchestrator com os quatro papéis numa skill só: o `SKILL.md` só roteia para

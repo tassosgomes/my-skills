@@ -16,7 +16,8 @@ worker) não foi alterada. Este roteiro decide se a v2 substitui a v1.
 | Linhas que o validator carrega | 189 | 246 (roteador 28 + papel 134 + contrato 84) |
 | Ledger padrão | `.tsg-flow/delegate-logs/` | `.tsg-flow/delegate-logs-v2/` |
 
-Roteamento, escalonamento, anti-afinidade, schema do resultado e `run-state.json` são idênticos. A
+Roteamento (inclusive perfis e `anti_affinity.by`), escalonamento, anti-afinidade, schema do
+resultado e `run-state.json` são idênticos. A
 suíte de transporte passa igual nas duas (`TSG_DELEGATE_SKILL=tsg-flow-orchestrator-v2 node --test
 tests/tsg-flow.test.mjs`).
 
@@ -31,8 +32,10 @@ tests/tsg-flow.test.mjs`).
    pode cair em qualquer uma.
    - v1: `tsg-flow-orchestrator --prd-dir=work/cap-001-x --transport=herdr`
    - v2: `tsg-flow-orchestrator-v2 --prd-dir=work/cap-001-x-v2 --transport=herdr`
-4. Rode pelo menos uma vez em Herdr com dois kinds diferentes (o padrão do `routing.default.json`
-   já faz isso) e uma vez no transporte por subagente.
+4. Rode pelo menos uma vez em Herdr com dois agentes diferentes (o padrão do
+   `routing.default.json` já faz isso) e uma vez no transporte por subagente. Com um agente só,
+   use perfis de modelos diferentes e `anti_affinity.by: "model"`, e anote isso no registro: a
+   revisão fica menos independente, e o resultado não é comparável a uma rodada com dois agentes.
 
 ## O que verificar — risco principal: vazamento de papel
 
@@ -56,7 +59,8 @@ Do ledger de cada versão:
 ```bash
 for d in delegate-logs delegate-logs-v2; do
   echo "== $d"
-  jq -rs 'group_by(.role)[] | {role: .[0].role, chamadas: length,
+  jq -rs 'group_by(.role + "/" + (.profile // .kind))[]
+    | {role: .[0].role, perfil: (.[0].profile // .[0].kind), chamadas: length,
     ok: ([.[] | select(.result == "ok")] | length),
     gate_reprovado: ([.[] | select(.outcome == "gate_failed" or .outcome == "rejected")] | length),
     s: ([.[].elapsed_s] | add)}' .tsg-flow/$d/runs.jsonl

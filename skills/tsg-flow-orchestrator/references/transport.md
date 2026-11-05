@@ -21,9 +21,16 @@ operações de git são curtas e sequenciais.
 
 ## Roteamento entre agentes
 
-`--kind` é opcional. Omitido, o kind vem da política, resolvida em `TSG_ROUTING_FILE`,
-`<repo>/.tsg-flow/routing.json` ou `scripts/routing.default.json`, nessa ordem. Informar `--kind`
-desliga a política inteira para aquela chamada — inclusive escalonamento e anti-afinidade.
+`--kind` e `--agent-profile` são opcionais e excludentes. Omitidos, o agente vem da política, resolvida em
+`TSG_ROUTING_FILE`, `<repo>/.tsg-flow/routing.json` ou `scripts/routing.default.json`, nessa ordem.
+Informar um deles desliga a política inteira para aquela chamada — inclusive escalonamento e
+anti-afinidade. `--agent-profile` usa o agente, o modelo e o esforço do perfil; `--kind`, o agente puro.
+
+**Kind e perfil.** O `kind` é o agente real que o Herdr abre (`claude`, `codex`, `opencode`) e
+guarda a grafia da CLI dele. O **perfil** é um nome seu para um agente com modelo, esforço e
+argumentos próprios — `codex-lua`, `codex-sol`, `claude-haiku` — e é o que rotas, escalonamento e
+preferência citam. Dois perfis podem usar o mesmo agente. Nome que não é perfil vale como kind puro,
+com os padrões do kind; é isso que mantém válidas as políticas escritas antes dos perfis.
 
 O princípio: **rebaixe o modelo onde o veredito é objetivo, suba onde é julgamento.** O gate com
 exit code, o `gate_expect` e a revisão independente são o que torna limitado o custo de errar o
@@ -34,18 +41,27 @@ roteamento; o pior caso é consumir uma tentativa.
   `{PRD_DIR}/<N>_task.md` (nome gravado pelo task-creator; `<N>.0_task.md` também é aceito), não
   de uma heurística do script. Sem o arquivo da task, a chamada para com erro de uso em vez de
   cair na rota genérica. O campo `kind` é reservado para o
-  agente (`--kind`) e não é aceito como sinônimo.
-- **Escalonamento:** `escalation` lista os kinds das tentativas 2 em diante, sem repetir o kind
-  base; a última entrada se repete quando as tentativas acabam. Serve para não repetir o mesmo
+  agente (`--kind`) e não é aceito como sinônimo. A rota aponta `profile` (ou `kind`, nas
+  políticas antigas).
+- **Escalonamento:** `escalation` lista os perfis das tentativas 2 em diante, sem repetir o
+  degrau base; a última entrada se repete quando as tentativas acabam. Como cada perfil carrega o
+  seu modelo, a escada pode subir dentro do mesmo agente (`codex-lua` → `codex-sol`). Serve para não repetir o mesmo
   modelo numa tentativa que já falhou — modelo fraco erra mais em processo (adaptar ou pular o
   comando do gate) do que em código. Declarada na rota, ou por papel como fallback.
-- **Anti-afinidade:** para os papéis em `anti_affinity.roles`, o kind escolhido nunca é o que
-  implementou aquela task. A origem é o próprio ledger, não uma suposição. Diversidade de provedor
-  reduz ponto cego compartilhado; não elimina.
-- **Modelo e esforço:** mesma precedência — valor da chamada (`--model` / `--effort`), valor da
-  rota, padrão do kind, padrão da CLI. Ambos valem só enquanto o kind for o da rota: trocado o
-  agente por escalonamento ou anti-afinidade, aquele nome de modelo e aquele nível de esforço não
-  existem no agente novo. A composição é por kind porque a grafia diverge em três
+- **Anti-afinidade:** para os papéis em `anti_affinity.roles`, o revisor escolhido nunca é o que
+  implementou aquela task; o substituto é o primeiro de `preference` com identidade diferente. A
+  origem é o próprio ledger, não uma suposição. `anti_affinity.by` define a identidade:
+  - `model` (o da política padrão): agente + modelo. Quem tem um agente só revisa com outro modelo
+    dele — `codex-sol` implementa, `codex-lua` revisa. Esforço não conta: o mesmo modelo com outro
+    esforço é o mesmo revisor.
+  - `kind` (quando `by` é omitido): só o agente; codex nunca revisa codex. É a regra mais forte, para
+    quem tem mais de um agente.
+
+  Diversidade de provedor reduz ponto cego compartilhado mais do que diversidade de modelo; nenhuma
+  das duas o elimina.
+- **Modelo e esforço:** mesma precedência — valor da chamada (`--model` / `--effort`), perfil,
+  padrão do kind, padrão da CLI. `model` e `effort` declarados direto na rota valem só para o
+  degrau base; trocado o degrau, vale o perfil novo. A composição é por kind porque a grafia diverge em três
   formas: `model_template` quando o esforço faz parte do nome do modelo (`cursor`), `effort_args`
   quando é argumento separado (`claude --effort`, `codex -c model_reasoning_effort=...`), e
   nenhuma das duas quando o agente não expõe esforço por chamada (`opencode`, via `--agent`).
@@ -53,14 +69,15 @@ roteamento; o pior caso é consumir uma tentativa.
   vez de aceitá-lo em silêncio. O esforço é a alavanca que troca
   qualidade por custo dentro de um modelo, e vale medir antes de descer de modelo.
   Valores por agente estão no [README da skill](../README.md#valores-de-modelo-por-agente).
-- **extra_args por kind:** aprovação e sandbox têm flags diferentes em cada agente, então uma
-  string global não serve a uma execução com kinds misturados. `TSG_AGENT_EXTRA_ARGS` continua
+- **extra_args por kind e por perfil:** aprovação e sandbox têm flags diferentes em cada agente,
+  então uma string global não serve a uma execução com kinds misturados. Os do perfil vêm depois
+  dos do kind. `TSG_AGENT_EXTRA_ARGS` continua
   válida e é aplicada depois. Não desligue controles de autorização por conveniência.
 
 ## Resultado
 
 - DELEGATE result=ok: o envelope é válido, não necessariamente a etapa aprovada.
-- ROUTE: kind, modelo, esforço e origem (`policy` ou `explicit`); `note` registra escalonamento,
+- ROUTE: kind, modelo, esforço, origem (`policy` ou `explicit`) e perfil; `note` registra escalonamento,
   anti-afinidade e esforço descartado.
 - VERDICT: outcome do JSON. Resultado de negócio pertence ao orquestrador.
 - RESULT: caminho do JSON, contendo identidade da chamada e resultado final.
@@ -128,7 +145,8 @@ Não aumente --lines para transportar um relatório: leia REPORT/RESULT do disco
 ## Ledger
 
 `{LOG_DIR}/runs.jsonl` recebe uma linha por chamada, sucesso ou falha de transporte, com `ts`,
-`run_id`, `role`, `mode`, `prd_dir`, `task`, `task_kind`, `attempt`, `kind`, `model`, `effort`,
+`run_id`, `role`, `mode`, `prd_dir`, `task`, `task_kind`, `attempt`, `kind`, `profile`, `model`,
+`model_id` (modelo antes de compor o esforço, usado na anti-afinidade), `effort`,
 `route`,
 `route_note`, `result`, `outcome`, `gate`, `elapsed_s` e `reason`. Falha ao gravar não derruba a
 delegação, e o ledger nunca decide resultado — ele existe para comparar kind e modelo por entrega

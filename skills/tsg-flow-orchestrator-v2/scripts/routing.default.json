@@ -1,55 +1,138 @@
 {
   "schema_version": 1,
-  "_doc": "Politica de roteamento do transporte Herdr. Campos, valores de modelo e niveis de esforco por agente estao no README.md da skill. Copie para .tsg-flow/routing.json no repositorio alvo para sobrescrever. model/effort null usam o padrao da CLI daquele agente.",
-
+  "_doc": "Politica de roteamento do transporte Herdr. kinds: o agente real e a grafia da sua CLI. profiles: nome seu para um agente com modelo, esforco e argumentos proprios; dois perfis podem usar o mesmo agente. Rotas, escalonamento e preferencia citam perfis; nome que nao e perfil vale como kind puro. Campos e valores no README.md da skill. Copie para .tsg-flow/routing.json no repositorio alvo para sobrescrever.",
   "kinds": {
     "claude": {
-      "model_flag": "--model", "model": "claude-sonnet-5",
-      "effort_args": ["--effort", "{effort}"], "effort": "high", "extra_args": []
+      "model_flag": "--model",
+      "model": "claude-sonnet-5",
+      "effort_args": [
+        "--effort",
+        "{effort}"
+      ],
+      "effort": "high",
+      "extra_args": []
     },
     "codex": {
-      "model_flag": "--model", "model": null,
-      "effort_args": ["-c", "model_reasoning_effort=\"{effort}\""], "effort": null,
-      "extra_args": [], "start_settle_s": 3
+      "model_flag": "--model",
+      "model": null,
+      "effort_args": [
+        "-c",
+        "model_reasoning_effort=\"{effort}\""
+      ],
+      "effort": null,
+      "extra_args": [],
+      "start_settle_s": 3
     },
     "opencode": {
-      "model_flag": "--model", "model": null,
-      "effort_args": [], "effort": null, "extra_args": [], "start_settle_s": 6
+      "model_flag": "--model",
+      "model": null,
+      "effort_args": [],
+      "effort": null,
+      "extra_args": [],
+      "start_settle_s": 6
     },
     "cursor": {
-      "model_flag": "--model", "model": null,
+      "model_flag": "--model",
+      "model": null,
       "model_template": "{model}[effort={effort}]",
-      "effort_args": [], "effort": null, "extra_args": []
+      "effort_args": [],
+      "effort": null,
+      "extra_args": []
     },
     "agy": {
-      "model_flag": "--model", "model": null,
-      "effort_args": ["--effort", "{effort}"], "effort": null, "extra_args": [],
+      "model_flag": "--model",
+      "model": null,
+      "effort_args": [
+        "--effort",
+        "{effort}"
+      ],
+      "effort": null,
+      "extra_args": [],
       "start_settle_s": 8
     }
   },
-
-  "routes": [
-    { "role": "integrator", "kind": "codex", "escalation": ["claude"] },
-    { "role": "implementer", "task_kind": "enabling", "kind": "opencode",
-      "escalation": ["codex", "claude"] },
-    { "role": "implementer", "task_kind": "vertical", "kind": "codex",
-      "escalation": ["claude"] },
-    { "role": "implementer", "kind": "codex", "escalation": ["claude"] },
-    { "role": "validator", "mode": "full", "kind": "claude",
-      "model": "claude-opus-5", "effort": "max" },
-    { "role": "validator", "kind": "claude",
-      "model": "claude-sonnet-5", "effort": "high" }
-  ],
-
-  "escalation": {
-    "implementer": ["claude"],
-    "validator": [],
-    "integrator": ["claude"]
+  "profiles": {
+    "claude-sonnet": {
+      "kind": "claude",
+      "model": "claude-sonnet-5",
+      "effort": "high"
+    },
+    "claude-opus-max": {
+      "kind": "claude",
+      "model": "claude-opus-5",
+      "effort": "max"
+    },
+    "codex": {
+      "kind": "codex"
+    },
+    "opencode": {
+      "kind": "opencode"
+    }
   },
-
+  "routes": [
+    {
+      "role": "integrator",
+      "profile": "codex",
+      "escalation": [
+        "claude-sonnet"
+      ]
+    },
+    {
+      "role": "implementer",
+      "task_kind": "enabling",
+      "profile": "opencode",
+      "escalation": [
+        "codex",
+        "claude-sonnet"
+      ]
+    },
+    {
+      "role": "implementer",
+      "task_kind": "vertical",
+      "profile": "codex",
+      "escalation": [
+        "claude-sonnet"
+      ]
+    },
+    {
+      "role": "implementer",
+      "profile": "codex",
+      "escalation": [
+        "claude-sonnet"
+      ]
+    },
+    {
+      "role": "validator",
+      "mode": "full",
+      "profile": "claude-opus-max"
+    },
+    {
+      "role": "validator",
+      "profile": "claude-sonnet"
+    }
+  ],
+  "escalation": {
+    "implementer": [
+      "claude-sonnet"
+    ],
+    "validator": [],
+    "integrator": [
+      "claude-sonnet"
+    ]
+  },
   "anti_affinity": {
     "enabled": true,
-    "roles": ["validator"],
-    "preference": ["claude", "codex", "cursor", "agy", "opencode"]
+    "roles": [
+      "validator"
+    ],
+    "by": "model",
+    "preference": [
+      "claude-opus-max",
+      "claude-sonnet",
+      "codex",
+      "cursor",
+      "agy",
+      "opencode"
+    ]
   }
 }

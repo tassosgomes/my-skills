@@ -13,7 +13,8 @@ Preserve uma branch por PRD, workers frescos e tentativas limitadas.
 ## Entradas
 
 - `--prd-dir=<path>` obrigatório.
-- `--profile=standard` (único perfil).
+- `--profile=standard` (perfil de execução; único disponível). Não confundir com o
+  `--agent-profile` do transporte, que escolhe agente e modelo de um worker.
 - `--max-attempts=3..5`, padrão 3.
 - `--transport=subagent|herdr`, padrão subagent.
 - `--delivery=branch|pr|merge` e base alvo, quando definidos/autorizados.
@@ -105,11 +106,13 @@ Use uma delegação por vez; workers compartilham working tree e branch.
   `scripts/tsg-delegate.sh`. Cada chamada usa pane/agente novo e resultado JSON por run_id.
   Passe decisões operacionais adicionais por `--context-file` quando houver, sem misturá-las ao
   plano aprovado da task.
-  Omita `--kind` para deixar a política de roteamento escolher agente, modelo e esforço de
+  Omita `--kind` e `--agent-profile` para deixar a política de roteamento escolher agente, modelo e esforço de
   raciocínio por papel, modo e `task_kind` da task, com escalonamento por tentativa e anti-afinidade
   entre implementer e validator.
-  Informe `--kind` apenas para impor um agente; isso desliga a política naquela chamada.
-  Kind diferente pode oferecer diversidade de revisão, mas não garante ausência de pontos cegos.
+  Informe `--agent-profile` para impor um perfil (agente + modelo + esforço) ou `--kind` para impor um
+  agente puro; qualquer um desliga a política naquela chamada.
+  Agente ou modelo diferente pode oferecer diversidade de revisão, mas não garante ausência de
+  pontos cegos.
   Use modelos configurados/autorizados, sem substituir escolhas explícitas.
 - Não execute localmente etapas delegadas. Para runtime sem workers, resolva a limitação de
   transporte antes de iniciar; não simule uma revisão independente.

@@ -23,22 +23,31 @@ por projeto, copie para `.tsg-flow/routing.json` no repositório alvo, ou aponte
       "start_settle_s": 1        // espera entre start e prompt; TUIs lentas perdem o prompt
     }
   },
+  "profiles": {
+    "<perfil>": {                // nome seu; vários perfis podem usar o mesmo kind
+      "kind": "codex",           // obrigatório; o agente que o Herdr abre
+      "model": "gpt-sol",        // opcional; vence o padrão do kind
+      "effort": "high",          // opcional; vence o padrão do kind
+      "extra_args": []           // opcional; somados depois dos extra_args do kind
+    }
+  },
   "routes": [
     {
       "role": "implementer",     // implementer | validator | integrator
       "mode": "full",            // opcional; casa o modo da chamada
       "task_kind": "vertical",   // opcional; vertical | enabling, do campo task_kind no frontmatter
-      "kind": "codex",           // agente da primeira tentativa
-      "model": "...",            // opcional; vale só enquanto o kind for o da rota
+      "profile": "codex-lua",    // perfil da primeira tentativa (ou "kind", nas políticas antigas)
+      "model": "...",            // opcional; sobrescreve o perfil só no degrau base
       "effort": "max",           // opcional; mesma regra do model
-      "escalation": ["claude"]   // kinds das tentativas 2+; sem repetir o kind base
+      "escalation": ["codex-sol"] // perfis das tentativas 2+; sem repetir o degrau base
     }
   ],
   "escalation": { "<role>": ["..."] },   // fallback quando a rota não declara escalation
   "anti_affinity": {
     "enabled": true,
-    "roles": ["validator"],              // papéis que nunca reusam o kind do implementer
-    "preference": ["claude", "codex"]    // ordem de escolha do substituto
+    "roles": ["validator"],              // papéis que nunca reusam o revisor do implementer
+    "by": "model",                       // model: agente + modelo; kind (padrão se omitido): só o agente
+    "preference": ["codex-lua", "claude-opus"]  // perfis, em ordem de escolha do substituto
   }
 }
 ```
@@ -46,12 +55,31 @@ por projeto, copie para `.tsg-flow/routing.json` no repositório alvo, ou aponte
 Vale a primeira rota que casa. Rota sem `mode` casa qualquer modo; sem `task_kind`, qualquer task.
 Deixe as rotas específicas acima das genéricas.
 
-**Precedência**, idêntica para modelo e esforço: valor da chamada (`--model` / `--effort`) → valor
-da rota → padrão do kind → padrão da CLI.
+**Precedência**, idêntica para modelo e esforço: valor da chamada (`--model` / `--effort`) → perfil
+→ padrão do kind → padrão da CLI.
 
-`model` e `effort` da rota só se aplicam enquanto o kind continuar sendo o da rota. Se escalonamento
-ou anti-afinidade trocarem o agente, aquele nome de modelo e aquele nível de esforço não existem no
-agente novo, e a resolução cai para o padrão do kind.
+Nome que não está em `profiles` vale como kind puro, com os padrões do kind. Por isso uma política
+antiga, com `kind` nas rotas e kinds na escada, continua funcionando sem mudança.
+
+### Exemplo: um agente, vários modelos
+
+Quem só tem o codex pode escalonar e contra-validar dentro dele:
+
+```json
+"profiles": {
+  "codex-lua": { "kind": "codex", "model": "gpt-lua", "effort": "medium" },
+  "codex-sol": { "kind": "codex", "model": "gpt-sol", "effort": "high" }
+},
+"routes": [
+  { "role": "implementer", "profile": "codex-lua", "escalation": ["codex-sol"] },
+  { "role": "validator", "profile": "codex-sol" },
+  { "role": "integrator", "profile": "codex-lua" }
+],
+"anti_affinity": { "enabled": true, "roles": ["validator"], "by": "model",
+                   "preference": ["codex-sol", "codex-lua"] }
+```
+
+Se a tentativa 2 do implementer subir para `codex-sol`, a revisão daquela task cai para `codex-lua`.
 
 ## Valores de modelo por agente
 
