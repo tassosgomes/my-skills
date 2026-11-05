@@ -7,7 +7,9 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
-const delegate = join(root, 'skills/tsg-flow-orchestrator/scripts/tsg-delegate.sh');
+// TSG_DELEGATE_SKILL roda a mesma suite contra outra copia do orchestrator (ex.: a v2 em comparacao).
+const delegateSkill = process.env.TSG_DELEGATE_SKILL || 'tsg-flow-orchestrator';
+const delegate = join(root, 'skills', delegateSkill, 'scripts/tsg-delegate.sh');
 
 function command(bin, args, cwd, env = {}) {
   return spawnSync(bin, args, {
@@ -340,7 +342,7 @@ test('only implementer and validator workers are told to use subagents', t => {
     ['validator', 'focused', true], ['integrator', 'prepare-prd-branch', false]]) {
     const r = runDelegate(t, { role, mode });
     assert.equal(r.status, 0, r.stdout + r.stderr);
-    assert.equal(/secao Subagentes da skill/.test(r.prompt), expected, role);
+    assert.equal(/secao Subagentes d/.test(r.prompt), expected, role);
   }
 });
 
@@ -393,7 +395,7 @@ test('an invalid start_settle_s in the policy is a usage error', t => {
 
 test('the default policy gives slow-to-render TUIs a start settle interval', () => {
   const policy = JSON.parse(readFileSync(
-    join(root, 'skills/tsg-flow-orchestrator/scripts/routing.default.json'), 'utf8'));
+    join(root, 'skills', delegateSkill, 'scripts/routing.default.json'), 'utf8'));
   for (const kind of ['opencode', 'agy', 'codex']) {
     assert.ok(policy.kinds[kind].start_settle_s > 1, kind + ' waits longer than the default');
   }
@@ -791,4 +793,71 @@ test('without any product state the gate is a usage error', t => {
   const r = command('python3', [validateState, repo], repo);
   assert.equal(r.status, 2);
   assert.match(r.stderr, /docs\/product\/flow-state\.json nao encontrado/);
+});
+
+// v2: os quatro papeis vivem em tsg-flow-orchestrator-v2; o worker e chamado pelo papel.
+const delegateV2 = join(root, 'skills/tsg-flow-orchestrator-v2/scripts/tsg-delegate.sh');
+const skillV2 = join(root, 'skills/tsg-flow-orchestrator-v2');
+
+test('v2 invokes the worker by role inside the single skill', t => {
+  for (const role of ['implementer', 'validator', 'integrator']) {
+    const f = fixture(t);
+    const mock = join(f.bin, 'herdr');
+    writeFileSync(mock, mockHerdr, { mode: 0o755 });
+    writeFileSync(join(f.prd, '1_task.md'),
+      '---\nstatus: pending\ntask_kind: vertical\nblocked_by: []\n---\n\n# 1.0 Fixture\n');
+    const calls = join(f.dir, 'calls.jsonl');
+    const mode = role === 'implementer' ? 'implement' : role === 'validator' ? 'focused' : 'checkpoint-task';
+    const r = command('bash', [delegateV2, '--role=' + role, '--prd-dir=' + f.prd, '--mode=' + mode,
+      '--attempt=1/3', '--task=1.0'], f.repo, {
+      HERDR_ENV: '1', HERDR_BIN_PATH: mock, MOCK_SCENARIO: 'ok', MOCK_CALLS: calls,
+      MOCK_SHA: f.sha, MOCK_TREE: f.tree, TSG_DELEGATE_LOG_DIR: join(f.dir, 'logs'),
+    });
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    const prompt = readFileSync(calls, 'utf8').split('\n').filter(Boolean).map(JSON.parse)
+      .find(a => a[0] === 'agent' && a[1] === 'prompt').join(' ');
+    assert.match(prompt, new RegExp('tsg-flow-orchestrator-v2 --role=' + role + ' '), role);
+    assert.doesNotMatch(prompt, /tsg-flow-(implementer|validator|integrator)/, role);
+  }
+});
+
+test('v2 writes its ledger apart from v1 by default', () => {
+  const script = readFileSync(delegateV2, 'utf8');
+  assert.match(script, /\.tsg-flow\/delegate-logs-v2/);
+});
+
+test('v2 router names exactly the role files that exist', () => {
+  const router = readFileSync(join(skillV2, 'SKILL.md'), 'utf8');
+  const linked = [...router.matchAll(/\]\((roles\/[a-z]+\.md)\)/g)].map(m => m[1]);
+  assert.deepEqual(linked.sort(),
+    ['roles/coordinator.md', 'roles/implementer.md', 'roles/integrator.md', 'roles/validator.md']);
+  for (const file of linked) assert.ok(existsSync(join(skillV2, file)), file);
+});
+
+test('v2 router carries no role instructions of its own', () => {
+  const router = readFileSync(join(skillV2, 'SKILL.md'), 'utf8');
+  for (const marker of [/gate_expect/, /checkpoint-task/, /sensor de discrimina/i, /Coordene sem/]) {
+    assert.doesNotMatch(router, marker);
+  }
+});
+
+test('v2 implementer and validator take gate rules from the shared contract only', () => {
+  for (const role of ['implementer', 'validator']) {
+    const text = readFileSync(join(skillV2, 'roles', role + '.md'), 'utf8');
+    assert.match(text, /gate-contract\.md/, role);
+    assert.doesNotMatch(text, /O exit code é o veredito/, role);
+    assert.doesNotMatch(text, /Nunca encerre o turno/, role);
+  }
+});
+
+test('every relative link inside v2 resolves', () => {
+  const files = ['SKILL.md', 'roles/coordinator.md', 'roles/implementer.md', 'roles/validator.md',
+    'roles/integrator.md', 'references/gate-contract.md', 'references/transport.md'];
+  for (const file of files) {
+    const text = readFileSync(join(skillV2, file), 'utf8');
+    for (const [, target] of text.matchAll(/\]\(([^)#:]+\.md)(?:#[^)]*)?\)/g)) {
+      const base = join(skillV2, file, '..');
+      assert.ok(existsSync(join(base, target)), file + ' -> ' + target);
+    }
+  }
 });

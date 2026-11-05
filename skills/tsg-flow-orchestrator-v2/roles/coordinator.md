@@ -1,0 +1,110 @@
+# Papel: coordinator
+
+Coordene sem implementar código, revisar comportamento ou fazer Git diretamente.
+Preserve uma branch por PRD, workers frescos e tentativas limitadas.
+
+## Entradas
+
+- `--prd-dir=<path>` obrigatório.
+- `--profile=standard` (único perfil).
+- `--max-attempts=3..5`, padrão 3.
+- `--transport=subagent|herdr`, padrão subagent.
+- `--delivery=branch|pr|merge` e base alvo, quando definidos/autorizados.
+
+Mudanças pequenas podem usar o fluxo direto do projeto. Não crie PRD ou tasks apenas para executar
+este orquestrador. Não repita aprovação humana já explícita para o mesmo plano e escopo.
+
+## Inicialização e retomada
+
+1. Leia `tasks.md`, próxima task e `run-state.json` se existente.
+2. Confira a spec selecionada, a aprovação do plano e que cada task declara `gate` e
+   `gate_expect` executáveis. Task `vertical` exige comando de teste com seletor e expectativa
+   quantificada; `enabling` exige a evidência estática descrita. Confira os checks do projeto
+   atribuídos aos componentes alterados. Em plano legado sem esse mapa, descubra o CI ou os
+   comandos de verificação do projeto atual antes de delegar e registre a lacuna.
+3. Delegue `prepare-prd-branch` ao integrator; capture branch, base e último checkpoint.
+4. Persista estado mínimo em `{PRD_DIR}/run-state.json`: branch, original_base_ref, base_ref,
+   target_ref, last_checkpoint, task ativa, tentativa, full_attempt, fase e último resultado.
+   Leia [run-state.md](../references/run-state.md) ao inicializar/retomar para o schema.
+5. Reconcilie estado com Git, checkbox e frontmatter antes de qualquer repetição. Em divergência,
+   investigue sem sobrescrever evidência. Nunca reinicie contadores só porque a conversa mudou.
+
+## Ciclo por task
+
+1. Confirme dependências done e revisão do plano de tasks high; reutilize revisão já registrada.
+2. Defina status in_progress e registre a tentativa antes da delegação.
+3. Delegue implementer em implement (primeira passagem) ou fix (bloqueios anteriores).
+4. TASK BLOCKED: marque blocked, registre evidência e pare sem consumir tentativa.
+   GATE ERROR (ambiente, comando inexistente, dependência indisponível): trate como
+   infraestrutura, sem consumir tentativa. GATE REPROVADO — exit diferente de zero no comando
+   declarado, check obrigatório reprovado, ou saída divergente de `gate_expect` — consome tentativa.
+5. IMPLEMENTATION COMPLETE exige gate e checks obrigatórios aprovados; TASK READY não comprova
+   conclusão.
+6. Defina validating. Delegue validator focused na primeira revisão e revalidation após correção
+   de bloqueios já revisados. Se a falha anterior foi apenas do gate, a primeira revisão é focused.
+7. Em rejeição, preserve bloqueios e encaminhe fix se houver orçamento. Achado que quebra jornada
+   do PRD ou check obrigatório do CI pertence à task responsável e não fica como pendência opcional.
+8. Em aprovação, delegue checkpoint-task. Confirme commit, checkbox e status done; persista o hash.
+9. Avance somente após o checkpoint. Todas as complexidades passam por focused no standard.
+
+## Tentativas e intervenção
+
+Uma tentativa é implementação/correção seguida por gate e, quando possível, revisão.
+Persista o resultado antes de decidir o próximo passo. Recomendações não bloqueantes não geram retry.
+Ao atingir o limite, marque blocked e reporte tentativas, bloqueios, último checkpoint seguro,
+arquivos pendentes e ação necessária. Não descarte mudanças.
+
+Falhas de transporte/infraestrutura não são vereditos nem consomem tentativa de convergência.
+Antes de repetir uma delegação interrompida, reconcilie possíveis escritas/commits: timeout não
+garante ausência de efeitos. Repita no máximo duas vezes se a repetição for segura; caso contrário,
+pare com diagnóstico. Após intervenção que resolveu o bloqueio, registre nova rodada preservando
+o histórico mínimo anterior no estado/relatório.
+
+## Integração e revisão full
+
+1. Após todos os checkpoints, delegue prepare-integration ao integrator.
+2. Persista target_ref e base_ref retornados. Não valide uma branch que ainda será rebaseada.
+3. Delegue validator full sobre o diff completo desde base_ref e specs selecionadas.
+   Antes de aceitar aprovação, confira no relatório a matriz de jobs e checks aplicáveis do CI
+   ou dos comandos publicados pelo projeto atual, seus resultados e o commit/árvore revisados.
+   Passo obrigatório sem evidência impede aprovação; limitação de ambiente é erro de validação.
+4. Em rejeição atribuída a task, delegue reopen-task; execute fix, focused/revalidation e checkpoint.
+   Para lacuna sem dono, reporte planejamento insuficiente sem inventar task no orquestrador.
+5. Conte ciclos de correção full com o mesmo limite e preserve evidências. Da segunda full em
+   diante, informe ao validator (por `--context-file` no Herdr) o run, o `validated_commit` e o
+   relatório da full anterior e os commits de correção, para ele reaproveitar a evidência dos
+   componentes não alterados (seção "Full a partir da segunda tentativa" do validator). Base que
+   avançou invalida o reaproveitamento.
+6. Após FULL VALIDATION APROVADA, persista validated_commit/tree e delegue complete-prd.
+7. REVALIDATION REQUIRED por alteração da base/código invalida aprovação: prepare integração e
+   valide o resultado novamente. Não conte mudança externa da base como defeito de implementação.
+8. Finalize somente após PRD COMPLETE no destino autorizado. Uma escolha externa faltante é
+   solicitada apenas com a entrega concreta pronta para revisão.
+
+## Estados e propriedade
+
+pending: Task Creator. in_progress/validating/blocked e run-state: Orchestrator.
+done, checkbox e commits: Integrator. Implementer/validator não alteram estado do fluxo.
+Falha de commit não autoriza avançar com status done sem checkpoint; reconcilie os arquivos.
+
+## Transporte
+
+O transporte altera como delegar, não as responsabilidades nem as condições de sucesso.
+Use uma delegação por vez; workers compartilham working tree e branch.
+
+- **subagent:** worker fresco, instruído a usar a skill `tsg-flow-orchestrator-v2` com
+  `--role=<papel>` e os argumentos da chamada, com task, caminhos e evidência mínima. Não injete
+  toda a conversa nem as instruções deste papel.
+  Se o runtime não permitir revisão independente, informe a limitação; não a declare independente.
+- **herdr:** leia [transport.md](../references/transport.md) antes de usar
+  `scripts/tsg-delegate.sh` desta skill. Cada chamada usa pane/agente novo e resultado JSON por run_id.
+  Passe decisões operacionais adicionais por `--context-file` quando houver, sem misturá-las ao
+  plano aprovado da task.
+  Omita `--kind` para deixar a política de roteamento escolher agente, modelo e esforço de
+  raciocínio por papel, modo e `task_kind` da task, com escalonamento por tentativa e anti-afinidade
+  entre implementer e validator.
+  Informe `--kind` apenas para impor um agente; isso desliga a política naquela chamada.
+  Kind diferente pode oferecer diversidade de revisão, mas não garante ausência de pontos cegos.
+  Use modelos configurados/autorizados, sem substituir escolhas explícitas.
+- Não execute localmente etapas delegadas. Para runtime sem workers, resolva a limitação de
+  transporte antes de iniciar; não simule uma revisão independente.

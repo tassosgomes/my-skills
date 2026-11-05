@@ -111,7 +111,11 @@ Testes: `claude plugin test mods/flow-progress`. Validação: `claude plugin val
 São três pontos de entrada: `tsg-flow-product` (uma vez por produto), `tsg-flow-next` (por
 capacidade) e `tsg-flow-orchestrator` (execução, que coordena `tsg-flow-implementer`,
 `tsg-flow-validator` e `tsg-flow-integrator`). As demais são etapas que a `next` encadeia.
-Artefatos duráveis ficam em `docs/`, os de cada entrega em `work/<cap>-<slug>/`. A `flow-qa` pertence ao pipeline de QA, fora do
+Artefatos duráveis ficam em `docs/`, os de cada entrega em `work/<cap>-<slug>/`.
+
+> **Em comparação:** [tsg-flow-orchestrator-v2](skills/tsg-flow-orchestrator-v2/) junta os quatro papéis
+> da execução numa skill só. Fica fora do grupo `tsg-flow` até a decisão; instale à parte e siga o
+> [roteiro de comparação](docs/tsg-flow-orchestrator-v2-eval.md). A `flow-qa` pertence ao pipeline de QA, fora do
 TSG Flow.
 
 ### Pipeline de QA

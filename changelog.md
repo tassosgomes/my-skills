@@ -1,5 +1,14 @@
 # Changelog das skills TSG Flow
 
+## 2026-11-04 — `tsg-flow-orchestrator-v2` para comparação lado a lado
+
+Cópia experimental do orchestrator com os quatro papéis numa skill só: o `SKILL.md` só roteia para
+`roles/coordinator|implementer|validator|integrator.md`, e as regras de gate repetidas no implementer
+e no validator viram `references/gate-contract.md`. O worker é chamado como
+`tsg-flow-orchestrator-v2 --role=<papel>`, e o ledger vai para `.tsg-flow/delegate-logs-v2/`. A v1
+não foi alterada e a v2 fica fora do grupo do marketplace. A decisão sai do roteiro em
+`docs/tsg-flow-orchestrator-v2-eval.md`.
+
 ## 2026-11-04 — Três pontos de entrada e duas raízes de artefato
 
 O fluxo tinha 14 skills, saídas em seis raízes e dois `flow-state.json` de schemas diferentes. Agora
